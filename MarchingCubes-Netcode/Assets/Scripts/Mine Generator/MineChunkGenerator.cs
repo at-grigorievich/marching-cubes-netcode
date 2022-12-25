@@ -2,9 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using NaughtyBezierCurves;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Color = UnityEngine.Color;
 
 namespace Mine_Generator
@@ -36,7 +38,6 @@ namespace Mine_Generator
         public void CreateMineChunk()
         {
             _points = new PointData[gridSize, gridSize, gridSize];
-            
             for (int x = 0; x < gridSize; x++)
             {
                 for (int y = 0; y < gridSize; y++)
@@ -57,14 +58,14 @@ namespace Mine_Generator
             _mesh = new Mesh();
             MeshFilter.mesh = _mesh;
             MeshFilter.sharedMesh = _mesh;
-
-            int normalize = 1 / (gridSize * gridSize * gridSize);
             
             CreateMineChunk();
 
             //float centerValue = ((gridSize-1) * deltaStep) / 2f;
-            //Vector2 center = Vector2.one * centerValue;
-
+            //Vector3 center = Vector3.one * centerValue;
+            
+            
+            
             float rMax = (radius+error) * (radius+error);
 
             for (int z = 0; z < gridSize; z++)
@@ -73,15 +74,18 @@ namespace Mine_Generator
                 {
                     for (int x = 0; x < gridSize; x++)
                     {
+                        var normalize = (z * deltaStep) / bezier.GetApproximateLength();
+                        
+                        if(normalize > 1f) continue;
+
+                        var center = bezier.GetPoint(normalize);
+                        
                         var point = _points[x, y, z];
                         var pointPos = point.Position;
-
-
-                        var center = bezier.GetPoint((x * y * z)*normalize);
-
+                        
                         float distance = (center.x - pointPos.x) * (center.x - pointPos.x) +
                                          (center.y - pointPos.y) * (center.y - pointPos.y) + 
-                                         (center.z - pointPos.z)*(center.z - pointPos.z);
+                                         (center.z - pointPos.z) * (center.z - pointPos.z);
 
                         var onRadius = distance < rMax;
 
@@ -99,8 +103,8 @@ namespace Mine_Generator
                     }
                 }
             }
-
-            //March();
+            
+            March();
         }
 
         Vector3 Interp(Vector3 edgeVertex1, float valueAtVertex1, Vector3 edgeVertex2, float valueAtVertex2) {
