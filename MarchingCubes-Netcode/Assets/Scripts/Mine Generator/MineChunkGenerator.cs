@@ -1,12 +1,7 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
 using NaughtyBezierCurves;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UIElements;
 using Color = UnityEngine.Color;
 
 namespace Mine_Generator
@@ -22,7 +17,8 @@ namespace Mine_Generator
         public BezierCurve3D bezier;
         
         private PointData[,,] _points;
-
+        private Vector3[] _pointsPositions;
+        
         public float radius;
         public float error;
         
@@ -38,6 +34,9 @@ namespace Mine_Generator
         public void CreateMineChunk()
         {
             _points = new PointData[gridSize, gridSize, gridSize];
+            _pointsPositions = new Vector3[gridSize * gridSize * gridSize];
+
+            int count = 0;
             for (int x = 0; x < gridSize; x++)
             {
                 for (int y = 0; y < gridSize; y++)
@@ -47,6 +46,9 @@ namespace Mine_Generator
                         var pos = new Vector3(x*deltaStep, y*deltaStep, z*deltaStep);
 
                         _points[x, y, z] = new PointData(pos, 0f);
+                        _pointsPositions[count] = pos;
+                        
+                        count++;
                     }
                 }
             }
@@ -59,51 +61,55 @@ namespace Mine_Generator
             MeshFilter.mesh = _mesh;
             MeshFilter.sharedMesh = _mesh;
             
+            vertices.Clear();
+            triangles.Clear();
+            
             CreateMineChunk();
-
-            //float centerValue = ((gridSize-1) * deltaStep) / 2f;
-            //Vector3 center = Vector3.one * centerValue;
-            
-            
             
             float rMax = (radius+error) * (radius+error);
-
-            for (int z = 0; z < gridSize; z++)
+            
+            float normalize = 0f;
+            while (normalize <= 1f)
             {
-                for (int y = 0; y < gridSize; y++)
+                var select = bezier.GetPoint(normalize);
+                
+                for (int x = 0; x < gridSize; x++)
                 {
-                    for (int x = 0; x < gridSize; x++)
+                    for (int y = 0; y < gridSize; y++)
                     {
-                        var normalize = (z * deltaStep) / bezier.GetApproximateLength();
-                        
-                        if(normalize > 1f) continue;
+                        for (int z = 0; z < gridSize; z++)
+                        {
+                            var center = select;
+                            
+                            var point = _points[x, y, z];
+                            var pointPos = point.Position;
 
-                        var center = bezier.GetPoint(normalize);
-                        
-                        var point = _points[x, y, z];
-                        var pointPos = point.Position;
-                        
-                        float distance = (center.x - pointPos.x) * (center.x - pointPos.x) +
+                            float distance = (center.x - pointPos.x) * (center.x - pointPos.x) +
                                          (center.y - pointPos.y) * (center.y - pointPos.y) + 
                                          (center.z - pointPos.z) * (center.z - pointPos.z);
 
-                        var onRadius = distance < rMax;
+                            var onRadius = distance <= rMax;
+                            var onSecRadiout = distance <= rMax * 2f;
 
-                        if (onRadius)
-                        {
-                            _points[x, y, z].Density = 1f;
-                        }
-                        else
-                        {
-                            var delta = rMax/distance;
                             float noise = Noise.PerlinNoise3D((float)x / gridSize * noiseScale, (float)y / gridSize * noiseScale, (float)z / gridSize * noiseScale) * noiseAmplitude;
-
-                            _points[x, y, z].Density = delta + noise;
+                            
+                            if (onRadius)
+                            {
+                                _points[x, y, z].Density = 1f;
+                                _points[x, y, z].IsLocked = true;
+                            }
+                            else if(onSecRadiout)
+                            {
+                                var delta = Mathf.Exp(-distance);
+                                _points[x, y, z].Density += delta + noise;
+                            }
                         }
                     }
                 }
+
+                normalize += deltaStep / bezier.GetApproximateLength();
             }
-            
+
             March();
         }
 
