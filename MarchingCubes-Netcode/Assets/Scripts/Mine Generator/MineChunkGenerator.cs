@@ -1,10 +1,13 @@
+#nullable enable
+
 using System.Collections.Generic;
+using MineGenerator.Containers;
+using MineGenerator.Data;
 using NaughtyBezierCurves;
-using UnityEditor;
 using UnityEngine;
 using Color = UnityEngine.Color;
 
-namespace Mine_Generator
+namespace MineGenerator
 {
     public class MineChunkGenerator : MonoBehaviour
     {
@@ -22,7 +25,6 @@ namespace Mine_Generator
         public float radius;
         public float error;
         
-        public float marchSpeedInSeconds = 0.5f;
         public MeshFilter MeshFilter;
 
         private Mesh _mesh;
@@ -194,11 +196,6 @@ namespace Mine_Generator
 
             float centerValue = ((gridSize-1) * deltaStep) / 2f;
             Vector2 center = Vector2.one * centerValue;
-
-#if UNITY_EDITOR
-            Handles.color = Color.red;
-            Handles.DrawWireDisc(new Vector3(center.x,center.y,0f),Vector3.forward,radius);
-#endif
 
             for (int x = 0; x < gridSize; x++)
             {

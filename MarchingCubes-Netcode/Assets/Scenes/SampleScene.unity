@@ -413,7 +413,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &964066197
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -428,13 +428,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridSize: 40
   deltaStep: 1
-  isoLevel: 0.6
+  isoLevel: 0.5
   noiseScale: 10
-  noiseAmplitude: 0.3
+  noiseAmplitude: 0.4
   bezier: {fileID: 8263875485371111745}
   radius: 4
-  error: 0.25
-  marchSpeedInSeconds: 0.5
+  error: 0.3
   MeshFilter: {fileID: 978899368}
 --- !u!4 &964066198
 Transform:
@@ -451,6 +450,53 @@ Transform:
   - {fileID: 978899370}
   m_Father: {fileID: 0}
   m_RootOrder: 4
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &975062955
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 975062957}
+  - component: {fileID: 975062956}
+  m_Layer: 0
+  m_Name: Chunk Bezier Generator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &975062956
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 975062955}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 742deb1edbb342f4b4b22e8f2b484a04, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  curves:
+  - {fileID: 8263875485371111745}
+  chunkPrefab: {fileID: 8686463240817815653, guid: 9a9c4ec0513b38442bb3e68b636fff40, type: 3}
+--- !u!4 &975062957
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 975062955}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 6
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &978899367
 GameObject:
@@ -941,17 +987,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 97378408249854d4a902c2bc229edfa2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  x1: 0
-  gridSize: 8
-  useMarchingCubes: 1
-  isoLevel: 0.5
-  noiseScale: 5
-  noiseAmplitude: 4
-  useGroundLevel: 1
-  groundLevel: 0.389
-  useMarchDelay: 0
-  marchSpeedInSeconds: 0.05
-  MeshFilter: {fileID: 1500236185}
 --- !u!4 &1878327869
 Transform:
   m_ObjectHideFlags: 0
@@ -999,8 +1034,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   curve: {fileID: 8263875485371111745}
   handleType: 0
-  leftHandleLocalPosition: {x: 0.92104745, y: -1.8920965, z: -2.5939033}
-  rightHandleLocalPosition: {x: -0.92104745, y: 1.8920965, z: 2.5939033}
+  leftHandleLocalPosition: {x: 0.26154715, y: -0.21802616, z: -3.3088968}
+  rightHandleLocalPosition: {x: -0.26154715, y: 0.21802616, z: 3.3088968}
 --- !u!4 &1949069506
 Transform:
   m_ObjectHideFlags: 0
@@ -1024,7 +1059,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8263875485364392733}
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 10, y: 5, z: 1}
+  m_LocalPosition: {x: 10, y: 5, z: 5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
