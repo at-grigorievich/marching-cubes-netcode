@@ -25,7 +25,7 @@ namespace MineGenerator
             
             var point = bezier.GetPoint(chunkLength);
             
-            while (IsPointInChunk(point) && chunkLength <= bezier.GetApproximateLength())
+            while (IsPointInChunk(point) && chunkLength <= 1f)
             {
                 _pointsContainer.RecalculateWeight(point, chunkData.TunnelParameters.RadiusWithError);
 
@@ -66,7 +66,7 @@ namespace MineGenerator
                             _pointsContainer[x, y + 1, z].Density
                         };
                         
-                        Vector3 worldPos = new Vector3(x, y, z)*deltaStep;
+                        Vector3 worldPos = new Vector3(x, y, z)*deltaStep + transform.position;
                         
                         int cubeIndex = 0;
                         if (cubeValues[0] < isoLevel) cubeIndex |= 1;
@@ -119,7 +119,8 @@ namespace MineGenerator
         }
         private void CreatePointsContainer()
         {
-            _pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters);
+            var worldDelta = transform.position;
+            _pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters, worldDelta);
         }
         
         private void OnDrawGizmosSelected()

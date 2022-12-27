@@ -9,12 +9,19 @@ namespace MineGenerator
     {
         [SerializeField] private BezierCurve3D[] curves;
         [SerializeField] private MineBezierChunk chunkPrefab;
+        [SerializeField] private Vector3 chunkCounts;
         
         private HashSet<MineBezierChunk> _chunks;
 
         [ContextMenu("Generate Chunks")]
         public void GenerateChunks()
         {
+            float a = 0f;
+            
+            var c = Instantiate(chunkPrefab);
+            c.GenerateChunk(ref a,curves[0]);
+            
+            return;
             _chunks = new HashSet<MineBezierChunk>();
             foreach (var curve in curves)
             {

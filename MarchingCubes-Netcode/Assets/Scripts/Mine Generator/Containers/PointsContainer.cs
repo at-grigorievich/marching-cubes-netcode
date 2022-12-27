@@ -11,6 +11,8 @@ namespace MineGenerator.Containers
         private readonly GridData _gridData;
         private readonly NoiseData _noiseData;
 
+        private readonly Vector3 _worldDelta;
+        
         public PointData this[int x, int y, int z] => _points[x, y, z];
         
         public Vector3 LeftBottomBottomPoint => _points[0, 0, 0].Position;
@@ -23,10 +25,11 @@ namespace MineGenerator.Containers
         public float NoiseScale => _noiseData.NoiseScale;
         public float NoiseAmplitude => _noiseData.NoiseAmplitude;
         
-        public PointsContainer(GridData gridData, NoiseData noiseData)
+        public PointsContainer(GridData gridData, NoiseData noiseData, Vector3 worldDelta)
         {
             _gridData = gridData;
             _noiseData = noiseData;
+            _worldDelta = worldDelta;
             
             var gridSize = _gridData.GridSize;
             var deltaStep = _gridData.DeltaStep;
@@ -42,7 +45,8 @@ namespace MineGenerator.Containers
                     for (int z = 0; z < gridSize; z++)
                     {
                         var pos = new Vector3(x*deltaStep, y*deltaStep, z*deltaStep);
-
+                        pos += worldDelta;
+                        
                         _points[x, y, z] = new PointData(pos, 0f);
                         _pointsPositions[count] = pos;
                         

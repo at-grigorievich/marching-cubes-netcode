@@ -20,5 +20,5 @@ MonoBehaviour:
     <NoiseScale>k__BackingField: 10
     <NoiseAmplitude>k__BackingField: 0.4
   <TunnelParameters>k__BackingField:
-    Radius: 4
+    Radius: 3
     RadiusError: 0.3

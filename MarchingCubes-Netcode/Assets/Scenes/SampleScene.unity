@@ -296,8 +296,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   curve: {fileID: 8263875485371111745}
   handleType: 0
-  leftHandleLocalPosition: {x: 0.29178244, y: 4.832444, z: 1.1761935}
-  rightHandleLocalPosition: {x: -0.29178244, y: -4.832444, z: -1.1761935}
+  leftHandleLocalPosition: {x: 0.90140367, y: -4.473217, z: -0.050260555}
+  rightHandleLocalPosition: {x: -0.90140367, y: 4.473217, z: 0.050260555}
 --- !u!4 &945914610
 Transform:
   m_ObjectHideFlags: 0
@@ -483,6 +483,7 @@ MonoBehaviour:
   curves:
   - {fileID: 8263875485371111745}
   chunkPrefab: {fileID: 8686463240817815653, guid: 9a9c4ec0513b38442bb3e68b636fff40, type: 3}
+  chunkCounts: {x: 0, y: 0, z: 0}
 --- !u!4 &975062957
 Transform:
   m_ObjectHideFlags: 0
