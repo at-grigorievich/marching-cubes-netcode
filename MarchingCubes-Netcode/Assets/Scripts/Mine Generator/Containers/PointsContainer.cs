@@ -1,3 +1,4 @@
+using System;
 using MineGenerator.Data;
 using UnityEngine;
 
@@ -24,6 +25,26 @@ namespace MineGenerator.Containers
 
         public float NoiseScale => _noiseData.NoiseScale;
         public float NoiseAmplitude => _noiseData.NoiseAmplitude;
+        
+        public bool IsEmptyChunk
+        {
+            get
+            {
+                var gridSize = _gridData.GridSize;
+                for (int x = 0; x < gridSize; x++)
+                {
+                    for (int y = 0; y < gridSize; y++)
+                    {
+                        for (int z = 0; z < gridSize; z++)
+                        {
+                            if (_points[x, y, z].Density > Mathf.Epsilon)
+                                return false;
+                        }
+                    }
+                }
+                return true;
+            }
+        }
         
         public PointsContainer(GridData gridData, NoiseData noiseData, Vector3 worldDelta)
         {
@@ -71,7 +92,7 @@ namespace MineGenerator.Containers
                                          (center.z - pointPos.z) * (center.z - pointPos.z);
                         
                         var onRadius = distance <= radius;
-                        var onSecRadius = distance <= radius * 1.4f;
+                        var onSecRadius = distance <= radius + 1.365f*radius;
 
                         var noiseX = (float) x / GridSize * NoiseScale;
                         var noiseY = (float) y / GridSize * NoiseScale;
@@ -92,17 +113,6 @@ namespace MineGenerator.Containers
                     }
                 }
             }
-        }
-
-        public bool IsPointInContainer(Vector3 point)
-        {
-            return true;
-            
-            var inX = point.x >= LeftBottomBottomPoint.x && point.x <= RightTopBottomPoint.x;
-            var inY = point.y >= LeftBottomBottomPoint.y && point.y <= LeftBottomTopPoint.y;
-            var inZ = point.z >= LeftBottomBottomPoint.z && point.z <= RightTopBottomPoint.z;
-
-            return inX && inY && inZ;
         }
     }
 }

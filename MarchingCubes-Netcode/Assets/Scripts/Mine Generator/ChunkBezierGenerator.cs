@@ -14,21 +14,19 @@ namespace MineGenerator
 
         [SerializeField] private Vector3 chunkCounts;
         
-        private List<MineBezierChunk> _chunks;
+        private HashSet<MineBezierChunk> _chunks;
 
         [ContextMenu("Generate Chunks")]
-        public void GenerateChunks()
+        public void CreateChunks()
         {
-            _chunks = new List<MineBezierChunk>();
-            GenerateChunksGrid();
-            
-            foreach (var mineBezierChunk in _chunks)
-            {
-                mineBezierChunk.GenerateChunk(curves);
-            }
+            _chunks = new HashSet<MineBezierChunk>();
+           
+            CreateChunksGrid();
+            GenerateChunks();
+            ClearEmptyChunks();
         }
 
-        private void GenerateChunksGrid()
+        private void CreateChunksGrid()
         {
             var step = chunkData.GridParameters.DeltaStep * chunkData.GridParameters.GridSize;
 
@@ -46,6 +44,27 @@ namespace MineGenerator
                     }
                 }
             }
+        }
+
+        private void GenerateChunks()
+        {
+            foreach (var mineBezierChunk in _chunks)
+            {
+                mineBezierChunk.GenerateChunk(curves);
+            }
+        }
+        
+        private void ClearEmptyChunks()
+        {
+            foreach (var chunk in _chunks)
+            {
+                if (chunk.IsEmptyChunk)
+                {
+                    Destroy(chunk.gameObject);
+                }
+            }
+
+            _chunks.RemoveWhere(c => c == null);
         }
         
         private MineBezierChunk CreateChunk(Vector3 spawnPosition)

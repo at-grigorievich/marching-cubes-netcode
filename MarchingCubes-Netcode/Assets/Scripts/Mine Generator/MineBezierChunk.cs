@@ -16,6 +16,8 @@ namespace MineGenerator
         private PointsContainer? _pointsContainer;
         private MeshContainer? _meshContainer;
 
+        public bool IsEmptyChunk => _pointsContainer?.IsEmptyChunk ?? true;
+        
         public void GenerateChunk(IEnumerable<BezierCurve3D> curves)
         {
             CreateMeshContainer();
@@ -27,23 +29,13 @@ namespace MineGenerator
                 for (float curveLength = 0f; curveLength <= 1f; curveLength += addValue)
                 {
                     var point = bezier.GetPoint(curveLength);
-
-                    if (IsPointInChunk(point))
-                    {
-                        _pointsContainer.RecalculateWeight(point, chunkData.TunnelParameters.RadiusWithError);
-                    }
+                    
+                    _pointsContainer.RecalculateWeight(point, chunkData.TunnelParameters.RadiusWithError);
                 }
             }
             March();
         }
-
-        public bool IsPointInChunk(Vector3 point)
-        {
-            return _pointsContainer != null && _pointsContainer.IsPointInContainer(point);
-        }
         
-
-
         private void March()
         {
             var gridSize = _pointsContainer!.GridSize;
@@ -130,9 +122,6 @@ namespace MineGenerator
             if(_pointsContainer == null) return;
 
             var gridSize = _pointsContainer.GridSize;
-            var deltaStep = _pointsContainer.DeltaStep;
-            
-            float centerValue = ((gridSize-1) * deltaStep) / 2f;
 
             for (int x = 0; x < gridSize; x++)
             {
