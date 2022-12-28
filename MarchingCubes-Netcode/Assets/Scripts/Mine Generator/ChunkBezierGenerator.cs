@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.Linq;
+using MineGenerator.Data;
 using NaughtyBezierCurves;
 using UnityEngine;
 
@@ -8,57 +8,51 @@ namespace MineGenerator
     public class ChunkBezierGenerator: MonoBehaviour
     {
         [SerializeField] private BezierCurve3D[] curves;
+        
         [SerializeField] private MineBezierChunk chunkPrefab;
+        [SerializeField] private ChunkData chunkData;
+
         [SerializeField] private Vector3 chunkCounts;
         
-        private HashSet<MineBezierChunk> _chunks;
+        private List<MineBezierChunk> _chunks;
 
         [ContextMenu("Generate Chunks")]
         public void GenerateChunks()
         {
-            float a = 0f;
+            _chunks = new List<MineBezierChunk>();
+            GenerateChunksGrid();
             
-            var c = Instantiate(chunkPrefab);
-            c.GenerateChunk(ref a,curves[0]);
-            
-            return;
-            _chunks = new HashSet<MineBezierChunk>();
-            foreach (var curve in curves)
+            foreach (var mineBezierChunk in _chunks)
             {
-                CreateChunksByBezier(curve);
+                mineBezierChunk.GenerateChunk(curves);
             }
         }
 
-        private void CreateChunksByBezier(BezierCurve3D curve)
+        private void GenerateChunksGrid()
         {
-            var passedLength = 0f;
+            var step = chunkData.GridParameters.DeltaStep * chunkData.GridParameters.GridSize;
 
-            while (passedLength < 1f)
+            for (int x = 0; x < chunkCounts.x; x++)
             {
-                var startPoint = curve.GetPoint(passedLength);
-                var chunk = FindOrCreateChunk(startPoint);
-                
-                chunk.GenerateChunk(ref passedLength,curve);
+                for (int y = 0; y < chunkCounts.y; y++)
+                {
+                    for (int z = 0; z < chunkCounts.z; z++)
+                    {
+                        var xyz = new Vector3(x, y, z);
+                        var position = xyz * step - xyz * chunkData.GridParameters.DeltaStep;
+                        var instance = CreateChunk(position);
+
+                        _chunks.Add(instance);
+                    }
+                }
             }
         }
-
-        private MineBezierChunk FindOrCreateChunk(Vector3 startBezierPoint)
-        {
-            if (_chunks.Count <= 0)
-            {
-                return CreateChunk(startBezierPoint);
-            }
-            var selected = 
-                    _chunks.FirstOrDefault(chunk => chunk.IsPointInChunk(startBezierPoint));
-            
-            return selected == null ? CreateChunk(startBezierPoint) : selected;
-        }
-
+        
         private MineBezierChunk CreateChunk(Vector3 spawnPosition)
         {
             var instance = Instantiate(chunkPrefab);
-            _chunks.Add(instance);
-                
+            instance.transform.position = spawnPosition;
+
             return instance;
         }
     }

@@ -71,7 +71,7 @@ namespace MineGenerator.Containers
                                          (center.z - pointPos.z) * (center.z - pointPos.z);
                         
                         var onRadius = distance <= radius;
-                        var onSecRadius = distance <= radius * 2f;
+                        var onSecRadius = distance <= radius * 1.4f;
 
                         var noiseX = (float) x / GridSize * NoiseScale;
                         var noiseY = (float) y / GridSize * NoiseScale;
@@ -96,6 +96,8 @@ namespace MineGenerator.Containers
 
         public bool IsPointInContainer(Vector3 point)
         {
+            return true;
+            
             var inX = point.x >= LeftBottomBottomPoint.x && point.x <= RightTopBottomPoint.x;
             var inY = point.y >= LeftBottomBottomPoint.y && point.y <= LeftBottomTopPoint.y;
             var inZ = point.z >= LeftBottomBottomPoint.z && point.z <= RightTopBottomPoint.z;

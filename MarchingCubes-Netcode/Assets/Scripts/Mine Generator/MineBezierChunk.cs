@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Collections.Generic;
 using MineGenerator.Containers;
 using MineGenerator.Data;
 using NaughtyBezierCurves;
@@ -15,31 +16,32 @@ namespace MineGenerator
         private PointsContainer? _pointsContainer;
         private MeshContainer? _meshContainer;
 
-        public void GenerateChunk(ref float lengthPassed, BezierCurve3D bezier)
+        public void GenerateChunk(IEnumerable<BezierCurve3D> curves)
         {
             CreateMeshContainer();
             CreatePointsContainer();
-
-            var addValue = _pointsContainer!.DeltaStep / bezier.GetApproximateLength();
-            var chunkLength = lengthPassed;
             
-            var point = bezier.GetPoint(chunkLength);
-            
-            while (IsPointInChunk(point) && chunkLength <= 1f)
+            foreach (var bezier in curves)
             {
-                _pointsContainer.RecalculateWeight(point, chunkData.TunnelParameters.RadiusWithError);
+                var addValue = _pointsContainer!.DeltaStep / bezier.GetApproximateLength();
+                for (float curveLength = 0f; curveLength <= 1f; curveLength += addValue)
+                {
+                    var point = bezier.GetPoint(curveLength);
 
-                chunkLength += addValue;
-                point = bezier.GetPoint(chunkLength);
+                    if (IsPointInChunk(point))
+                    {
+                        _pointsContainer.RecalculateWeight(point, chunkData.TunnelParameters.RadiusWithError);
+                    }
+                }
             }
-            
             March();
-
-            lengthPassed += chunkLength;
         }
 
-        public bool IsPointInChunk(Vector3 point) => 
-            _pointsContainer != null && _pointsContainer.IsPointInContainer(point);
+        public bool IsPointInChunk(Vector3 point)
+        {
+            return _pointsContainer != null && _pointsContainer.IsPointInContainer(point);
+        }
+        
 
 
         private void March()
@@ -66,7 +68,7 @@ namespace MineGenerator
                             _pointsContainer[x, y + 1, z].Density
                         };
                         
-                        Vector3 worldPos = new Vector3(x, y, z)*deltaStep + transform.position;
+                        Vector3 worldPos = new Vector3(x, y, z)*deltaStep;
                         
                         int cubeIndex = 0;
                         if (cubeValues[0] < isoLevel) cubeIndex |= 1;
@@ -131,7 +133,6 @@ namespace MineGenerator
             var deltaStep = _pointsContainer.DeltaStep;
             
             float centerValue = ((gridSize-1) * deltaStep) / 2f;
-            Vector2 center = Vector2.one * centerValue;
 
             for (int x = 0; x < gridSize; x++)
             {
