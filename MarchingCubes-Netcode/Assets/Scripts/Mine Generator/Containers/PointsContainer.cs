@@ -54,6 +54,8 @@ namespace MineGenerator.Containers
 
         public void GeneratePointsByBezier(Vector3[] curvesPoints, float radius)
         {
+            Dispose();
+            
             int pointsCount = GridSize * GridSize * GridSize;
             _points = new NativeArray<PointData>(pointsCount,Allocator.Persistent);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
