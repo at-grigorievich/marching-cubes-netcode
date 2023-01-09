@@ -4,13 +4,13 @@ using UnityEngine;
 
 public static class MarchingCubesTables
 {
-	public static int[][] edgeConnections = {
+	public static readonly int[][] edgeConnections = {
 		new int[] {0,1}, new int[] {1,2}, new int[] {2,3}, new int[] {3,0},
 		new int[] {4,5}, new int[] {5,6}, new int[] {6,7}, new int[] {7,4},
 		new int[] {0,4}, new int[] {1,5}, new int[] {2,6}, new int[] {3,7}
 	};
 
-	public static Vector3[] cubeCorners = new Vector3[] {
+	public static readonly Vector3[] cubeCorners = new Vector3[] {
 		new Vector3(0, 0, 1),
 		new Vector3(1, 0, 1),
 		new Vector3(1, 0, 0),
@@ -21,7 +21,7 @@ public static class MarchingCubesTables
 		new Vector3(0, 1, 0)
 	};
 
-	public static int[][] triTable = {
+	public static readonly int[][] triTable = {
 		new int[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 		new int[] {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 		new int[] {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},

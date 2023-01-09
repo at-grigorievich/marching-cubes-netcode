@@ -20,9 +20,11 @@ namespace MineGenerator
         public void CreateChunks()
         {
             _chunks = new HashSet<MineBezierChunk>();
-           
+
+            var curvesPoints = GetAllBezierCurvesPoints();
+
             CreateChunksGrid();
-            GenerateChunks();
+            GenerateChunks(curvesPoints);
             ClearEmptyChunks();
         }
 
@@ -46,14 +48,13 @@ namespace MineGenerator
             }
         }
 
-        private void GenerateChunks()
+        private void GenerateChunks(Vector3[] curvesPoints)
         {
             foreach (var mineBezierChunk in _chunks)
             {
-                mineBezierChunk.GenerateChunk(curves);
+                mineBezierChunk.GenerateChunk(curvesPoints);
             }
         }
-        
         private void ClearEmptyChunks()
         {
             foreach (var chunk in _chunks)
@@ -73,6 +74,24 @@ namespace MineGenerator
             instance.transform.position = spawnPosition;
 
             return instance;
+        }
+
+        private Vector3[] GetAllBezierCurvesPoints()
+        {
+            var points = new List<Vector3>();
+            
+            foreach (var bezier in curves)
+            {
+                var addValue = chunkData.GridParameters.DeltaStep / bezier.GetApproximateLength();
+                
+                for (float curveLength = 0f; curveLength <= 1f; curveLength += addValue)
+                {
+                    var point = bezier.GetPoint(curveLength);
+                    points.Add(point);
+                }
+            }
+
+            return points.ToArray();
         }
     }
 }
