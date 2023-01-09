@@ -92,7 +92,8 @@ namespace MineGenerator.Containers
         
         public void Dispose()
         {
-            _points.Dispose();
+            if(_points.Length > 0)
+                _points.Dispose();
         }
     }
 }
