@@ -17,9 +17,7 @@ namespace MineGenerator.Containers
 
         [SerializeField,HideInInspector] private GridData gridData = null!;
         [SerializeField,HideInInspector] private float isoLevel;
-        
-        [SerializeField, ReadOnly] private string meshName;
-        
+
         public MeshContainer(MeshFilter meshFilter, GridData gridData, float isoLevel)
         {
             this.meshFilter = meshFilter;

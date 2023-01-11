@@ -12,8 +12,8 @@ namespace MineGenerator
         [SerializeField] private ChunkData chunkData = null!;
         [SerializeField] private MeshFilter meshFilter = null!;
         
-        [SerializeField, HideInInspector] private PointsContainer pointsContainer = null!;
-        [SerializeField, HideInInspector] private MeshContainer meshContainer = null!;
+        [SerializeField, HideInInspector] private PointsContainer? pointsContainer;
+        [SerializeField, HideInInspector] private MeshContainer? meshContainer;
 
         public bool IsEmptyChunk => pointsContainer?.IsEmptyChunk ?? true;
         
@@ -26,7 +26,7 @@ namespace MineGenerator
             meshContainer!.UpdateMesh(pointsContainer.PointsArray);
         }
 
-        public void SaveMeshChunk(string path,string pathName) => meshContainer.SaveMeshAsset(path,pathName);
+        public void SaveMeshChunk(string path,string pathName) => meshContainer?.SaveMeshAsset(path,pathName);
         
         private void CreateMeshContainer()
         {
@@ -40,6 +40,8 @@ namespace MineGenerator
         
         private void OnDrawGizmosSelected()
         {
+            if(pointsContainer == null) return;
+            
             var gridSize = pointsContainer.GridSize;
 
             for (int x = 0; x < gridSize; x++)
