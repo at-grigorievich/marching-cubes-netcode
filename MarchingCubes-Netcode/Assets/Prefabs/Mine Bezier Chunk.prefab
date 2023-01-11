@@ -96,7 +96,7 @@ GameObject:
   m_Layer: 0
   m_Name: Mine Bezier Chunk
   m_TagString: Untagged
-  m_Icon: {fileID: 0}
+  m_Icon: {fileID: 2800000, guid: d3fb08cddcb99d046a30571c6535d7d1, type: 3}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
@@ -130,3 +130,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   chunkData: {fileID: 11400000, guid: a70286dafd007fb4491eab2d781349bb, type: 2}
   meshFilter: {fileID: 8686463239720669133}
+  pointsContainer:
+    _points: []
+    gridData:
+      <GridSize>k__BackingField: 40
+      <DeltaStep>k__BackingField: 1
+    noiseData:
+      <NoiseScale>k__BackingField: 10
+      <NoiseAmplitude>k__BackingField: 0.4
+    worldDelta: {x: 0, y: 0, z: 0}
+  meshContainer:
+    meshFilter: {fileID: 0}
+    mesh: {fileID: 0}
+    gridData:
+      <GridSize>k__BackingField: 40
+      <DeltaStep>k__BackingField: 1
+    isoLevel: 0
+    meshName: 
