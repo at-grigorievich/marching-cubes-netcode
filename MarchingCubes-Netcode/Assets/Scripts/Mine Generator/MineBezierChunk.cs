@@ -6,50 +6,41 @@ using UnityEngine;
 
 namespace MineGenerator
 {
+    [ExecuteInEditMode]
     public class MineBezierChunk : MonoBehaviour
     {
         [SerializeField] private ChunkData chunkData = null!;
         [SerializeField] private MeshFilter meshFilter = null!;
         
-        private PointsContainer? _pointsContainer;
-        private MeshContainer? _meshContainer;
+        [SerializeField, HideInInspector] private PointsContainer pointsContainer = null!;
+        [SerializeField, HideInInspector] private MeshContainer meshContainer = null!;
 
-        public bool IsEmptyChunk => _pointsContainer?.IsEmptyChunk ?? true;
+        public bool IsEmptyChunk => pointsContainer?.IsEmptyChunk ?? true;
         
         public void GenerateChunk(Vector3[] curvesPoints)
         {
             CreateMeshContainer();
             CreatePointsContainer();
             
-            _pointsContainer!.GeneratePointsByBezier(curvesPoints, chunkData.TunnelParameters.RadiusWithError);
-            _meshContainer!.UpdateMesh(_pointsContainer.PointsArray);
+            pointsContainer!.GeneratePointsByBezier(curvesPoints, chunkData.TunnelParameters.RadiusWithError);
+            meshContainer!.UpdateMesh(pointsContainer.PointsArray);
         }
 
-        private void OnDisable()
-        {
-            _pointsContainer?.Dispose();
-        }
+        public void SaveMeshChunk(string path,string pathName) => meshContainer.SaveMeshAsset(path,pathName);
         
         private void CreateMeshContainer()
         {
-            if (_meshContainer != null)
-            {
-                _meshContainer.ClearMesh();
-                return;
-            }
-            _meshContainer = new MeshContainer(meshFilter,chunkData.GridParameters,chunkData.IsoLevel);
+            meshContainer = new MeshContainer(meshFilter,chunkData.GridParameters,chunkData.IsoLevel);
         }
         private void CreatePointsContainer()
         {
             var worldDelta = transform.position;
-            _pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters, worldDelta);
+            pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters, worldDelta);
         }
         
         private void OnDrawGizmosSelected()
         {
-            if(_pointsContainer == null) return;
-
-            var gridSize = _pointsContainer.GridSize;
+            var gridSize = pointsContainer.GridSize;
 
             for (int x = 0; x < gridSize; x++)
             {
@@ -57,10 +48,10 @@ namespace MineGenerator
                 {
                     for (int z = 0; z < gridSize; z++)
                     {
-                        Gizmos.color = _pointsContainer[x, y, z].Density >= chunkData.IsoLevel 
+                        Gizmos.color = pointsContainer[x, y, z].Density >= chunkData.IsoLevel 
                             ? Color.white : Color.black;
                         
-                        Gizmos.DrawCube(_pointsContainer[x, y, z].Position,Vector3.one*.1f);
+                        Gizmos.DrawCube(pointsContainer[x, y, z].Position,Vector3.one*.1f);
                     }  
                 }
             }

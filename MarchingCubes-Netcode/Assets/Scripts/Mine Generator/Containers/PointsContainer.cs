@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using MineGenerator.Data;
 using Unity.Collections;
@@ -6,30 +8,34 @@ using UnityEngine;
 
 namespace MineGenerator.Containers
 {
-    public class PointsContainer: IDisposable
+    [Serializable]
+    public class PointsContainer
     {
-        private NativeArray<PointData> _points;
+        [SerializeField,HideInInspector] private PointData[] _points = null!;
 
-        private readonly GridData _gridData;
-        private readonly NoiseData _noiseData;
+        [SerializeField,HideInInspector] private GridData gridData = null!;
+        [SerializeField,HideInInspector] private NoiseData noiseData = null!;
 
-        private readonly Vector3 _worldDelta;
+        [SerializeField,HideInInspector] private Vector3 worldDelta;
         
         public PointData this[int x, int y, int z] => _points[x*GridSize*GridSize+y*GridSize + z];
-        public PointData[] PointsArray => _points.ToArray();
+        public PointData[] PointsArray => _points;
 
         public Vector3 LeftBottomBottomPoint => this[0,0,0].Position;
-        public Vector3 RightTopBottomPoint => this[_gridData.GridSize - 1, 0, _gridData.GridSize - 1].Position;
-        public Vector3 LeftBottomTopPoint => this[0, _gridData.GridSize - 1, 0].Position;
+        public Vector3 RightTopBottomPoint => this[gridData!.GridSize - 1, 0, gridData.GridSize - 1].Position;
+        public Vector3 LeftBottomTopPoint => this[0, gridData!.GridSize - 1, 0].Position;
 
-        public float DeltaStep => _gridData.DeltaStep;
-        public int GridSize => _gridData.GridSize;
+        public float DeltaStep => gridData?.DeltaStep ?? 0f;
+        public int GridSize => gridData?.GridSize ?? 0;
 
         public bool IsEmptyChunk
         {
             get
             {
-                var gridSize = _gridData.GridSize;
+                var gridSize = GridSize;
+
+                if (gridSize == 0) return true;
+                
                 for (int x = 0; x < gridSize; x++)
                 {
                     for (int y = 0; y < gridSize; y++)
@@ -47,35 +53,33 @@ namespace MineGenerator.Containers
         
         public PointsContainer(GridData gridData, NoiseData noiseData, Vector3 worldDelta)
         {
-            _gridData = gridData;
-            _noiseData = noiseData;
-            _worldDelta = worldDelta;
+            this.gridData = gridData;
+            this.noiseData = noiseData;
+            this.worldDelta = worldDelta;
         }
 
         public void GeneratePointsByBezier(Vector3[] curvesPoints, float radius)
         {
-            Dispose();
-            
             int pointsCount = GridSize * GridSize * GridSize;
-            _points = new NativeArray<PointData>(pointsCount,Allocator.Persistent);
+            var points = new NativeArray<PointData>(pointsCount,Allocator.TempJob);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
 
             var createPointsJob = new CreatePointsJob()
             {
-                Data = _points,
+                Data = points,
                 GridSize = GridSize,
                 DeltaStep = DeltaStep,
-                WorldDelta = _worldDelta
+                WorldDelta = worldDelta
             };
 
             var setupPointsJob = new SetupPointWeightJob()
             {
                 CurvePoints = curvePoints,
-                Data = _points,
+                Data = points,
 
                 GridSize = this.GridSize,
-                NoiseScale = _noiseData.NoiseScale,
-                NoiseAmplitude = _noiseData.NoiseAmplitude,
+                NoiseScale = noiseData!.NoiseScale,
+                NoiseAmplitude = noiseData!.NoiseAmplitude,
 
                 Radius = radius
             };
@@ -87,13 +91,10 @@ namespace MineGenerator.Containers
             createPointsHandle.Complete();
             setupPointsHandle.Complete();
 
+            _points = points.ToArray();
+            
             curvePoints.Dispose();
-        }
-        
-        public void Dispose()
-        {
-            if(_points.Length > 0)
-                _points.Dispose();
+            points.Dispose();
         }
     }
 }

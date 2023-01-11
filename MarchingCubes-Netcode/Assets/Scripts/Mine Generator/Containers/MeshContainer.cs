@@ -1,25 +1,32 @@
+#nullable enable
+
+using System;
 using MineGenerator.Data;
 using Unity.Collections;
 using Unity.Jobs;
+using UnityEditor;
 using UnityEngine;
 
 namespace MineGenerator.Containers
 {
+    [Serializable]
     public class MeshContainer
     {
-        private readonly MeshFilter _meshFilter;
-        private readonly Mesh _mesh;
+        [SerializeField] private MeshFilter meshFilter = null!;
+        [SerializeField,HideInInspector] private Mesh mesh = null!;
 
-        private readonly GridData _gridData;
-        private readonly float _isoLevel;
+        [SerializeField,HideInInspector] private GridData gridData = null!;
+        [SerializeField,HideInInspector] private float isoLevel;
+        
+        [SerializeField, ReadOnly] private string meshName;
         
         public MeshContainer(MeshFilter meshFilter, GridData gridData, float isoLevel)
         {
-            _meshFilter = meshFilter;
-            _mesh = new Mesh();
+            this.meshFilter = meshFilter;
+            mesh = new Mesh { name = "mesh"};
 
-            _gridData = gridData;
-            _isoLevel = isoLevel;
+            this.gridData = gridData;
+            this.isoLevel = isoLevel;
         }
 
         public void UpdateMesh(PointData[] pointsArr)
@@ -37,30 +44,42 @@ namespace MineGenerator.Containers
 
                 CubeValues = cubeValues,
                 
-                GridSize = _gridData.GridSize,
-                DeltaStep = _gridData.DeltaStep,
-                IsoLevel = _isoLevel
+                GridSize = gridData!.GridSize,
+                DeltaStep = gridData!.DeltaStep,
+                IsoLevel = isoLevel
             };
 
             JobHandle updateMeshHandle = updateMeshJob.Schedule();
             updateMeshHandle.Complete();
             
-            _mesh.SetVertices(vertices.ToArray());
-            _mesh.SetTriangles(triangles.ToArray(),0);
+            mesh.SetVertices(vertices.ToArray());
+            mesh.SetTriangles(triangles.ToArray(),0);
 
             vertices.Dispose();
             triangles.Dispose();
             points.Dispose();
             cubeValues.Dispose();
             
-            _mesh.RecalculateNormals();
-            _meshFilter.mesh = _mesh;
+            mesh.RecalculateNormals();
+            
+            meshFilter.mesh = mesh;
         }
         
         public void ClearMesh()
         {
-            _mesh.Clear();
-            _meshFilter.mesh = _mesh;
+            if(mesh == null) return;
+            
+            mesh.Clear();
+            meshFilter.mesh = mesh;
+        }
+
+        public void SaveMeshAsset(string path,string name)
+        {
+            if(mesh.vertices.Length <= 0) return;
+            var sharedMesh = meshFilter.sharedMesh;
+            
+            sharedMesh.name = name;
+            AssetDatabase.AddObjectToAsset(sharedMesh,path);
         }
     }
 }

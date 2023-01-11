@@ -1,12 +1,16 @@
 using System.Collections.Generic;
+using System.Linq;
 using MineGenerator.Data;
 using NaughtyBezierCurves;
 using UnityEngine;
 
 namespace MineGenerator
 {
+    [ExecuteInEditMode]
     public class ChunkBezierGenerator: MonoBehaviour
     {
+        public const string MineChunksTag = "Mine-Behaviour";
+        
         [SerializeField] private BezierCurve3D[] curves;
         
         [SerializeField] private MineBezierChunk chunkPrefab;
@@ -26,6 +30,7 @@ namespace MineGenerator
             CreateChunksGrid();
             GenerateChunks(curvesPoints);
             ClearEmptyChunks();
+            SetupChunksGrid();
         }
 
         private void CreateChunksGrid()
@@ -48,6 +53,15 @@ namespace MineGenerator
             }
         }
 
+        private void SetupChunksGrid()
+        {
+            var mineObject = new GameObject();
+            mineObject.name = $"{MineChunksTag}-{Mathf.Abs(mineObject.GetInstanceID())}";
+            var mineBehaviour = mineObject.AddComponent<MineBehaviour>();
+
+            mineBehaviour.AddMineChunks(_chunks.ToArray());
+        }
+        
         private void GenerateChunks(Vector3[] curvesPoints)
         {
             foreach (var mineBezierChunk in _chunks)
@@ -61,7 +75,7 @@ namespace MineGenerator
             {
                 if (chunk.IsEmptyChunk)
                 {
-                    Destroy(chunk.gameObject);
+                    DestroyImmediate(chunk.gameObject);
                 }
             }
 

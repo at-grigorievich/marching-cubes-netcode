@@ -1,10 +1,16 @@
+using System;
 using UnityEngine;
 
 namespace MineGenerator
 {
+    [Serializable]
     public struct PointData
     {
-        public Vector3 Position;
+        [SerializeField,HideInInspector] public Vector3 Position;
+
+        [SerializeField,HideInInspector] public bool IsLocked;
+
+        [SerializeField,HideInInspector] private float _density;
 
         public float Density
         {
@@ -15,11 +21,7 @@ namespace MineGenerator
                 _density = value;
             }
         }
-
-        public bool IsLocked;
-
-        private float _density;
-
+        
         public PointData(Vector3 pos, float dens)
         {
             Position = pos;

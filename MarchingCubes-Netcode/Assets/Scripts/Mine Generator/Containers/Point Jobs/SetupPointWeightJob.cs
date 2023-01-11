@@ -43,7 +43,7 @@ namespace MineGenerator.Containers
                 if (onRadius)
                 {
                     selectedPoint.Density = 1f;
-                    selectedPoint.IsLocked = true;
+                    //selectedPoint.IsLocked = true;
                 }
                 else if(onSecRadius)
                 {
