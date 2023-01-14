@@ -7,6 +7,7 @@ using UnityEngine;
 namespace MineGenerator
 {
     [ExecuteInEditMode]
+    [RequireComponent(typeof(MeshCollider))]
     public class MineBezierChunk : MonoBehaviour
     {
         [SerializeField] private ChunkData chunkData = null!;
@@ -15,6 +16,8 @@ namespace MineGenerator
         [SerializeField, HideInInspector] private PointsContainer? pointsContainer;
         [SerializeField, HideInInspector] private MeshContainer? meshContainer;
 
+        private MeshCollider _meshCollider;
+        
         public bool IsEmptyChunk => pointsContainer?.IsEmptyChunk ?? true;
         
         public void GenerateChunk(Vector3[] curvesPoints)
@@ -24,6 +27,9 @@ namespace MineGenerator
             
             pointsContainer!.GeneratePointsByBezier(curvesPoints, chunkData.TunnelParameters.RadiusWithError);
             meshContainer!.UpdateMesh(pointsContainer.PointsArray);
+
+            _meshCollider = GetComponent<MeshCollider>();
+            _meshCollider.sharedMesh = meshFilter.sharedMesh;
         }
 
         public void SaveMeshChunk(string path,string pathName) => meshContainer?.SaveMeshAsset(path,pathName);
@@ -41,9 +47,10 @@ namespace MineGenerator
         private void OnDrawGizmosSelected()
         {
             if(pointsContainer == null) return;
+            if(pointsContainer.PointsArray.Length <= 0) return;
             
             var gridSize = pointsContainer.GridSize;
-
+            
             for (int x = 0; x < gridSize; x++)
             {
                 for (int y = 0; y < gridSize; y++)
