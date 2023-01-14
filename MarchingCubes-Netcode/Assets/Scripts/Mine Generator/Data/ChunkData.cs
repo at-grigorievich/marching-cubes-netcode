@@ -24,9 +24,10 @@ namespace MineGenerator.Data
     {
         [field: Header("Параметры туннеля")]
         [field: SerializeField] public float Radius = 4f;
+        [field: SerializeField] public float SecondRadius = 8f;
         [field: SerializeField] public float RadiusError = 0.3f;
         
-        public float RadiusWithError => (Radius+RadiusError) * (Radius+RadiusError);
+        public float RadiusWithError => Radius+RadiusError;
     }
     
     [CreateAssetMenu(fileName = "new Chunk Parameters", menuName = "Mine Generator/Chunk Parameters", order = 0)]

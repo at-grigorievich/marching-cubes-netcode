@@ -8,18 +8,14 @@ namespace MineGenerator
     {
         [SerializeField,HideInInspector] public Vector3 Position;
 
-        [SerializeField,HideInInspector] public bool IsLocked;
+        [SerializeField,HideInInspector] public bool IsAvailable;
 
         [SerializeField,HideInInspector] private float _density;
 
         public float Density
         {
             get => _density;
-            set
-            {
-                if (IsLocked) return;
-                _density = value;
-            }
+            set => _density = value; 
         }
         
         public PointData(Vector3 pos, float dens)
@@ -27,7 +23,7 @@ namespace MineGenerator
             Position = pos;
             _density = dens;
 
-            IsLocked = false;
+            IsAvailable = false;
         }
     }
 }

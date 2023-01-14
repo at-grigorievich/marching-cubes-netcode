@@ -25,7 +25,7 @@ namespace MineGenerator
             CreateMeshContainer();
             CreatePointsContainer();
             
-            pointsContainer!.GeneratePointsByBezier(curvesPoints, chunkData.TunnelParameters.RadiusWithError);
+            pointsContainer!.GeneratePointsByBezier(curvesPoints,chunkData.TunnelParameters);
             meshContainer!.UpdateMesh(pointsContainer.PointsArray);
 
             _meshCollider = GetComponent<MeshCollider>();
@@ -43,7 +43,8 @@ namespace MineGenerator
             var worldDelta = transform.position;
             pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters, worldDelta);
         }
-        
+
+#if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
             if(pointsContainer == null) return;
@@ -57,7 +58,9 @@ namespace MineGenerator
                 {
                     for (int z = 0; z < gridSize; z++)
                     {
-                        Gizmos.color = pointsContainer[x, y, z].Density >= chunkData.IsoLevel 
+                        if(!pointsContainer[x,y,z].IsAvailable) continue;
+                        
+                        Gizmos.color = pointsContainer[x,y,z].Density >= chunkData.IsoLevel
                             ? Color.white : Color.black;
                         
                         Gizmos.DrawCube(pointsContainer[x, y, z].Position,Vector3.one*.1f);
@@ -65,5 +68,6 @@ namespace MineGenerator
                 }
             }
         }
+#endif
     }
 }

@@ -12,13 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ded826c522943e39481ae1c72846410, type: 3}
   m_Name: Chunk Data
   m_EditorClassIdentifier: 
-  <IsoLevel>k__BackingField: 0.5
+  <IsoLevel>k__BackingField: 0.55
   <GridParameters>k__BackingField:
     <GridSize>k__BackingField: 10
     <DeltaStep>k__BackingField: 1
   <NoiseParameters>k__BackingField:
-    <NoiseScale>k__BackingField: 10
-    <NoiseAmplitude>k__BackingField: 0.4
+    <NoiseScale>k__BackingField: 0
+    <NoiseAmplitude>k__BackingField: 0.55
   <TunnelParameters>k__BackingField:
-    Radius: 3
-    RadiusError: 0.3
+    Radius: 4
+    SecondRadius: 8
+    RadiusError: 0.55

@@ -1,6 +1,9 @@
+#nullable enable
+
 using System.Collections.Generic;
 using System.Linq;
 using MineGenerator.Data;
+using MineGenerator.Interfaces;
 using NaughtyBezierCurves;
 using UnityEngine;
 
@@ -11,29 +14,27 @@ namespace MineGenerator
     {
         public const string MineChunksTag = "Mine-Behaviour";
         
-        [SerializeField] private BezierCurve3D[] curves;
+        [SerializeField] private BezierCurve3D[] curves = null!;
         
-        [SerializeField] private MineBezierChunk chunkPrefab;
-        [SerializeField] private ChunkData chunkData;
+        [SerializeField] private MineBezierChunk chunkPrefab = null!;
+        [SerializeField] private ChunkData chunkData = null!;
 
         [SerializeField] private Vector3 chunkCounts;
         
-        private HashSet<MineBezierChunk> _chunks;
-
         [ContextMenu("Generate Chunks")]
         public void CreateChunks()
         {
-            _chunks = new HashSet<MineBezierChunk>();
+            var chunks = new HashSet<MineBezierChunk>();
 
             var curvesPoints = GetAllBezierCurvesPoints();
 
-            CreateChunksGrid();
-            GenerateChunks(curvesPoints);
-            ClearEmptyChunks();
-            SetupChunksGrid();
+            CreateChunksGrid(ref chunks);
+            GenerateChunks(ref chunks,curvesPoints);
+            ClearEmptyChunks(ref chunks);
+            SetupChunksGrid(ref chunks);
         }
 
-        private void CreateChunksGrid()
+        private void CreateChunksGrid(ref HashSet<MineBezierChunk> chunks)
         {
             var step = chunkData.GridParameters.DeltaStep * chunkData.GridParameters.GridSize;
 
@@ -47,31 +48,31 @@ namespace MineGenerator
                         var position = xyz * step - xyz * chunkData.GridParameters.DeltaStep;
                         var instance = CreateChunk(position);
 
-                        _chunks.Add(instance);
+                        chunks.Add(instance);
                     }
                 }
             }
         }
 
-        private void SetupChunksGrid()
+        private void SetupChunksGrid(ref HashSet<MineBezierChunk> chunks)
         {
             var mineObject = new GameObject();
             mineObject.name = $"{MineChunksTag}-{Mathf.Abs(mineObject.GetInstanceID())}";
-            var mineBehaviour = mineObject.AddComponent<MineBehaviour>();
+            IMineChunksCollectable mineBehaviour = mineObject.AddComponent<MineBehaviour>();
 
-            mineBehaviour.AddMineChunks(_chunks.ToArray());
+            mineBehaviour.AddMineChunks(chunks.ToArray());
         }
         
-        private void GenerateChunks(Vector3[] curvesPoints)
+        private void GenerateChunks(ref HashSet<MineBezierChunk> chunks, Vector3[] curvesPoints)
         {
-            foreach (var mineBezierChunk in _chunks)
+            foreach (var mineBezierChunk in chunks)
             {
                 mineBezierChunk.GenerateChunk(curvesPoints);
             }
         }
-        private void ClearEmptyChunks()
+        private void ClearEmptyChunks(ref HashSet<MineBezierChunk> chunks)
         {
-            foreach (var chunk in _chunks)
+            foreach (var chunk in chunks)
             {
                 if (chunk.IsEmptyChunk)
                 {
@@ -79,7 +80,7 @@ namespace MineGenerator
                 }
             }
 
-            _chunks.RemoveWhere(c => c == null);
+            chunks.RemoveWhere(c => c == null);
         }
         
         private MineBezierChunk CreateChunk(Vector3 spawnPosition)
@@ -107,5 +108,29 @@ namespace MineGenerator
 
             return points.ToArray();
         }
+
+#if UNITY_EDITOR
+        private void OnDrawGizmosSelected()
+        {
+            var gridSize = chunkData.GridParameters.GridSize;
+            var deltaStep = chunkData.GridParameters.DeltaStep;
+
+            var chunkStep = gridSize * deltaStep;
+
+            Gizmos.color = Color.blue;
+            for (int x = 0; x < chunkCounts.x; x++)
+            {
+                for (int y = 0; y < chunkCounts.y; y++)
+                {
+                    for (int z = 0; z < chunkCounts.z; z++)
+                    {
+                        var chunkPosition = new Vector3(x * chunkStep, y * chunkStep, z * chunkStep);
+                        var chunkSize = new Vector3(chunkStep, chunkStep, chunkStep);
+                        Gizmos.DrawWireCube(chunkPosition, chunkSize);
+                    }
+                }
+            }
+        }
+#endif
     }
 }

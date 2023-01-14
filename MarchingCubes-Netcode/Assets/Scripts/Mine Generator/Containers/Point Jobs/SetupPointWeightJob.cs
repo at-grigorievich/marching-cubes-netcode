@@ -17,6 +17,8 @@ namespace MineGenerator.Containers
         [ReadOnly] public float NoiseAmplitude;
 
         [ReadOnly] public float Radius;
+        [ReadOnly] public float RadiusWithError;
+        [ReadOnly] public float SecondRadius;
 
         public void Execute(int index)
         {
@@ -33,22 +35,25 @@ namespace MineGenerator.Containers
             {
                 var center = CurvePoints[i];
                 
-                float distance = (center.x - pointPos.x) * (center.x - pointPos.x) +
-                                 (center.y - pointPos.y) * (center.y - pointPos.y) + 
-                                 (center.z - pointPos.z) * (center.z - pointPos.z);
-
+                var distance = Vector3.Distance(center, pointPos);
+                
                 var onRadius = distance <= Radius;
-                var onSecRadius = distance <= Radius + 1.365f * Radius;
+                var onSecRadius = distance <= RadiusWithError;
+                var onThirdRadius = distance <= SecondRadius;
 
                 if (onRadius)
                 {
                     selectedPoint.Density = 1f;
-                    //selectedPoint.IsLocked = true;
+                    selectedPoint.IsAvailable = true;
                 }
                 else if(onSecRadius)
                 {
-                    var delta = Mathf.Exp(-distance);
-                    selectedPoint.Density += delta + noise;
+                    selectedPoint.Density += noise;
+                    selectedPoint.IsAvailable = true;
+                }
+                else if (onThirdRadius)
+                {
+                    selectedPoint.IsAvailable = true;
                 }
             }
 

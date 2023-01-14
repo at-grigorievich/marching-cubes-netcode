@@ -42,7 +42,7 @@ namespace MineGenerator.Containers
                     {
                         for (int z = 0; z < gridSize; z++)
                         {
-                            if (this[x,y,z].Density > Mathf.Epsilon)
+                            if (this[x,y,z].IsAvailable)
                                 return false;
                         }
                     }
@@ -58,7 +58,7 @@ namespace MineGenerator.Containers
             this.worldDelta = worldDelta;
         }
 
-        public void GeneratePointsByBezier(Vector3[] curvesPoints, float radius)
+        public void GeneratePointsByBezier(Vector3[] curvesPoints, MineTunnelData tunnelData)
         {
             int pointsCount = GridSize * GridSize * GridSize;
             var points = new NativeArray<PointData>(pointsCount,Allocator.TempJob);
@@ -69,7 +69,7 @@ namespace MineGenerator.Containers
                 Data = points,
                 GridSize = GridSize,
                 DeltaStep = DeltaStep,
-                WorldDelta = worldDelta
+                WorldDelta = worldDelta,
             };
 
             var setupPointsJob = new SetupPointWeightJob()
@@ -81,7 +81,9 @@ namespace MineGenerator.Containers
                 NoiseScale = noiseData!.NoiseScale,
                 NoiseAmplitude = noiseData!.NoiseAmplitude,
 
-                Radius = radius
+                Radius = tunnelData.Radius,
+                RadiusWithError = tunnelData.RadiusWithError,
+                SecondRadius = tunnelData.SecondRadius
             };
 
             JobHandle createPointsHandle = createPointsJob.Schedule();

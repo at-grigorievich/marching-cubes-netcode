@@ -59,6 +59,7 @@ namespace MineGenerator.Containers
             cubeValues.Dispose();
             
             mesh.RecalculateNormals();
+            mesh.Optimize();
             
             meshFilter.mesh = mesh;
         }
