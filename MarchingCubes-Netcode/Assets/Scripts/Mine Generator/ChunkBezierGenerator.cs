@@ -19,8 +19,6 @@ namespace MineGenerator
         [SerializeField] private MineBezierChunk chunkPrefab = null!;
         [SerializeField] private ChunkData chunkData = null!;
 
-        [SerializeField] private Vector3 chunkCounts;
-        
         [ContextMenu("Generate Chunks")]
         public void CreateChunks()
         {
@@ -38,11 +36,11 @@ namespace MineGenerator
         {
             var step = chunkData.GridParameters.DeltaStep * chunkData.GridParameters.GridSize;
 
-            for (int x = 0; x < chunkCounts.x; x++)
+            for (int x = 0; x < chunkData.GridParameters.ChunksCount.x; x++)
             {
-                for (int y = 0; y < chunkCounts.y; y++)
+                for (int y = 0; y < chunkData.GridParameters.ChunksCount.y; y++)
                 {
-                    for (int z = 0; z < chunkCounts.z; z++)
+                    for (int z = 0; z < chunkData.GridParameters.ChunksCount.z; z++)
                     {
                         var xyz = new Vector3(x, y, z);
                         var position = xyz * step - xyz * chunkData.GridParameters.DeltaStep;
@@ -118,11 +116,11 @@ namespace MineGenerator
             var chunkStep = gridSize * deltaStep;
 
             Gizmos.color = Color.blue;
-            for (int x = 0; x < chunkCounts.x; x++)
+            for (int x = 0; x < chunkData.GridParameters.ChunksCount.x; x++)
             {
-                for (int y = 0; y < chunkCounts.y; y++)
+                for (int y = 0; y < chunkData.GridParameters.ChunksCount.y; y++)
                 {
-                    for (int z = 0; z < chunkCounts.z; z++)
+                    for (int z = 0; z < chunkData.GridParameters.ChunksCount.z; z++)
                     {
                         var chunkPosition = new Vector3(x * chunkStep, y * chunkStep, z * chunkStep);
                         var chunkSize = new Vector3(chunkStep, chunkStep, chunkStep);

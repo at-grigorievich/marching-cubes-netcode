@@ -6,6 +6,8 @@ namespace MineGenerator.Data
     [Serializable]
     public sealed class GridData
     {
+        [field: Header("Количество чанков")]
+        [field: SerializeField] public Vector3 ChunksCount { get; private set; }
         [field: Header("Параметры сетки")]
         [field: SerializeField] public int GridSize { get; private set; } = 40;
         [field: SerializeField] public float DeltaStep { get; private set; } = 1;

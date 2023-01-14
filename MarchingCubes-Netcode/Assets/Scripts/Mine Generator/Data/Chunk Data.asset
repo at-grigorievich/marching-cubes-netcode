@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   <IsoLevel>k__BackingField: 0.55
   <GridParameters>k__BackingField:
+    <ChunksCount>k__BackingField: {x: 10, y: 5, z: 10}
     <GridSize>k__BackingField: 10
     <DeltaStep>k__BackingField: 1
   <NoiseParameters>k__BackingField:
