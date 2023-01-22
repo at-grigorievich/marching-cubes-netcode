@@ -32,14 +32,17 @@ namespace MineGenerator.Containers
             var points = new NativeArray<PointData>(pointsArr, Allocator.TempJob);
             var vertices = new NativeList<Vector3>(Allocator.TempJob);
             var triangles = new NativeList<int>(Allocator.TempJob);
-            var cubeValues = new NativeArray<float>(8,Allocator.TempJob);
+            var cubeValues = new NativeArray<PointData>(8,Allocator.TempJob);
 
+            var normals = new NativeList<Vector3>(Allocator.TempJob);
+            
             var updateMeshJob = new MarchMeshUpdateJob()
             {
                 Points = points,
                 Vertices = vertices,
                 Triangles = triangles,
-
+                Normals = normals,
+                
                 CubeValues = cubeValues,
                 
                 GridSize = gridData!.GridSize,
@@ -52,13 +55,15 @@ namespace MineGenerator.Containers
             
             mesh.SetVertices(vertices.ToArray());
             mesh.SetTriangles(triangles.ToArray(),0);
-
+            mesh.normals = normals.ToArray();
+            
             vertices.Dispose();
             triangles.Dispose();
             points.Dispose();
             cubeValues.Dispose();
+            normals.Dispose();
             
-            mesh.RecalculateNormals();
+            //mesh.RecalculateNormals();
             mesh.Optimize();
             
             meshFilter.mesh = mesh;
