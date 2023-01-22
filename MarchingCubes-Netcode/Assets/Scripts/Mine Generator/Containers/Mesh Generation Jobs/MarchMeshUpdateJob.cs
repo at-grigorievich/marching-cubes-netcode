@@ -63,21 +63,14 @@ namespace MineGenerator.Containers
                             int e20 = MarchingCubesTables.edgeConnections[edges[i + 2]][0];
                             int e21 = MarchingCubesTables.edgeConnections[edges[i + 2]][1];
 
-                            Vector3 a = Interpolation.Interpolate(MarchingCubesTables.cubeCorners[e00] * DeltaStep,
-                                CubeValues[e00].Density,
-                                MarchingCubesTables.cubeCorners[e01] * DeltaStep, CubeValues[e01].Density, IsoLevel) + worldPos;
 
-                            Vector3 b = Interpolation.Interpolate(MarchingCubesTables.cubeCorners[e10] * DeltaStep,
-                                CubeValues[e10].Density,
-                                MarchingCubesTables.cubeCorners[e11] * DeltaStep, CubeValues[e11].Density, IsoLevel) + worldPos;
+                            Vector3 a = InterpolateVertex(e00, e01, worldPos);
+                            Vector3 b = InterpolateVertex(e10, e11, worldPos);
+                            Vector3 c = InterpolateVertex(e20, e21, worldPos);
 
-                            Vector3 c = Interpolation.Interpolate(MarchingCubesTables.cubeCorners[e20] * DeltaStep,
-                                CubeValues[e20].Density,
-                                MarchingCubesTables.cubeCorners[e21] * DeltaStep, CubeValues[e21].Density, IsoLevel) + worldPos;
-                            
-                            AddNormal(CubeValues[e00].Position,CubeValues[e00].Density,CubeValues[e01].Position,CubeValues[e01].Density);
-                            AddNormal(CubeValues[e10].Position,CubeValues[e10].Density,CubeValues[e11].Position,CubeValues[e11].Density);
-                            AddNormal(CubeValues[e20].Position,CubeValues[e20].Density,CubeValues[e21].Position,CubeValues[e21].Density);
+                            AddNormal(CubeValues[e00],CubeValues[e01]);
+                            AddNormal(CubeValues[e10],CubeValues[e11]);
+                            AddNormal(CubeValues[e20],CubeValues[e21]);
                             
                             AddVerticesAndTriangles(a, b, c);
                         }
@@ -86,16 +79,26 @@ namespace MineGenerator.Containers
             }
         }
 
-        private void AddNormal(Vector3 a, float densityA, Vector3 b, float densityB)
+        private void AddNormal(PointData pointA, PointData pointB)
         {
-            var normalA = a.normalized;
-            var normalB = b.normalized;
+            var normalA = pointA.Position.normalized;
+            var normalB = pointB.Position.normalized;
 
-            float t = Interpolation.InterpolateFloat(IsoLevel, densityA, densityB);
+            float t = Interpolation.InterpolateFloat(IsoLevel, pointA.Density, pointB.Density);
 
             var normal = (normalA + t * (normalB - normalA)).normalized;
             
             Normals.Add(normal);
+        }
+
+        private Vector3 InterpolateVertex(int e0, int e1, Vector3 worldPos)
+        {
+            return Interpolation.Interpolate(
+                MarchingCubesTables.cubeCorners[e0] * DeltaStep, 
+                CubeValues[e0].Density,
+                MarchingCubesTables.cubeCorners[e1] * DeltaStep, 
+                CubeValues[e1].Density, 
+                IsoLevel) + worldPos;
         }
         
         private void AddVerticesAndTriangles(Vector3 a, Vector3 b, Vector3 c)

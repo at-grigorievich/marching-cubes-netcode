@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ded826c522943e39481ae1c72846410, type: 3}
   m_Name: Chunk Data
   m_EditorClassIdentifier: 
-  <IsoLevel>k__BackingField: 1
+  <IsoLevel>k__BackingField: 0.35
   <GridParameters>k__BackingField:
     <ChunksCount>k__BackingField: {x: 10, y: 5, z: 10}
     <GridSize>k__BackingField: 10
