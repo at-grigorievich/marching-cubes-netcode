@@ -5,42 +5,41 @@ using MineGenerator.Data;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MineGenerator.Containers
 {
     [Serializable]
     public class PointsContainer
     {
-        [SerializeField,HideInInspector] private PointData[] _points = null!;
+        [SerializeField,HideInInspector] private PointData[] points = null!;
 
-        [SerializeField,HideInInspector] private GridData gridData = null!;
-        [SerializeField,HideInInspector] private NoiseData noiseData = null!;
+        [SerializeField,HideInInspector] private GridData gridData;
+        [SerializeField,HideInInspector] private NoiseData noiseData;
 
         [SerializeField,HideInInspector] private Vector3 worldDelta;
         
-        public PointData this[int x, int y, int z] => _points[x*GridSize*GridSize+y*GridSize + z];
-        public PointData[] PointsArray => _points;
+        public PointData this[int x, int y, int z] => points[x*GridSize*GridSize+y*GridSize + z];
+        public PointData[] PointsArray => points;
 
         public Vector3 LeftBottomBottomPoint => this[0,0,0].Position;
-        public Vector3 RightTopBottomPoint => this[gridData!.GridSize - 1, 0, gridData.GridSize - 1].Position;
-        public Vector3 LeftBottomTopPoint => this[0, gridData!.GridSize - 1, 0].Position;
+        public Vector3 RightTopBottomPoint => this[gridData.GridSize - 1, 0, gridData.GridSize - 1].Position;
+        public Vector3 LeftBottomTopPoint => this[0, gridData.GridSize - 1, 0].Position;
 
-        public float DeltaStep => gridData?.DeltaStep ?? 0f;
-        public int GridSize => gridData?.GridSize ?? 0;
+        public float DeltaStep => gridData.DeltaStep;
+        public int GridSize => gridData.GridSize;
 
         public bool IsEmptyChunk
         {
             get
             {
-                var gridSize = GridSize;
-
-                if (gridSize == 0) return true;
+                if (GridSize == 0) return true;
                 
-                for (int x = 0; x < gridSize; x++)
+                for (int x = 0; x < GridSize; x++)
                 {
-                    for (int y = 0; y < gridSize; y++)
+                    for (int y = 0; y < GridSize; y++)
                     {
-                        for (int z = 0; z < gridSize; z++)
+                        for (int z = 0; z < GridSize; z++)
                         {
                             if (this[x,y,z].IsAvailable)
                                 return false;
@@ -61,12 +60,12 @@ namespace MineGenerator.Containers
         public void GeneratePointsByBezier(Vector3[] curvesPoints, MineTunnelData tunnelData)
         {
             int pointsCount = GridSize * GridSize * GridSize;
-            var points = new NativeArray<PointData>(pointsCount,Allocator.TempJob);
+            var pointData = new NativeArray<PointData>(pointsCount,Allocator.TempJob);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
 
             var createPointsJob = new CreatePointsJob()
             {
-                Data = points,
+                Data = pointData,
                 GridSize = GridSize,
                 DeltaStep = DeltaStep,
                 WorldDelta = worldDelta,
@@ -75,7 +74,7 @@ namespace MineGenerator.Containers
             var setupPointsJob = new SetupPointWeightJob()
             {
                 CurvePoints = curvePoints,
-                Data = points,
+                Data = pointData,
 
                 GridSize = this.GridSize,
                 NoiseScale = noiseData!.NoiseScale,
@@ -93,10 +92,10 @@ namespace MineGenerator.Containers
             createPointsHandle.Complete();
             setupPointsHandle.Complete();
 
-            _points = points.ToArray();
+            points = pointData.ToArray();
             
             curvePoints.Dispose();
-            points.Dispose();
+            pointData.Dispose();
         }
     }
 }

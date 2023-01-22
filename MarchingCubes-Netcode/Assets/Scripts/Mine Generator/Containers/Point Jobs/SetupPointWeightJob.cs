@@ -34,12 +34,10 @@ namespace MineGenerator.Containers
             for (int i = 0; i < CurvePoints.Length; i++)
             {
                 var center = CurvePoints[i];
-                
-                var distance = Vector3.Distance(center, pointPos);
-                
-                var onRadius = distance <= Radius;
-                var onSecRadius = distance <= RadiusWithError;
-                var onThirdRadius = distance <= SecondRadius;
+
+                var onRadius = IsPointInRadius(pointPos,center,Radius);
+                var onSecRadius = IsPointInRadius(pointPos,center,RadiusWithError);
+                var onThirdRadius = IsPointInRadius(pointPos,center,SecondRadius);
 
                 if (onRadius)
                 {
@@ -53,11 +51,24 @@ namespace MineGenerator.Containers
                 }
                 else if (onThirdRadius)
                 {
+                    if(!selectedPoint.IsAvailable)
+                        selectedPoint.Density = 0f;
                     selectedPoint.IsAvailable = true;
                 }
             }
 
             Data[index] = selectedPoint;
+        }
+
+        private bool IsPointInRadius(Vector3 point, Vector3 center, float Radius)
+        {
+            float x = point.x - center.x;
+            float y = point.y - center.y;
+            float z = point.z - center.z;
+
+            float distance = Mathf.Sqrt(x * x + y * y + z * z) - Radius;
+
+            return distance <= 0f;
         }
     }
 
