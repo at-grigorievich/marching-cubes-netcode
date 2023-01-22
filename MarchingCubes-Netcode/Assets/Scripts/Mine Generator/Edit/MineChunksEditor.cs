@@ -1,3 +1,4 @@
+using MineGenerator.Interfaces;
 using UnityEditor;
 using UnityEngine;
 
@@ -17,10 +18,15 @@ namespace MineGenerator
             
             if (Physics.Raycast(ray, out hit))
             {
-                if (hit.collider.TryGetComponent(out MineBezierChunk chunk))
+                if (hit.collider.TryGetComponent(out IWeightEditable chunk))
                 {
-                    Gizmos.color = Color.yellow;
+                    Gizmos.color = !AllowModify ? Color.yellow : Color.red;
                     Gizmos.DrawWireSphere(hit.point,Radius);
+
+                    if (AllowModify)
+                    {
+                        chunk.UpdateWeight();
+                    }
                 }
             }
             

@@ -2,13 +2,14 @@
 
 using MineGenerator.Containers;
 using MineGenerator.Data;
+using MineGenerator.Interfaces;
 using UnityEngine;
 
 namespace MineGenerator
 {
     [ExecuteInEditMode]
     [RequireComponent(typeof(MeshCollider))]
-    public class MineBezierChunk : MonoBehaviour
+    public class MineBezierChunk : MonoBehaviour, IWeightEditable
     {
         [SerializeField] private ChunkData chunkData = null!;
         [SerializeField] private MeshFilter meshFilter = null!;
@@ -20,6 +21,7 @@ namespace MineGenerator
         
         public bool IsEmptyChunk => pointsContainer?.IsEmptyChunk ?? true;
         
+#if  UNITY_EDITOR
         public void GenerateChunk(Vector3[] curvesPoints)
         {
             CreateMeshContainer();
@@ -31,8 +33,13 @@ namespace MineGenerator
             _meshCollider = GetComponent<MeshCollider>();
             _meshCollider.sharedMesh = meshFilter.sharedMesh;
         }
-
         public void SaveMeshChunk(string path,string pathName) => meshContainer?.SaveMeshAsset(path,pathName);
+#endif       
+        
+        public void UpdateWeight()
+        {
+            Debug.Log("pizda");
+        }
         
         private void CreateMeshContainer()
         {
