@@ -1,5 +1,3 @@
-#nullable enable
-
 using System.Collections.Generic;
 using System.Linq;
 using MineGenerator.Data;
@@ -14,10 +12,10 @@ namespace MineGenerator
     {
         public const string MineChunksTag = "Mine-Behaviour";
         
-        [SerializeField] private BezierCurve3D[] curves = null!;
+        [SerializeField] private BezierCurve3D[] curves;
         
-        [SerializeField] private MineBezierChunk chunkPrefab = null!;
-        [SerializeField] private ChunkData chunkData = null!;
+        [SerializeField] private MineBezierChunk chunkPrefab;
+        [SerializeField] private ChunkData chunkData;
 
         [ContextMenu("Generate Chunks")]
         public void CreateChunks()
@@ -57,6 +55,10 @@ namespace MineGenerator
             var mineObject = new GameObject();
             mineObject.name = $"{MineChunksTag}-{Mathf.Abs(mineObject.GetInstanceID())}";
             IMineChunksCollectable mineBehaviour = mineObject.AddComponent<MineBehaviour>();
+            
+            var rb = mineObject.AddComponent<Rigidbody>();
+            rb.useGravity = false;
+            rb.isKinematic = true;
 
             mineBehaviour.AddMineChunks(chunks.ToArray());
         }

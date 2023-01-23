@@ -1,16 +1,17 @@
 #nullable enable
 
 using System;
+using Mine_Generator.Data;
 using MineGenerator.Data;
+using MineGenerator.Interfaces;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace MineGenerator.Containers
 {
     [Serializable]
-    public class PointsContainer
+    public class PointsContainer: IWeightEditable
     {
         [SerializeField,HideInInspector] private PointData[] points = null!;
 
@@ -29,6 +30,8 @@ namespace MineGenerator.Containers
         public float DeltaStep => gridData.DeltaStep;
         public int GridSize => gridData.GridSize;
 
+        public int Count => GridSize * GridSize * GridSize;
+        
         public bool IsEmptyChunk
         {
             get
@@ -59,8 +62,7 @@ namespace MineGenerator.Containers
 
         public void GeneratePointsByBezier(Vector3[] curvesPoints, MineTunnelData tunnelData)
         {
-            int pointsCount = GridSize * GridSize * GridSize;
-            var pointData = new NativeArray<PointData>(pointsCount,Allocator.TempJob);
+            var pointData = new NativeArray<PointData>(Count,Allocator.TempJob);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
 
             var createPointsJob = new CreatePointsJob()
@@ -87,7 +89,7 @@ namespace MineGenerator.Containers
 
             JobHandle createPointsHandle = createPointsJob.Schedule();
             JobHandle setupPointsHandle = 
-                setupPointsJob.Schedule(pointsCount, 0, createPointsHandle);
+                setupPointsJob.Schedule(Count, 0, createPointsHandle);
             
             createPointsHandle.Complete();
             setupPointsHandle.Complete();
@@ -95,6 +97,23 @@ namespace MineGenerator.Containers
             points = pointData.ToArray();
             
             curvePoints.Dispose();
+            pointData.Dispose();
+        }
+        public void UpdateWeight(WeightModifyData modifyData)
+        {
+            var pointData = new NativeArray<PointData>(points,Allocator.TempJob);
+
+            var updatePointsWeightJob = new UpdatePointsWeightJob()
+            {
+                Data = pointData,
+                ModifyData = modifyData
+            };
+
+            var handle = updatePointsWeightJob.Schedule();
+            handle.Complete();
+
+            points = pointData.ToArray();
+
             pointData.Dispose();
         }
     }

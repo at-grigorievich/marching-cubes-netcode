@@ -35,9 +35,9 @@ namespace MineGenerator.Containers
             {
                 var center = CurvePoints[i];
 
-                var onRadius = IsPointInRadius(pointPos,center,Radius);
-                var onSecRadius = IsPointInRadius(pointPos,center,RadiusWithError);
-                var onThirdRadius = IsPointInRadius(pointPos,center,SecondRadius);
+                var onRadius = MathfHelper.IsPointInRadius(pointPos,center,Radius);
+                var onSecRadius = MathfHelper.IsPointInRadius(pointPos,center,RadiusWithError);
+                var onThirdRadius = MathfHelper.IsPointInRadius(pointPos,center,SecondRadius);
 
                 if (onRadius)
                 {
@@ -58,17 +58,6 @@ namespace MineGenerator.Containers
             }
 
             Data[index] = selectedPoint;
-        }
-
-        private bool IsPointInRadius(Vector3 point, Vector3 center, float Radius)
-        {
-            float x = point.x - center.x;
-            float y = point.y - center.y;
-            float z = point.z - center.z;
-
-            float distance = Mathf.Sqrt(x * x + y * y + z * z) - Radius;
-
-            return distance <= 0f;
         }
     }
 

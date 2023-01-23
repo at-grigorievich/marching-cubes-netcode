@@ -1,3 +1,4 @@
+using Mine_Generator.Data;
 using MineGenerator.Interfaces;
 using UnityEditor;
 using UnityEngine;
@@ -8,8 +9,10 @@ namespace MineGenerator
     public class MineChunksEditor : MonoBehaviour
     {
         public float Radius;
-        public bool AllowModify;
+        public float Intensity;
         
+        public bool AllowModify;
+
         private void OnDrawGizmos()
         {
             RaycastHit hit;
@@ -18,14 +21,14 @@ namespace MineGenerator
             
             if (Physics.Raycast(ray, out hit))
             {
-                if (hit.collider.TryGetComponent(out IWeightEditable chunk))
+                if (hit.transform.TryGetComponent(out IWeightEditable weightEditor))
                 {
                     Gizmos.color = !AllowModify ? Color.yellow : Color.red;
                     Gizmos.DrawWireSphere(hit.point,Radius);
 
                     if (AllowModify)
                     {
-                        chunk.UpdateWeight();
+                        weightEditor.UpdateWeight(new WeightModifyData(hit.point,Radius,Intensity));
                     }
                 }
             }

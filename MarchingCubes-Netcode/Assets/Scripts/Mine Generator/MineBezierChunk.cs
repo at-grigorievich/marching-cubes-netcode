@@ -1,5 +1,4 @@
-#nullable enable
-
+using Mine_Generator.Data;
 using MineGenerator.Containers;
 using MineGenerator.Data;
 using MineGenerator.Interfaces;
@@ -11,14 +10,12 @@ namespace MineGenerator
     [RequireComponent(typeof(MeshCollider))]
     public class MineBezierChunk : MonoBehaviour, IWeightEditable
     {
-        [SerializeField] private ChunkData chunkData = null!;
-        [SerializeField] private MeshFilter meshFilter = null!;
+        [SerializeField] private ChunkData chunkData;
+        [SerializeField] private MeshFilter meshFilter;
         
-        [SerializeField, HideInInspector] private PointsContainer? pointsContainer;
-        [SerializeField, HideInInspector] private MeshContainer? meshContainer;
+        [SerializeField, HideInInspector] private PointsContainer pointsContainer;
+        [SerializeField, HideInInspector] private MeshContainer meshContainer;
 
-        private MeshCollider _meshCollider;
-        
         public bool IsEmptyChunk => pointsContainer?.IsEmptyChunk ?? true;
         
 #if  UNITY_EDITOR
@@ -27,23 +24,22 @@ namespace MineGenerator
             CreateMeshContainer();
             CreatePointsContainer();
             
-            pointsContainer!.GeneratePointsByBezier(curvesPoints,chunkData.TunnelParameters);
-            meshContainer!.UpdateMesh(pointsContainer.PointsArray);
-
-            _meshCollider = GetComponent<MeshCollider>();
-            _meshCollider.sharedMesh = meshFilter.sharedMesh;
+            pointsContainer.GeneratePointsByBezier(curvesPoints,chunkData.TunnelParameters);
+            meshContainer.UpdateMesh(pointsContainer.PointsArray);
         }
         public void SaveMeshChunk(string path,string pathName) => meshContainer?.SaveMeshAsset(path,pathName);
 #endif       
         
-        public void UpdateWeight()
+        public void UpdateWeight(WeightModifyData modifyData)
         {
-            Debug.Log("pizda");
+            pointsContainer!.UpdateWeight(modifyData);
+            meshContainer!.UpdateMesh(pointsContainer.PointsArray);
         }
         
         private void CreateMeshContainer()
         {
-            meshContainer = new MeshContainer(meshFilter,chunkData.GridParameters,chunkData.IsoLevel);
+            var meshCollider = GetComponent<MeshCollider>();
+            meshContainer = new MeshContainer(meshFilter,meshCollider,chunkData.GridParameters,chunkData.IsoLevel);
         }
         private void CreatePointsContainer()
         {

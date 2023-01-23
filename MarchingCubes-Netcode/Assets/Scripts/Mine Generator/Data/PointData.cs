@@ -12,6 +12,8 @@ namespace MineGenerator
 
         [SerializeField,HideInInspector] private float _density;
 
+        public bool IsGround => IsAvailable && _density <= 0.35f;
+        
         public float Density
         {
             get => _density;

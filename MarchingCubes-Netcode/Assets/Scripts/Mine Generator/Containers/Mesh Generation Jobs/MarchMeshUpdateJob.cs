@@ -9,10 +9,11 @@ namespace MineGenerator.Containers
     public struct MarchMeshUpdateJob : IJob
     {
         [ReadOnly] public NativeArray<PointData> Points;
-
+        
         public NativeList<Vector3> Vertices;
-        public NativeList<int> Triangles;
         public NativeList<Vector3> Normals;
+        
+        public NativeList<int> Triangles;
 
         public NativeArray<PointData> CubeValues;
         

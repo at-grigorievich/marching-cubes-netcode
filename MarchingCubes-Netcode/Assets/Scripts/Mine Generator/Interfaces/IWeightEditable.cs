@@ -1,7 +1,9 @@
+using Mine_Generator.Data;
+
 namespace MineGenerator.Interfaces
 {
     public interface IWeightEditable
     {
-        void UpdateWeight();
+        void UpdateWeight(WeightModifyData modifyData);
     }
 }
