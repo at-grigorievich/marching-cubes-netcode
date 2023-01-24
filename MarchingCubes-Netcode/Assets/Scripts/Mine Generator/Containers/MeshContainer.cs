@@ -16,7 +16,7 @@ namespace MineGenerator.Containers
         [SerializeField,HideInInspector] private GridData gridData;
         [SerializeField,HideInInspector] private float isoLevel;
 
-        private readonly MeshCollider _collider;
+        [SerializeField,HideInInspector] private MeshCollider _collider;
         
         public MeshContainer(MeshFilter meshFilter, MeshCollider collider, GridData gridData, float isoLevel)
         {
