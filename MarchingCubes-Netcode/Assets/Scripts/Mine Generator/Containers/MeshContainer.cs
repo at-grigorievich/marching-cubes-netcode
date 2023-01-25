@@ -52,11 +52,11 @@ namespace MineGenerator.Containers
                 DeltaStep = gridData!.DeltaStep,
                 IsoLevel = isoLevel
             };
-
-            JobHandle updateMeshHandle = updateMeshJob.Schedule();
-            updateMeshHandle.Complete();
             
             mesh.Clear();
+            
+            JobHandle updateMeshHandle = updateMeshJob.Schedule();
+            updateMeshHandle.Complete();
             
             mesh.vertices = vertices.ToArray();
             mesh.triangles = triangles.ToArray();
@@ -69,8 +69,9 @@ namespace MineGenerator.Containers
             normals.Dispose();
             
             //mesh.RecalculateNormals();
-            mesh.Optimize();
+            //mesh.Optimize();
             
+            //TODO: Продумать как будет изменяться меш в рантайме
             meshFilter.sharedMesh = mesh;
             _collider.sharedMesh = mesh;
         }

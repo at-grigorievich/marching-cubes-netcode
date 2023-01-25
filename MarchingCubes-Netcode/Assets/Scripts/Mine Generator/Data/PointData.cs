@@ -12,7 +12,7 @@ namespace MineGenerator
 
         [SerializeField,HideInInspector] private float _density;
 
-        public bool IsGround => IsAvailable && _density <= 0.35f;
+        [SerializeField, HideInInspector] public bool IsCorner;
         
         public float Density
         {
@@ -20,11 +20,12 @@ namespace MineGenerator
             set => _density = value; 
         }
         
-        public PointData(Vector3 pos, float dens)
+        public PointData(Vector3 pos, float dens, bool isCorner = false)
         {
             Position = pos;
             _density = dens;
 
+            IsCorner = isCorner;
             IsAvailable = false;
         }
     }

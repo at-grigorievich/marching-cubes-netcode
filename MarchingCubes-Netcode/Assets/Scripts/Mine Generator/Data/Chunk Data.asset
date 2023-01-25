@@ -16,11 +16,11 @@ MonoBehaviour:
   <GridParameters>k__BackingField:
     <ChunksCount>k__BackingField: {x: 10, y: 5, z: 10}
     <GridSize>k__BackingField: 10
-    <DeltaStep>k__BackingField: 2
+    <DeltaStep>k__BackingField: 1
   <NoiseParameters>k__BackingField:
     <NoiseScale>k__BackingField: 1
     <NoiseAmplitude>k__BackingField: 1
   <TunnelParameters>k__BackingField:
     Radius: 4
-    SecondRadius: 12
+    SecondRadius: 20
     RadiusError: 0.55

@@ -25,6 +25,7 @@ namespace MineGenerator
             tooltip = "Chunks Weight Editor Tool"
         };
 
+        private EnumField _modifyType;
         private FloatField _radius;
         private FloatField _intensity;
         private ColorField _selectColor;
@@ -57,6 +58,7 @@ namespace MineGenerator
             var titleLabel = new Label("Place Objects Tool");
             titleLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
 
+            _modifyType = new EnumField("Тип модификации", ModifyType.Decrease);
             _radius = new FloatField("Радиус воздействия");
             _intensity = new FloatField("Интенсивность воздействия");
             _selectColor = new ColorField("Выбран");
@@ -67,11 +69,12 @@ namespace MineGenerator
             _selectColor.value = LoadSelectedColor();
             _unselectColor.value = LoadUnselectedColor();
 
+            _toolRootElement.Add(_modifyType);
             _toolRootElement.Add(_radius);
             _toolRootElement.Add(_intensity);
             _toolRootElement.Add(_selectColor);
             _toolRootElement.Add(_unselectColor);
-            
+
             var sv = SceneView.lastActiveSceneView;
             
             sv.rootVisualElement.Add(_toolRootElement);
@@ -117,9 +120,9 @@ namespace MineGenerator
                 {
                     Handles.color = _allowModify ? _selectColor.value : _unselectColor.value;
                     Handles.SphereHandleCap(0,_hit.point, Quaternion.identity, _radius.value, EventType.Repaint);
-
+                    
                     if (_allowModify) 
-                        weightEditor.UpdateWeight(new WeightModifyData(_hit.point, _radius.value, _intensity.value));
+                        weightEditor.UpdateWeight(new WeightModifyData(_hit.point, _radius.value, _intensity.value, (ModifyType)_modifyType.value));
                 }
             }
         }
