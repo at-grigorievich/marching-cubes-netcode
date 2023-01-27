@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace MineGenerator.Containers
 {
@@ -11,20 +12,19 @@ namespace MineGenerator.Containers
     public class MeshContainer
     {
         [SerializeField] private MeshFilter meshFilter;
-        [SerializeField,HideInInspector] private Mesh mesh;
 
         [SerializeField,HideInInspector] private GridData gridData;
         [SerializeField,HideInInspector] private float isoLevel;
 
-        [SerializeField,HideInInspector] private MeshCollider _collider;
+        [SerializeField,HideInInspector] private MeshCollider collider;
+        
+        private Mesh _mesh;
         
         public MeshContainer(MeshFilter meshFilter, MeshCollider collider, GridData gridData, float isoLevel)
         {
             this.meshFilter = meshFilter;
-            _collider = collider;
-
-            mesh = new Mesh { name = "mesh"};
-
+            this.collider = collider;
+            
             this.gridData = gridData;
             this.isoLevel = isoLevel;
         }
@@ -53,15 +53,17 @@ namespace MineGenerator.Containers
                 IsoLevel = isoLevel
             };
             
-            mesh.Clear();
-            
             JobHandle updateMeshHandle = updateMeshJob.Schedule();
             updateMeshHandle.Complete();
             
-            mesh.vertices = vertices.ToArray();
-            mesh.triangles = triangles.ToArray();
-            mesh.normals = normals.ToArray();
-            
+            _mesh = new Mesh
+            {
+                name = "mesh",
+                vertices = vertices.ToArray(),
+                triangles = triangles.ToArray(),
+                normals = normals.ToArray()
+            };
+
             vertices.Dispose();
             triangles.Dispose();
             points.Dispose();
@@ -71,18 +73,25 @@ namespace MineGenerator.Containers
             //mesh.RecalculateNormals();
             //mesh.Optimize();
             
-            //TODO: Продумать как будет изменяться меш в рантайме
-            meshFilter.sharedMesh = mesh;
-            _collider.sharedMesh = mesh;
+            meshFilter.mesh = _mesh;
+            collider.sharedMesh = _mesh;
         }
 
         public void SaveMeshAsset(string path,string name)
         {
-            if(mesh.vertices.Length <= 0) return;
-            var sharedMesh = meshFilter.sharedMesh;
+            if(_mesh.vertices.Length <= 0) return;
             
-            sharedMesh.name = name;
+            var sharedMesh = new Mesh
+            {
+                name = name,
+                vertices = _mesh.vertices,
+                triangles = _mesh.triangles,
+                normals = _mesh.normals
+            };
+            
             AssetDatabase.AddObjectToAsset(sharedMesh,path);
+            
+            meshFilter.sharedMesh = sharedMesh;
         }
     }
 }
