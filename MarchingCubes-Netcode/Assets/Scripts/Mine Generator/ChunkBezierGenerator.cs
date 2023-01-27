@@ -10,6 +10,7 @@ namespace MineGenerator
     [ExecuteInEditMode]
     public class ChunkBezierGenerator: MonoBehaviour
     {
+#if UNITY_EDITOR
         public const string MineChunksTag = "Mine-Behaviour";
         
         [SerializeField] private BezierCurve3D[] curves;
@@ -109,7 +110,6 @@ namespace MineGenerator
             return points.ToArray();
         }
 
-#if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
             var gridSize = chunkData.GridParameters.GridSize;
@@ -117,19 +117,17 @@ namespace MineGenerator
 
             var chunkStep = gridSize * deltaStep;
 
+            var xChunksCount = chunkData.GridParameters.ChunksCount.x -1;
+            var yChunksCount = chunkData.GridParameters.ChunksCount.y -1;
+            var zChunksCount = chunkData.GridParameters.ChunksCount.z -1;
+
+            var center = new Vector3((xChunksCount * chunkStep) / 2f, (yChunksCount * chunkStep) / 2f,
+                (zChunksCount * chunkStep) / 2f);
+            var size = new Vector3((xChunksCount * chunkStep), (yChunksCount * chunkStep),
+                (zChunksCount * chunkStep));
+            
             Gizmos.color = Color.blue;
-            for (int x = 0; x < chunkData.GridParameters.ChunksCount.x; x++)
-            {
-                for (int y = 0; y < chunkData.GridParameters.ChunksCount.y; y++)
-                {
-                    for (int z = 0; z < chunkData.GridParameters.ChunksCount.z; z++)
-                    {
-                        var chunkPosition = new Vector3(x * chunkStep, y * chunkStep, z * chunkStep);
-                        var chunkSize = new Vector3(chunkStep, chunkStep, chunkStep);
-                        Gizmos.DrawWireCube(chunkPosition, chunkSize);
-                    }
-                }
-            }
+            Gizmos.DrawWireCube(center,size);
         }
 #endif
     }

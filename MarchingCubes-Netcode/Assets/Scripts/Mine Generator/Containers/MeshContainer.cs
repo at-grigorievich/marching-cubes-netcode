@@ -79,6 +79,7 @@ namespace MineGenerator.Containers
 
         public void SaveMeshAsset(string path,string name)
         {
+#if UNITY_EDITOR
             if(_mesh.vertices.Length <= 0) return;
             
             var sharedMesh = new Mesh
@@ -92,6 +93,8 @@ namespace MineGenerator.Containers
             AssetDatabase.AddObjectToAsset(sharedMesh,path);
             
             meshFilter.sharedMesh = sharedMesh;
+            collider.sharedMesh = sharedMesh;
+#endif
         }
     }
 }

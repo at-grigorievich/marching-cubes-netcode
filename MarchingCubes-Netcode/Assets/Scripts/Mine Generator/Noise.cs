@@ -1,7 +1,9 @@
-﻿using UnityEngine;
+﻿using Unity.Burst;
+using UnityEngine;
 
 namespace MineGenerator
 {
+	[BurstCompile]
 	public static class Noise
 	{
 		public static float PerlinNoise3D(float x, float y, float z)

@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace MineGenerator
 {
+    [BurstCompile]
     public static class MathfHelper
     {
-        [BurstCompile]
         public static bool IsPointInRadius(Vector3 point, Vector3 center, float Radius)
         {
             float x = point.x - center.x;

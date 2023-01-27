@@ -6,6 +6,7 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+#if UNITY_EDITOR
 namespace MineGenerator
 {
     [EditorTool("Chunks Weight Editor Tool")]
@@ -190,3 +191,4 @@ namespace MineGenerator
         }
     }
 }
+#endif

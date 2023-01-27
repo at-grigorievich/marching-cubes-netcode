@@ -48,7 +48,7 @@ namespace MineGenerator
         }
 
 #if UNITY_EDITOR
-        private void OnDrawGizmosSelected()
+        private void OnDrawGizmos()
         {
             if(pointsContainer == null) return;
             if(pointsContainer.PointsArray.Length <= 0) return;

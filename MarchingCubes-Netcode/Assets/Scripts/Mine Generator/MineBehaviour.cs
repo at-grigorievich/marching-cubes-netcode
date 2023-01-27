@@ -28,6 +28,7 @@ namespace MineGenerator
         [ContextMenu("Save mesh")]
         public void SaveMineMeshes()
         {
+#if UNITY_EDITOR
             var path = GetMeshAssetParentPath();
 
             var model = new Mesh();
@@ -41,6 +42,7 @@ namespace MineGenerator
             AssetDatabase.SaveAssets();
             PrefabUtility.SaveAsPrefabAssetAndConnect(gameObject, GetPrefabAssetParentPath(),
                 InteractionMode.UserAction);
+#endif
         }
         
         public string GetMeshAssetParentPath() => $"Assets/FBX/Mines/{transform.name}.asset";

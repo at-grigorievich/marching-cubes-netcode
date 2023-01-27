@@ -13,6 +13,7 @@ namespace MineGenerator
                    InterpolateFloat(isoLevel,valueAtVertex1, valueAtVertex2) * (edgeVertex2 - edgeVertex1);
         }
         
+        [BurstCompile]
         public static float InterpolateFloat(float isoLevel, float densityA, float densityB)
         {
             return (isoLevel - densityA) / (densityB - densityA);
