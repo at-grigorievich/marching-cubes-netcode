@@ -4,7 +4,6 @@ using Unity.Collections;
 using Unity.Jobs;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace MineGenerator.Containers
 {
