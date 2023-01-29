@@ -7,31 +7,29 @@ using UnityEngine;
 namespace MineGenerator.Containers
 {
     [BurstCompile]
-    public struct UpdatePointsWeightJob: IJob
+    public struct UpdatePointsWeightJob: IJobParallelFor
     {
         // Точка и радиус, где нужно обновить вес точек
         [ReadOnly] public WeightModifyData ModifyData;
         
         public NativeArray<PointData> Data;
         
-        public void Execute()
+        public void Execute(int index)
         {
-            for (int i = 0; i < Data.Length; i++)
-            {
-                PointData selected = Data[i];
-                
-                if(!selected.IsAvailable) continue;
-                if (!MathfHelper.IsPointInRadius(selected.Position, ModifyData.ModifyCenter, ModifyData.ModifyRadius, out float distance)) continue;
+            PointData selected = Data[index];
 
-                switch (ModifyData.TypeOfModify)
-                {
-                    case ModifyType.Decrease:
-                        DecreaseWeight(i,selected, distance);
-                        break;
-                    case ModifyType.Increase:
-                        IncreaseWeight(i,selected,distance);
-                        break;
-                }
+            if(!selected.IsAvailable) return;
+            if (!MathfHelper.IsPointInRadius(selected.Position, 
+                    ModifyData.ModifyCenter, ModifyData.ModifyRadius, out float distance)) return;
+
+            switch (ModifyData.TypeOfModify) 
+            {
+                case ModifyType.Decrease:
+                    DecreaseWeight(index,selected, distance);
+                    break;
+                case ModifyType.Increase:
+                    IncreaseWeight(index,selected,distance);
+                    break;
             }
         }
 

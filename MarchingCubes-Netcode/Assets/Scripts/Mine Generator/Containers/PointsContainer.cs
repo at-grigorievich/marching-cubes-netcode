@@ -109,7 +109,7 @@ namespace MineGenerator.Containers
                 ModifyData = modifyData
             };
 
-            var handle = updatePointsWeightJob.Schedule();
+            var handle = updatePointsWeightJob.Schedule(pointData.Length,0);
             handle.Complete();
 
             points = pointData.ToArray();
