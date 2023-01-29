@@ -11,21 +11,14 @@ namespace MineGenerator.Containers
     public class MeshContainer
     {
         [SerializeField] private MeshFilter meshFilter;
-
-        [SerializeField,HideInInspector] private GridData gridData;
-        [SerializeField,HideInInspector] private float isoLevel;
-
         [SerializeField,HideInInspector] private MeshCollider collider;
         
         private Mesh _mesh;
         
-        public MeshContainer(MeshFilter meshFilter, MeshCollider collider, GridData gridData, float isoLevel)
+        public MeshContainer(MeshFilter meshFilter, MeshCollider collider)
         {
             this.meshFilter = meshFilter;
             this.collider = collider;
-            
-            this.gridData = gridData;
-            this.isoLevel = isoLevel;
         }
 
         public void UpdateMesh(PointData[] pointsArr)
@@ -47,9 +40,9 @@ namespace MineGenerator.Containers
                 
                 CubeValues = cubeValues,
                 
-                GridSize = gridData!.GridSize,
-                DeltaStep = gridData!.DeltaStep,
-                IsoLevel = isoLevel
+                GridSize = ChunkData.instance.GridSize,
+                DeltaStep = ChunkData.instance.DeltaStep,
+                IsoLevel = ChunkData.instance.IsoLevel
             };
             
             JobHandle updateMeshHandle = updateMeshJob.Schedule();

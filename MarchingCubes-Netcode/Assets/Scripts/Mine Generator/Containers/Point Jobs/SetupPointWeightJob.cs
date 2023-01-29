@@ -1,3 +1,4 @@
+using MineGenerator.Data;
 using Unity.Burst;
 using UnityEngine;
 using Unity.Collections;
@@ -20,6 +21,8 @@ namespace MineGenerator.Containers
         [ReadOnly] public float RadiusWithError;
         [ReadOnly] public float SecondRadius;
 
+        [ReadOnly] public MineType TypeOfMine;
+
         public void Execute(int index)
         {
             PointData selectedPoint = Data[index];
@@ -35,8 +38,14 @@ namespace MineGenerator.Containers
             {
                 var center = CurvePoints[i];
 
-                var onRadius = MathfHelper.IsPointInCube(pointPos,center,Radius);
-                var onSecRadius = MathfHelper.IsPointInCube(pointPos,center,RadiusWithError);
+                var onRadius = TypeOfMine == MineType.Cubic 
+                    ? MathfHelper.IsPointInCube(pointPos,center,Radius) 
+                    : MathfHelper.IsPointInRadius(pointPos,center,Radius);
+                
+                var onSecRadius = TypeOfMine == MineType.Cubic 
+                    ? MathfHelper.IsPointInCube(pointPos,center,RadiusWithError)
+                    : MathfHelper.IsPointInRadius(pointPos,center,RadiusWithError);
+                
                 var onThirdRadius = MathfHelper.IsPointInRadius(pointPos,center,SecondRadius);
 
                 if (onRadius)

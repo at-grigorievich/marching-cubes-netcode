@@ -10,7 +10,6 @@ namespace MineGenerator
     [RequireComponent(typeof(MeshCollider))]
     public class MineBezierChunk : MonoBehaviour, IWeightEditable
     {
-        [SerializeField] private ChunkData chunkData;
         [SerializeField] private MeshFilter meshFilter;
         
         [SerializeField, HideInInspector] private PointsContainer pointsContainer;
@@ -24,7 +23,7 @@ namespace MineGenerator
             CreateMeshContainer();
             CreatePointsContainer();
             
-            pointsContainer.GeneratePointsByBezier(curvesPoints,chunkData.TunnelParameters);
+            pointsContainer.GeneratePointsByBezier(curvesPoints);
             meshContainer.UpdateMesh(pointsContainer.PointsArray);
         }
         public void SaveMeshChunk(string path,string pathName) => meshContainer?.SaveMeshAsset(path,pathName);
@@ -39,12 +38,12 @@ namespace MineGenerator
         private void CreateMeshContainer()
         {
             var meshCollider = GetComponent<MeshCollider>();
-            meshContainer = new MeshContainer(meshFilter,meshCollider,chunkData.GridParameters,chunkData.IsoLevel);
+            meshContainer = new MeshContainer(meshFilter,meshCollider);
         }
         private void CreatePointsContainer()
         {
             var worldDelta = transform.position;
-            pointsContainer = new PointsContainer(chunkData.GridParameters, chunkData.NoiseParameters, worldDelta);
+            pointsContainer = new PointsContainer(worldDelta);
         }
 
 #if UNITY_EDITOR
@@ -63,7 +62,7 @@ namespace MineGenerator
                     {
                         if(!pointsContainer[x,y,z].IsAvailable) continue;
                         
-                        Gizmos.color = pointsContainer[x,y,z].Density >= chunkData.IsoLevel
+                        Gizmos.color = pointsContainer[x,y,z].Density >= ChunkData.instance.IsoLevel
                             ? Color.white : Color.black;
                         
                         Gizmos.DrawCube(pointsContainer[x, y, z].Position,Vector3.one*.1f);

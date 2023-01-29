@@ -14,24 +14,20 @@ namespace MineGenerator.Containers
     public class PointsContainer: IWeightEditable
     {
         [SerializeField,HideInInspector] private PointData[] points = null!;
-
-        [SerializeField,HideInInspector] private GridData gridData;
-        [SerializeField,HideInInspector] private NoiseData noiseData;
-
         [SerializeField,HideInInspector] private Vector3 worldDelta;
         
         public PointData this[int x, int y, int z] => points[x*GridSize*GridSize+y*GridSize + z];
         public PointData[] PointsArray => points;
 
         public Vector3 LeftBottomBottomPoint => this[0,0,0].Position;
-        public Vector3 RightTopBottomPoint => this[gridData.GridSize - 1, 0, gridData.GridSize - 1].Position;
-        public Vector3 LeftBottomTopPoint => this[0, gridData.GridSize - 1, 0].Position;
+        public Vector3 RightTopBottomPoint => this[GridSize - 1, 0, GridSize - 1].Position;
+        public Vector3 LeftBottomTopPoint => this[0, GridSize - 1, 0].Position;
 
-        public float DeltaStep => gridData.DeltaStep;
-        public int GridSize => gridData.GridSize;
+        public float DeltaStep => ChunkData.instance.DeltaStep;
+        public int GridSize => ChunkData.instance.GridSize;
 
         public int Count => GridSize * GridSize * GridSize;
-        
+
         public bool IsEmptyChunk
         {
             get
@@ -53,14 +49,12 @@ namespace MineGenerator.Containers
             }
         }
         
-        public PointsContainer(GridData gridData, NoiseData noiseData, Vector3 worldDelta)
+        public PointsContainer(Vector3 worldDelta)
         {
-            this.gridData = gridData;
-            this.noiseData = noiseData;
             this.worldDelta = worldDelta;
         }
 
-        public void GeneratePointsByBezier(Vector3[] curvesPoints, MineTunnelData tunnelData)
+        public void GeneratePointsByBezier(Vector3[] curvesPoints)
         {
             var pointData = new NativeArray<PointData>(Count,Allocator.TempJob);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
@@ -79,12 +73,13 @@ namespace MineGenerator.Containers
                 Data = pointData,
 
                 GridSize = this.GridSize,
-                NoiseScale = noiseData!.NoiseScale,
-                NoiseAmplitude = noiseData!.NoiseAmplitude,
-
-                Radius = tunnelData.Radius,
-                RadiusWithError = tunnelData.RadiusWithError,
-                SecondRadius = tunnelData.SecondRadius
+                NoiseScale = ChunkData.instance.NoiseParameters.NoiseScale,
+                NoiseAmplitude = ChunkData.instance.NoiseParameters.NoiseAmplitude,
+                TypeOfMine = ChunkData.instance.TunnelParameters.MineType,
+                
+                Radius = ChunkData.instance.TunnelParameters.Radius,
+                RadiusWithError = ChunkData.instance.TunnelParameters.RadiusWithError,
+                SecondRadius = ChunkData.instance.TunnelParameters.SecondRadius
             };
 
             JobHandle createPointsHandle = createPointsJob.Schedule();

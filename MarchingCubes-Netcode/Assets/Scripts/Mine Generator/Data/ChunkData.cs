@@ -1,8 +1,15 @@
 using System;
+using UnityEditor;
 using UnityEngine;
 
 namespace MineGenerator.Data
 {
+    public enum MineType
+    {
+        Cubic,
+        Rounded
+    }
+    
     [Serializable]
     public sealed class GridData
     {
@@ -28,17 +35,23 @@ namespace MineGenerator.Data
         [field: SerializeField] public float Radius = 4f;
         [field: SerializeField] public float SecondRadius = 8f;
         [field: SerializeField] public float RadiusError = 0.3f;
+        [field: Space(5)]
+        [field: SerializeField] public MineType MineType { get; private set; } = MineType.Cubic;
         
         public float RadiusWithError => Radius+RadiusError;
     }
     
     [CreateAssetMenu(fileName = "new Chunk Parameters", menuName = "Mine Generator/Chunk Parameters", order = 0)]
-    public class ChunkData : ScriptableObject
+    public class ChunkData : ScriptableSingleton<ChunkData>
     {
         [field: SerializeField] public float IsoLevel { get; private set; } = 0.5f;
         [field: Space(5)]
         [field: SerializeField] public GridData GridParameters { get; private set; }
         [field: SerializeField] public NoiseData NoiseParameters { get; private set; }
         [field: SerializeField] public MineTunnelData TunnelParameters { get; private set; }
+
+        public int GridSize => GridParameters.GridSize;
+        public float DeltaStep => GridParameters.DeltaStep;
+        public Vector3 ChunksCount => GridParameters.ChunksCount;
     }
 }

@@ -16,7 +16,6 @@ namespace MineGenerator
         [SerializeField] private BezierCurve3D[] curves;
         
         [SerializeField] private MineBezierChunk chunkPrefab;
-        [SerializeField] private ChunkData chunkData;
 
         [ContextMenu("Generate Chunks")]
         public void CreateChunks()
@@ -33,16 +32,16 @@ namespace MineGenerator
 
         private void CreateChunksGrid(ref HashSet<MineBezierChunk> chunks)
         {
-            var step = chunkData.GridParameters.DeltaStep * chunkData.GridParameters.GridSize;
+            var step = ChunkData.instance.DeltaStep * ChunkData.instance.GridParameters.GridSize;
 
-            for (int x = 0; x < chunkData.GridParameters.ChunksCount.x; x++)
+            for (int x = 0; x < ChunkData.instance.ChunksCount.x; x++)
             {
-                for (int y = 0; y < chunkData.GridParameters.ChunksCount.y; y++)
+                for (int y = 0; y < ChunkData.instance.ChunksCount.y; y++)
                 {
-                    for (int z = 0; z < chunkData.GridParameters.ChunksCount.z; z++)
+                    for (int z = 0; z < ChunkData.instance.ChunksCount.z; z++)
                     {
                         var xyz = new Vector3(x, y, z);
-                        var position = xyz * step - xyz * chunkData.GridParameters.DeltaStep;
+                        var position = xyz * step - xyz * ChunkData.instance.DeltaStep;
                         var instance = CreateChunk(position);
 
                         chunks.Add(instance);
@@ -98,7 +97,7 @@ namespace MineGenerator
             
             foreach (var bezier in curves)
             {
-                var addValue = chunkData.GridParameters.DeltaStep / bezier.GetApproximateLength();
+                var addValue = ChunkData.instance.DeltaStep / bezier.GetApproximateLength();
                 
                 for (float curveLength = 0f; curveLength <= 1f; curveLength += addValue)
                 {
@@ -112,14 +111,14 @@ namespace MineGenerator
 
         private void OnDrawGizmos()
         {
-            var gridSize = chunkData.GridParameters.GridSize;
-            var deltaStep = chunkData.GridParameters.DeltaStep;
+            var gridSize = ChunkData.instance.GridSize;
+            var deltaStep = ChunkData.instance.DeltaStep;
 
             var chunkStep = gridSize * deltaStep;
 
-            var xChunksCount = chunkData.GridParameters.ChunksCount.x -1;
-            var yChunksCount = chunkData.GridParameters.ChunksCount.y -1;
-            var zChunksCount = chunkData.GridParameters.ChunksCount.z -1;
+            var xChunksCount = ChunkData.instance.ChunksCount.x -1;
+            var yChunksCount = ChunkData.instance.ChunksCount.y -1;
+            var zChunksCount = ChunkData.instance.ChunksCount.z -1;
 
             var center = new Vector3((xChunksCount * chunkStep) / 2f, (yChunksCount * chunkStep) / 2f,
                 (zChunksCount * chunkStep) / 2f);
