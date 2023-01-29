@@ -17,14 +17,7 @@ namespace MineGenerator
         public const string SelectColorRef = "minechunk-select-color";
         public const string UnselectColorRef = "minechunk-unselect-color";
         
-        private static Texture2D _toolIcon;
-        
-        private readonly GUIContent _iconContent = new GUIContent
-        {
-            image = _toolIcon,
-            text = "Chunks Weight Editor Tool",
-            tooltip = "Chunks Weight Editor Tool"
-        };
+        public Texture2D toolIcon;
 
         private EnumField _modifyType;
         private FloatField _radius;
@@ -36,10 +29,14 @@ namespace MineGenerator
 
         private bool _allowModify;
         
-        public override GUIContent toolbarIcon
-        {
-            get { return _iconContent; }
-        }
+        public override GUIContent toolbarIcon =>
+            new()
+            {
+                image = toolIcon,
+                text = "Chunks Weight Editor Tool",
+                tooltip = "Chunks Weight Editor Tool"
+            };
+        
 
         public override void OnActivated()
         {
@@ -56,14 +53,15 @@ namespace MineGenerator
             _toolRootElement.style.paddingRight = 5f;
             _toolRootElement.style.paddingLeft = 5f;
             _toolRootElement.style.paddingBottom = 5f;
-            var titleLabel = new Label("Place Objects Tool");
+            
+            var titleLabel = new Label("Mineformation Tool");
             titleLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
 
-            _modifyType = new EnumField("Тип модификации", ModifyType.Decrease);
-            _radius = new FloatField("Радиус воздействия");
-            _intensity = new FloatField("Интенсивность воздействия");
-            _selectColor = new ColorField("Выбран");
-            _unselectColor = new ColorField("Не выбран");
+            _modifyType = new EnumField("Modification Type", ModifyType.Decrease);
+            _radius = new FloatField("Action Radius");
+            _intensity = new FloatField("Action Intensity");
+            _selectColor = new ColorField("Action Color");
+            _unselectColor = new ColorField("Idle Color");
 
             _radius.value = LoadRadius();
             _intensity.value = LoadIntensity();
