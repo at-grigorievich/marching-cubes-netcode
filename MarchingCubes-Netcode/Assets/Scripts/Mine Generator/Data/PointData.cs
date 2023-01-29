@@ -10,9 +10,9 @@ namespace MineGenerator
 
         [SerializeField,HideInInspector] public bool IsAvailable;
 
-        [SerializeField,HideInInspector] private float _density;
+        [SerializeField,HideInInspector] public bool IsCorner;
 
-        [SerializeField, HideInInspector] public bool IsCorner;
+        [SerializeField,HideInInspector] private float _density;
         
         public float Density
         {

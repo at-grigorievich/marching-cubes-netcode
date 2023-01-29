@@ -18,7 +18,8 @@ namespace MineGenerator.Containers
         {
             PointData selected = Data[index];
 
-            if(!selected.IsAvailable) return;
+            if(!selected.IsAvailable || selected.IsCorner) return;
+            
             if (!MathfHelper.IsPointInRadius(selected.Position, 
                     ModifyData.ModifyCenter, ModifyData.ModifyRadius, out float distance)) return;
 

@@ -64,6 +64,11 @@ namespace MineGenerator
                         
                         Gizmos.color = pointsContainer[x,y,z].Density >= ChunkData.instance.IsoLevel
                             ? Color.white : Color.black;
+
+                        if (pointsContainer[x, y, z].IsCorner)
+                        {
+                            Gizmos.color = Color.red;
+                        }
                         
                         Gizmos.DrawCube(pointsContainer[x, y, z].Position,Vector3.one*.1f);
                     }  

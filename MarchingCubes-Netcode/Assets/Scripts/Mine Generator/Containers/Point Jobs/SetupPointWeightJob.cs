@@ -26,8 +26,9 @@ namespace MineGenerator.Containers
         public void Execute(int index)
         {
             PointData selectedPoint = Data[index];
-            var pointPos = selectedPoint.Position;
             
+            var pointPos = selectedPoint.Position;
+
             var noiseX = pointPos.x / GridSize * NoiseScale;
             var noiseY = pointPos.y / GridSize * NoiseScale;
             var noiseZ = pointPos.z / GridSize * NoiseScale;
@@ -48,12 +49,12 @@ namespace MineGenerator.Containers
                 
                 var onThirdRadius = MathfHelper.IsPointInRadius(pointPos,center,SecondRadius);
 
-                if (onRadius)
+                if (onRadius && !selectedPoint.IsCorner)
                 {
                     selectedPoint.Density = 1f;
                     selectedPoint.IsAvailable = true;
                 }
-                else if(onSecRadius)
+                else if(onSecRadius && !selectedPoint.IsCorner)
                 {
                     selectedPoint.Density += noise;
                     selectedPoint.IsAvailable = true;

@@ -56,6 +56,7 @@ namespace MineGenerator.Containers
 
         public void GeneratePointsByBezier(Vector3[] curvesPoints)
         {
+#if UNITY_EDITOR
             var pointData = new NativeArray<PointData>(Count,Allocator.TempJob);
             var curvePoints = new NativeArray<Vector3>(curvesPoints, Allocator.TempJob);
 
@@ -65,6 +66,10 @@ namespace MineGenerator.Containers
                 GridSize = GridSize,
                 DeltaStep = DeltaStep,
                 WorldDelta = worldDelta,
+                
+                CornersX = ChunkData.instance.GetCornersX(),
+                CornersY = ChunkData.instance.GetCornersY(),
+                CornersZ = ChunkData.instance.GetCornersZ()
             };
 
             var setupPointsJob = new SetupPointWeightJob()
@@ -93,6 +98,7 @@ namespace MineGenerator.Containers
             
             curvePoints.Dispose();
             pointData.Dispose();
+#endif
         }
         public void UpdateWeight(WeightModifyData modifyData)
         {

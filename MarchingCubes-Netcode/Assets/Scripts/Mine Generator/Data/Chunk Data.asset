@@ -24,4 +24,4 @@ MonoBehaviour:
     Radius: 2
     SecondRadius: 10
     RadiusError: 0.55
-    <MineType>k__BackingField: 1
+    <MineType>k__BackingField: 0

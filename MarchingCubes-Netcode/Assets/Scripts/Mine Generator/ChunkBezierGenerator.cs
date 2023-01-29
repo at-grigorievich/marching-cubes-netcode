@@ -111,22 +111,8 @@ namespace MineGenerator
 
         private void OnDrawGizmos()
         {
-            var gridSize = ChunkData.instance.GridSize;
-            var deltaStep = ChunkData.instance.DeltaStep;
-
-            var chunkStep = gridSize * deltaStep;
-
-            var xChunksCount = ChunkData.instance.ChunksCount.x -1;
-            var yChunksCount = ChunkData.instance.ChunksCount.y -1;
-            var zChunksCount = ChunkData.instance.ChunksCount.z -1;
-
-            var center = new Vector3((xChunksCount * chunkStep) / 2f, (yChunksCount * chunkStep) / 2f,
-                (zChunksCount * chunkStep) / 2f);
-            var size = new Vector3((xChunksCount * chunkStep), (yChunksCount * chunkStep),
-                (zChunksCount * chunkStep));
-            
             Gizmos.color = Color.blue;
-            Gizmos.DrawWireCube(center,size);
+            Gizmos.DrawWireCube(ChunkData.instance.ChunksCenter,ChunkData.instance.ChunksSize);
         }
 #endif
     }
