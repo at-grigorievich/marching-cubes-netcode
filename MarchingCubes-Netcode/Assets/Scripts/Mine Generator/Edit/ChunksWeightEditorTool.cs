@@ -1,4 +1,5 @@
 using Mine_Generator.Data;
+using MineGenerator.Data;
 using MineGenerator.Interfaces;
 using UnityEditor;
 using UnityEditor.EditorTools;
@@ -16,10 +17,13 @@ namespace MineGenerator
         public const string IntensityRef = "minechunk-intensity";
         public const string SelectColorRef = "minechunk-select-color";
         public const string UnselectColorRef = "minechunk-unselect-color";
+        public const string ModifyTypeRef = "minechunk-modify-type";
+        public const string FormTypeRef = "minechunk-form-type";
         
         public Texture2D toolIcon;
 
         private EnumField _modifyType;
+        private EnumField _formType;
         private FloatField _radius;
         private FloatField _intensity;
         private ColorField _selectColor;
@@ -58,6 +62,7 @@ namespace MineGenerator
             titleLabel.style.unityTextAlign = TextAnchor.MiddleLeft;
 
             _modifyType = new EnumField("Modification Type", ModifyType.Decrease);
+            _formType = new EnumField("Form Type", MineType.Cubic);
             _radius = new FloatField("Action Radius");
             _intensity = new FloatField("Action Intensity");
             _selectColor = new ColorField("Action Color");
@@ -67,8 +72,11 @@ namespace MineGenerator
             _intensity.value = LoadIntensity();
             _selectColor.value = LoadSelectedColor();
             _unselectColor.value = LoadUnselectedColor();
+            _modifyType.value = LoadModifyType();
+            _formType.value = LoadFormType();
 
             _toolRootElement.Add(_modifyType);
+            _toolRootElement.Add(_formType);
             _toolRootElement.Add(_radius);
             _toolRootElement.Add(_intensity);
             _toolRootElement.Add(_selectColor);
@@ -86,7 +94,9 @@ namespace MineGenerator
             SaveFloat(IntensityRef,_intensity.value);
             SaveColor(SelectColorRef,_selectColor.value);
             SaveColor(UnselectColorRef,_unselectColor.value);
-
+            SaveInt(ModifyTypeRef,(int)(ModifyType)_modifyType.value);
+            SaveInt(FormTypeRef,(int)(MineType)_formType.value);
+            
             _toolRootElement?.RemoveFromHierarchy();
         }
         
@@ -177,7 +187,31 @@ namespace MineGenerator
             }
             return Color.yellow;
         }
-        
+
+        private ModifyType LoadModifyType()
+        {
+            if (EditorPrefs.HasKey(ModifyTypeRef))
+            {
+                return (ModifyType)EditorPrefs.GetInt(ModifyTypeRef);
+            }
+
+            return ModifyType.Decrease;
+        }
+
+        private MineType LoadFormType()
+        {
+            if (EditorPrefs.HasKey(FormTypeRef))
+            {
+                return (MineType)EditorPrefs.GetInt(FormTypeRef);
+            }
+
+            return MineType.Cubic;
+        }
+
+        private void SaveInt(string reference, int value)
+        {
+            EditorPrefs.SetInt(reference,value);
+        }
         private void SaveFloat(string reference, float value)
         {
             EditorPrefs.SetFloat(reference,value);
