@@ -19,8 +19,8 @@ MonoBehaviour:
     <DeltaStep>k__BackingField: 1
   <NoiseParameters>k__BackingField:
     <NoiseScale>k__BackingField: 1
-    <NoiseAmplitude>k__BackingField: 0.3
+    <NoiseAmplitude>k__BackingField: 1
   <TunnelParameters>k__BackingField:
-    Radius: 4
+    Radius: 2
     SecondRadius: 20
     RadiusError: 0.55

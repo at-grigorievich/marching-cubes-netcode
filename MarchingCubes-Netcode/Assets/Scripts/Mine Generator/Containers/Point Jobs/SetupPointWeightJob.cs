@@ -35,9 +35,9 @@ namespace MineGenerator.Containers
             {
                 var center = CurvePoints[i];
 
-                var onRadius = MathfHelper.IsPointInRadius(pointPos,center,Radius);
-                var onSecRadius = MathfHelper.IsPointInRadius(pointPos,center,RadiusWithError);
-                var onThirdRadius = MathfHelper.IsPointInRadius(pointPos,center,SecondRadius);
+                var onRadius = MathfHelper.IsPointInCube(pointPos,center,Radius);
+                var onSecRadius = MathfHelper.IsPointInCube(pointPos,center,RadiusWithError);
+                var onThirdRadius = MathfHelper.IsPointInCube(pointPos,center,SecondRadius);
 
                 if (onRadius)
                 {
