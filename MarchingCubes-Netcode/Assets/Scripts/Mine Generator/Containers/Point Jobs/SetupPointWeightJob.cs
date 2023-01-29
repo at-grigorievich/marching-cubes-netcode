@@ -37,7 +37,7 @@ namespace MineGenerator.Containers
 
                 var onRadius = MathfHelper.IsPointInCube(pointPos,center,Radius);
                 var onSecRadius = MathfHelper.IsPointInCube(pointPos,center,RadiusWithError);
-                var onThirdRadius = MathfHelper.IsPointInCube(pointPos,center,SecondRadius);
+                var onThirdRadius = MathfHelper.IsPointInRadius(pointPos,center,SecondRadius);
 
                 if (onRadius)
                 {

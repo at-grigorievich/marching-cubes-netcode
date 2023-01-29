@@ -110,7 +110,7 @@ namespace MineGenerator
             return points.ToArray();
         }
 
-        private void OnDrawGizmosSelected()
+        private void OnDrawGizmos()
         {
             var gridSize = chunkData.GridParameters.GridSize;
             var deltaStep = chunkData.GridParameters.DeltaStep;
