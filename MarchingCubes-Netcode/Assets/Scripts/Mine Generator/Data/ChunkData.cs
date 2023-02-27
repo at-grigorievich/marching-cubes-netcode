@@ -59,11 +59,11 @@ namespace MineGenerator.Data
         public int ChunksCountX => ChunksCount.x -1;
         public int ChunksCountY => ChunksCount.y - 1;
         public int ChunksCountZ => ChunksCount.z -1;
-        
+
         public Vector3 ChunksCenter =>
-            new (ChunksCountX * ChunkStep/2f, ChunksCountY * ChunkStep/2f + ChunkStep/4f, ChunksCountZ * ChunkStep/2f);
+            new Vector3(ChunksCountX * ChunkStep/2f, ChunksCountY * ChunkStep/2f + ChunkStep/4f, ChunksCountZ * ChunkStep/2f);
         public Vector3 ChunksSize =>
-            new (ChunksCountX * ChunkStep, ChunksCountY * ChunkStep + ChunkStep/2f, ChunksCountZ * ChunkStep);
+            new Vector3(ChunksCountX * ChunkStep, ChunksCountY * ChunkStep + ChunkStep/2f, ChunksCountZ * ChunkStep);
 
         public Vector2 GetCornersX()
         {
