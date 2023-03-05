@@ -16,8 +16,7 @@ namespace MineGenerator
         [SerializeField] private BezierCurve3D[] curves;
         
         [SerializeField] private MineBezierChunk chunkPrefab;
-
-        [ContextMenu("Generate Chunks")]
+        
         public void CreateChunks()
         {
             var chunks = new HashSet<MineBezierChunk>();

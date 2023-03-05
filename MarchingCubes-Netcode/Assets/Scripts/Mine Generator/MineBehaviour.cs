@@ -24,8 +24,7 @@ namespace MineGenerator
                 mineChunks.Add(chunks[i]);
             }
         }
-
-        [ContextMenu("Save mesh")]
+        
         public void SaveMineMeshes()
         {
 #if UNITY_EDITOR

@@ -41,9 +41,24 @@ namespace MineGenerator.Data
         public float RadiusWithError => Radius+RadiusError;
     }
     
-    [CreateAssetMenu(fileName = "new Chunk Parameters", menuName = "Mine Generator/Chunk Parameters", order = 0)]
-    public class ChunkData : ScriptableSingleton<ChunkData>
+    [CreateAssetMenu(fileName = "Chunk Settings", menuName = "Mine Generator/Chunk Settings", order = 0)]
+    public class ChunkData : ScriptableObject
     {
+        private static ChunkData _instance;
+
+        public static ChunkData instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = Resources.Load<ChunkData>("Data/Chunk Settings");
+                }
+
+                return _instance;
+            }
+        }
+        
         [field: SerializeField] public float IsoLevel { get; private set; } = 0.5f;
         [field: Space(5)]
         [field: SerializeField] public GridData GridParameters { get; private set; }
@@ -64,6 +79,7 @@ namespace MineGenerator.Data
             new Vector3(ChunksCountX * ChunkStep/2f, ChunksCountY * ChunkStep/2f + ChunkStep/4f, ChunksCountZ * ChunkStep/2f);
         public Vector3 ChunksSize =>
             new Vector3(ChunksCountX * ChunkStep, ChunksCountY * ChunkStep + ChunkStep/2f, ChunksCountZ * ChunkStep);
+
 
         public Vector2 GetCornersX()
         {
