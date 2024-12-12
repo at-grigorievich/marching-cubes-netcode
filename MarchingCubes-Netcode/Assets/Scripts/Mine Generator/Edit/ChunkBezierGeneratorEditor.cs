@@ -1,3 +1,5 @@
+#if UNITY_EDITOR
+
 using UnityEditor;
 using UnityEngine;
 
@@ -6,7 +8,6 @@ namespace MineGenerator
     [CustomEditor(typeof(ChunkBezierGenerator),true)]
     public class ChunkBezierGeneratorEditor: Editor
     {
-#if UNITY_EDITOR
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
@@ -15,6 +16,6 @@ namespace MineGenerator
                 ((ChunkBezierGenerator)target).CreateChunks();
             }
         }
-#endif
     }
 }
+#endif
