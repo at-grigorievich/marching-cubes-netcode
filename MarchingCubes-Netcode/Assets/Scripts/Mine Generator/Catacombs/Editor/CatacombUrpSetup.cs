@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEditor;
+using UnityEditor.Rendering;
+using UnityEditor.Rendering.Universal;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -144,6 +147,79 @@ namespace MineGenerator.Catacombs.EditorTools
             QualitySettings.SetQualityLevel(restore, false);
 
             changes.AppendLine($"  назначен по умолчанию и во всех {names.Length} уровнях качества");
+        }
+
+        /// <summary>
+        /// Переводит материалы на встроенных шейдерах (Standard и легаси) на URP.
+        ///
+        /// Нужен покупным ассетам — паукам, паутине, реквизиту: их материалы сидят
+        /// на Standard, который в URP не собирается вовсе и даёт розовое. Материалы
+        /// катакомб сюда не попадают: они уже на своих шейдерах.
+        ///
+        /// Правится ТОЛЬКО материал. Настройки освещения не трогаются намеренно: свет,
+        /// туман и ambient катакомб выставлены вручную и замерены, а штатный конвертер
+        /// настроек перепишет их по своим правилам.
+        ///
+        /// Апгрейдер берётся официальный, <see cref="StandardUpgrader"/>, но зовётся
+        /// поматериально. Таблицу соответствия свойств (_MainTex к _BaseMap, _Color
+        /// к _BaseColor, _Glossiness к _Smoothness и прочее) выдумывать заново незачем,
+        /// а поматериальный обход, в отличие от пакетного <c>Converters.RunInBatchMode</c>,
+        /// заканчивается к возврату из метода и печатает, что именно он сделал.
+        ///
+        /// Пакетный конвертер тоже работает и семейство Standard разбирает сам; этот
+        /// проход добирает то, что осталось на легаси-шейдерах. Идемпотентен: материал,
+        /// уже переведённый на URP, пропускается по имени шейдера.
+        ///
+        /// Скайбоксы и демо-материалы Toony Colors Pro остаются на своих шейдерах
+        /// намеренно: встроенные скайбоксы в URP работают, а демо в игре не участвуют.
+        /// </summary>
+        [MenuItem("Tools/Mine Generator/URP: конвертировать материалы покупных ассетов")]
+        public static void ConvertMaterials()
+        {
+            var upgraded = 0;
+            var skipped = new List<string>();
+
+            var guids = AssetDatabase.FindAssets("t:Material");
+
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+
+                if (material == null || material.shader == null) continue;
+
+                var shaderName = material.shader.name;
+
+                // Уже на URP или на своём — не трогаем. Сюда же попадают шейдеры катакомб
+                // и Toony Colors Pro: у них своя история, и Standard они не используют.
+                if (!shaderName.StartsWith("Standard"))
+                {
+                    if (shaderName.StartsWith("Legacy Shaders/") || shaderName.StartsWith("Mobile/"))
+                        skipped.Add($"{path} ({shaderName})");
+
+                    continue;
+                }
+
+                new StandardUpgrader(shaderName).Upgrade(material, MaterialUpgrader.UpgradeFlags.None);
+
+                EditorUtility.SetDirty(material);
+                upgraded++;
+            }
+
+            AssetDatabase.SaveAssets();
+
+            var report = new StringBuilder();
+            report.AppendLine($"Материалов переведено на URP: {upgraded}.");
+            report.AppendLine("Настройки освещения намеренно не трогались.");
+
+            if (skipped.Count > 0)
+            {
+                report.AppendLine($"Осталось на легаси-шейдерах ({skipped.Count}) — проверить глазами:");
+
+                foreach (var item in skipped) report.AppendLine("  " + item);
+            }
+
+            Debug.Log(report.ToString());
         }
 
         private static void EnsureFolder(string folder)
