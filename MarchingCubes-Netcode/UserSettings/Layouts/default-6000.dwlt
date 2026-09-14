@@ -247,8 +247,8 @@ MonoBehaviour:
     y: 0
     width: 404.80005
     height: 716.8
-  m_MinSize: {x: 275, y: 50}
-  m_MaxSize: {x: 4000, y: 4000}
+  m_MinSize: {x: 276, y: 76}
+  m_MaxSize: {x: 4001, y: 4026}
   m_ActualView: {fileID: 17}
   m_Panes:
   - {fileID: 17}
@@ -277,7 +277,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 43.2
+    y: 0
     width: 1536
     height: 36
   m_SerializedDataModeController:
@@ -581,7 +581,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 79.200005
+    y: 24
     width: 785.4
     height: 690.8
   m_SerializedDataModeController:
@@ -1027,6 +1027,20 @@ MonoBehaviour:
       layout: 4
       size: {x: 0, y: 0}
       sizeOverridden: 0
+    - dockPosition: 1
+      containerId: overlay-container--right
+      displayed: 0
+      id: APV Overlay
+      index: 11
+      contents: '{"m_Layout":4,"m_Collapsed":false,"m_Folded":false,"m_Floating":false,"m_FloatingSnapOffset":{"x":0.0,"y":0.0},"m_SnapOffsetDelta":{"x":0.0,"y":0.0},"m_FloatingSnapCorner":0,"m_Size":{"x":0.0,"y":0.0},"m_SizeOverridden":false}'
+      floating: 0
+      collapsed: 0
+      snapOffset: {x: 0, y: 0}
+      snapOffsetDelta: {x: 0, y: 0}
+      snapCorner: 0
+      layout: 4
+      size: {x: 0, y: 0}
+      sizeOverridden: 0
     m_ContainerData:
     - containerId: overlay-toolbar__top
       scrollOffset: 0
@@ -1072,7 +1086,7 @@ MonoBehaviour:
   m_Position:
     m_Target: {x: 21.850082, y: 23.780384, z: 56.50473}
     speed: 2
-    m_Value: {x: -0.000000029802322, y: -0.000000059604645, z: 0}
+    m_Value: {x: 21.850082, y: 23.780384, z: 56.50473}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1121,11 +1135,11 @@ MonoBehaviour:
   m_Rotation:
     m_Target: {x: 0.05992508, y: 0.49353123, z: -0.034114204, w: 0.86699855}
     speed: 2
-    m_Value: {x: 0.05992465, y: 0.4935277, z: -0.034113962, w: 0.86699235}
+    m_Value: {x: 0.05992508, y: 0.49353126, z: -0.034114204, w: 0.86699855}
   m_Size:
     m_Target: 3.0205612
     speed: 2
-    m_Value: 0.6162302
+    m_Value: 3.0205612
   m_Ortho:
     m_Target: 0
     speed: 2
@@ -1283,8 +1297,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Hierarchy\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 786.4
-    y: 79.200005
+    x: 1
+    y: 24
     width: 342.79993
     height: 230
   m_SerializedDataModeController:
@@ -1360,8 +1374,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Project\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 786.4
-    y: 335.2
+    x: 1
+    y: 280
     width: 342.79993
     height: 434.8
   m_SerializedDataModeController:
@@ -1412,11 +1426,8 @@ MonoBehaviour:
       m_Data: 41680
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 40688
-    - m_Data: 40690
-    - m_Data: 41648
-    - m_Data: 41658
-    - m_Data: 1000000000
+    - m_Data: 49862
+    - m_Data: 49864
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1450,8 +1461,8 @@ MonoBehaviour:
       m_Data: 0
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 40688
-    - m_Data: 40690
+    - m_Data: 49862
+    - m_Data: 49864
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1486,8 +1497,8 @@ MonoBehaviour:
     m_ExpandedInstanceIDs: []
     m_RenameOverlay:
       m_UserAcceptedRename: 0
-      m_Name: SM_Cobwebs_05
-      m_OriginalName: SM_Cobwebs_05
+      m_Name: 
+      m_OriginalName: 
       m_EditFieldRect:
         serializedVersion: 2
         x: 0
@@ -1495,10 +1506,10 @@ MonoBehaviour:
         width: 0
         height: 0
       m_UserData:
-        m_Data: 41682
+        m_Data: 0
       m_IsWaitingForDelay: 0
       m_IsRenaming: 0
-      m_OriginalEventType: 0
+      m_OriginalEventType: 11
       m_IsRenamingFilename: 1
       m_TrimLeadingAndTrailingWhitespace: 0
       m_ClientGUIView: {fileID: 9}
@@ -1535,8 +1546,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Inspector\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1131.2001
-    y: 79.200005
+    x: 1132.2
+    y: 24
     width: 403.80005
     height: 690.8
   m_SerializedDataModeController:

@@ -1,4 +1,5 @@
-﻿﻿﻿using System.IO;
+﻿﻿﻿using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -13,6 +14,7 @@ namespace MineGenerator.Catacombs.EditorTools
         private const string NormalPath = "Assets/Textures/Cave Rock Normal.png";
         private const string SettingsPath = "Assets/Resources/Data/Catacomb Settings.asset";
         private const string CaveShaderName = "Mine Generator/Cave Triplanar";
+        private const string WebPrefabFolder = "Assets/StorePackages/PolyOne/Cobwebs Pack/Prefabs";
 
         public override void OnInspectorGUI()
         {
@@ -755,9 +757,47 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var so = new SerializedObject(webs);
             so.FindProperty("world").objectReferenceValue = world;
+
+            FillWebPrefabs(so.FindProperty("webPrefabs"));
+
             so.ApplyModifiedPropertiesWithoutUndo();
 
             webs.Rebuild();
+        }
+
+        /// <summary>
+        /// Раскладывает по компоненту готовые меши паутины из пака PolyOne Cobwebs.
+        ///
+        /// Делается здесь, а не в самом компоненте: <see cref="CaveWebs"/> работает
+        /// и в плеере, а поиск ассетов по пути — это AssetDatabase, то есть редактор.
+        /// Компонент про пак ничего не знает и съест любой набор префабов, лишь бы
+        /// меш лежал в плоскости XY.
+        /// </summary>
+        private static void FillWebPrefabs(SerializedProperty property)
+        {
+            if (property == null) return;
+
+            if (!Directory.Exists(WebPrefabFolder))
+            {
+                Debug.LogWarning($"Паутина: папка {WebPrefabFolder} не найдена, паутины не будет");
+                property.arraySize = 0;
+                return;
+            }
+
+            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { WebPrefabFolder });
+
+            // Порядок FindAssets не обещан, а сид уровня должен давать одну и ту же
+            // паутину от прогона к прогону — иначе не сравнить два кадра одной сцены.
+            var paths = new List<string>();
+
+            foreach (var guid in guids) paths.Add(AssetDatabase.GUIDToAssetPath(guid));
+            paths.Sort(System.StringComparer.Ordinal);
+
+            property.arraySize = paths.Count;
+
+            for (var i = 0; i < paths.Count; i++)
+                property.GetArrayElementAtIndex(i).objectReferenceValue =
+                    AssetDatabase.LoadAssetAtPath<GameObject>(paths[i]);
         }
 
         /// <summary>Настроение этажа — цвет дали по тому, куда спустился игрок.</summary>

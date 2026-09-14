@@ -47,6 +47,19 @@ namespace MineGenerator.Catacombs
             public Vector3 Center;
             public Vector3 Direction;
             public float Length;
+
+            /// <summary>
+            /// Поперечник самой щели: во что она сузилась, а не какой ход был до неё.
+            ///
+            /// Хранится потому, что снаружи его взять неоткуда — вычисляется он внутри
+            /// AddCorridorMaybePinched из ширины хода, PinchWidth и нижней границы
+            /// проходимости, и повторять эту формулу у каждого потребителя значит
+            /// получить два расходящихся числа. Паутина без него садится мимо: щели
+            /// около двух юнитов поперёк, и меш в пять юнитов уходит в породу целиком.
+            /// </summary>
+            public float Width;
+
+            public float Height;
         }
 
         /// <summary>
@@ -684,7 +697,9 @@ namespace MineGenerator.Catacombs
                 {
                     Center = (Vector3)math.lerp(from, to, mid),
                     Direction = (Vector3)direction,
-                    Length = pinchLength
+                    Length = pinchLength,
+                    Width = width,
+                    Height = height
                 });
             }
         }

@@ -34,7 +34,12 @@ namespace MineGenerator.Catacombs.EditorTools
             EditorApplication.Exit(code);
         }
 
-        private static void Report()
+        /// <summary>
+        /// То же самое, но без выхода из редактора: <see cref="Run"/> закрывает процесс,
+        /// и позвать его при открытом редакторе — значит захлопнуть его пользователю.
+        /// Через <c>unity cmd run_script</c> зовётся эта.
+        /// </summary>
+        public static void Report()
         {
             Directory.CreateDirectory(OutDir);
 
