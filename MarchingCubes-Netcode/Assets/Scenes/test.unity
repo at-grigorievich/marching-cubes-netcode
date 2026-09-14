@@ -425,10 +425,11 @@ MonoBehaviour:
   - {fileID: 6854083829974287453, guid: f5c555686d39bf848a61f283a684a619, type: 3}
   - {fileID: 3348056813132367235, guid: fdcd2234d2cb27c46bff0eafbdf10a3d, type: 3}
   webShare: 0.7
-  webSpan: {x: 4.2, y: 5.4}
-  cocoonsPerWeb: {x: 0, y: 3}
+  webOvershoot: {x: 1.15, y: 1.4}
   webColor: {r: 0.62, g: 0.62, b: 0.56, a: 0.3}
-  cocoonColor: {r: 0.62, g: 0.6, b: 0.54, a: 1}
+  webSpeedScale: 0.25
+  webFallScale: 0.2
+  webThickness: 1.1
 --- !u!114 &711213593
 MonoBehaviour:
   m_ObjectHideFlags: 0

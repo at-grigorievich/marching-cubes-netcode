@@ -92,6 +92,8 @@ namespace MineGenerator.Catacombs.EditorTools
 
             Debug.Log($"ПРОГОН ламп {lamps}, жил {veins}, с тенями {shadowed}");
 
+            ReportWebs(world);
+
             var player = GameObject.Find("Test Player");
             var cam = player.GetComponent<Camera>();
 
@@ -186,10 +188,77 @@ namespace MineGenerator.Catacombs.EditorTools
                 shot++;
             }
 
+            ReportWebTear(world);
+
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
 
             Debug.Log("ПРОГОН готово");
+        }
+
+        /// <summary>
+        /// Паутина: сколько её, ловится ли вязкий объём запросом и рвётся ли она.
+        ///
+        /// Проверять это в batchmode можно и нужно: физические запросы работают и вне
+        /// play-режима — коллайдеры зарегистрированы сразу, — а сам движок физики там
+        /// не крутится. То есть тракт «объём находится, паутина рвётся» проверяется
+        /// полностью, и непроверенным остаётся только ощущение от торможения на ходу.
+        /// Его смотреть руками: в этом проекте несколько диагнозов подряд оказались
+        /// неверными именно из-за гадания по картинке вместо проверки в игре.
+        /// </summary>
+        private static void ReportWebs(CatacombWorld world)
+        {
+            var webs = world.GetComponentsInChildren<CaveWeb>();
+
+            if (webs.Length == 0)
+            {
+                Debug.Log("ПРОГОН паутин 0");
+                return;
+            }
+
+            var volumes = 0;
+            var found = 0;
+
+            foreach (var web in webs)
+            {
+                var box = web.GetComponent<BoxCollider>();
+
+                if (box != null && box.isTrigger) volumes++;
+
+                // Тот же запрос, которым паутину ищет движение игрока. Если он её
+                // не находит, замедления в игре не будет, сколько бы объёмов ни висело.
+                var overlaps = Physics.OverlapSphere(web.transform.position, 0.3f, ~0,
+                    QueryTriggerInteraction.Collide);
+
+                foreach (var overlap in overlaps)
+                {
+                    if (overlap.GetComponent<CaveWeb>() == null) continue;
+
+                    found++;
+                    break;
+                }
+            }
+
+            Debug.Log($"ПРОГОН паутин {webs.Length}, с вязким объёмом {volumes}, " +
+                      $"ловится запросом {found}, замедление x{webs[0].SpeedScale:0.00} " +
+                      $"(падение x{webs[0].FallScale:0.00})");
+        }
+
+        /// <summary>
+        /// Разрыв паутины. Отдельно от отчёта и ПОСЛЕ съёмки кадров: проверка рвёт
+        /// настоящую паутину, а измерительный инструмент не должен менять то, что меряет.
+        /// </summary>
+        private static void ReportWebTear(CatacombWorld world)
+        {
+            var webs = world.GetComponentsInChildren<CaveWeb>();
+
+            if (webs.Length == 0) return;
+
+            var before = webs.Length;
+            var torn = CaveWebs.TearAt(webs[0].transform.position, 1.5f);
+            var left = world.GetComponentsInChildren<CaveWeb>().Length;
+
+            Debug.Log($"ПРОГОН разрыв: было {before}, радиус 1.5 порвал {torn}, осталось {left}");
         }
     }
 }

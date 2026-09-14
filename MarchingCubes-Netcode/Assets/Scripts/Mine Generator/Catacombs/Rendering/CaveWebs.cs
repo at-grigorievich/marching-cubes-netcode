@@ -51,6 +51,24 @@ namespace MineGenerator.Catacombs
         // краска, а не как то, что висит тут годами.
         [SerializeField] private Color webColor = new Color(0.62f, 0.62f, 0.56f, 0.3f);
 
+        [Header("Вязкость")]
+        [Tooltip("Во сколько раз медленнее игрок идёт внутри паутины.")]
+        [SerializeField, Range(0.05f, 1f)] private float webSpeedScale = 0.25f;
+
+        [Tooltip("Во сколько раз медленнее игрок падает внутри паутины.")]
+        [SerializeField, Range(0.05f, 1f)] private float webFallScale = 0.2f;
+
+        /// <summary>
+        /// Толщина вязкого объёма поперёк паутины, юниты.
+        ///
+        /// Сам меш — почти плоский лист, и объём по его толщине игрок проскакивал бы
+        /// за один кадр на любой разумной скорости: при 6 юнитах в секунду и 60 кадрах
+        /// шаг равен 0.1 юнита, а лист тоньше. Вязнуть надо примерно полметра пути,
+        /// иначе торможения не почувствовать.
+        /// </summary>
+        [Tooltip("Толщина вязкого объёма поперёк паутины, юниты.")]
+        [SerializeField] private float webThickness = 1.1f;
+
         /// <summary>Меньше этого радиуса паутина в кадре не читается — такие места пропускаем.</summary>
         private const float MinReadableRadius = 0.9f;
 
@@ -160,6 +178,63 @@ namespace MineGenerator.Catacombs
                 // копий, которые в режиме редактирования оседают в сцене.
                 view.SetPropertyBlock(_tint);
             }
+
+            AddDragVolume(web, radius);
+        }
+
+        /// <summary>
+        /// Вязкий объём. Коробка-триггер, а не коллайдер по мешу.
+        ///
+        /// По мешу нельзя: нити тонкие и с прорехами, и попадание зависело бы от того,
+        /// прошёл игрок ровно по нити или между. Вязнуть надо во всей паутине целиком —
+        /// это же не сетка-рабица, а липкое полотно.
+        ///
+        /// Триггер, а не глухой коллайдер: проход паутина не запирает, она его замедляет.
+        /// Глухой вдобавок нарушил бы связность уровня — щель бывает единственной связью
+        /// между кусками, а заливка по полю плотности этого не заметит, она про породу.
+        /// </summary>
+        private void AddDragVolume(GameObject web, float radius)
+        {
+            var box = web.AddComponent<BoxCollider>();
+
+            box.isTrigger = true;
+
+            // Размеры в локальных: объект отмасштабирован под щель, и коробка едет вместе
+            // с ним. Толщину поперёк задаём в мировых и делим обратно на масштаб — она
+            // про шаг игрока за кадр, а не про размер паутины.
+            var scale = Mathf.Max(0.001f, web.transform.localScale.x);
+            var side = radius * 2f / scale;
+
+            box.size = new Vector3(side, side, webThickness / scale);
+            box.center = Vector3.zero;
+
+            web.AddComponent<CaveWeb>().Configure(webSpeedScale, webFallScale);
+        }
+
+        /// <summary>
+        /// Рвёт паутины в радиусе от точки. Зовётся попаданием — взрывом гранаты, киркой.
+        ///
+        /// По точке и радиусу, а не по конкретной паутине, потому что оружие в этой игре
+        /// гранатомёт: попадание здесь — это область, а не луч. Для луча достаточно взять
+        /// <see cref="CaveWeb"/> с того, во что он попал, и позвать Tear.
+        /// </summary>
+        /// <returns>Сколько паутин порвано.</returns>
+        public static int TearAt(Vector3 center, float radius)
+        {
+            var hits = Physics.OverlapSphere(center, radius, ~0, QueryTriggerInteraction.Collide);
+            var torn = 0;
+
+            foreach (var hit in hits)
+            {
+                var web = hit.GetComponent<CaveWeb>();
+
+                if (web == null) continue;
+
+                web.Tear();
+                torn++;
+            }
+
+            return torn;
         }
 
         /// <summary>

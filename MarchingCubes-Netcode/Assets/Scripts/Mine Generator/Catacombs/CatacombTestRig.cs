@@ -56,6 +56,7 @@ namespace MineGenerator.Catacombs
         private bool _spawned;
 
         private readonly RaycastHit[] _sweepHits = new RaycastHit[8];
+        private readonly Collider[] _webOverlaps = new Collider[8];
 
         private float _lastDigVolume;
         private float _totalDugVolume;
@@ -138,10 +139,16 @@ namespace MineGenerator.Catacombs
 
             _controller.enabled = true;
 
+            // Паутина замедляет только ходьбу: полёт — отладочная камера, и вязнуть ей
+            // не в чем. Ищется опросом, а не событиями триггера, см. CaveWeb.
+            var web = CurrentWeb();
+
             // Направление берём только по горизонтали, иначе взгляд вниз тормозит ходьбу.
             var forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
             var right = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
-            var move = (forward * input.z + right * input.x).normalized * (walkSpeed * boost);
+
+            var speed = walkSpeed * boost * (web != null ? web.SpeedScale : 1f);
+            var move = (forward * input.z + right * input.x).normalized * speed;
 
             if (_controller.isGrounded)
             {
@@ -154,7 +161,43 @@ namespace MineGenerator.Catacombs
             }
 
             move.y = _verticalSpeed;
+
+            // Падение гасим по скорости, а не по ускорению: разгон под тяжестью идёт и
+            // в паутине, просто наружу он не выходит. Иначе после долгого падения сквозь
+            // затянутую щель игрок вылетал бы снизу с накопленной скоростью.
+            if (web != null && move.y < 0f) move.y *= web.FallScale;
+
             _controller.Move(move * Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Паутина, в которой игрок сейчас стоит, или null.
+        ///
+        /// Опрос каждый кадр вместо OnTriggerEnter/Exit — намеренно. Паутина исчезает
+        /// и от перегенерации уровня, и от выстрела, и события выхода из неё в обоих
+        /// случаях не будет: игрок остался бы замедленным навсегда в пустом коридоре.
+        /// Состояния здесь нет вовсе, поэтому и портиться нечему.
+        ///
+        /// Буфер фиксированный: искать надо каждый кадр, а OverlapSphere с выделением
+        /// массива на этом месте давал бы мусор в куче шестьдесят раз в секунду.
+        /// </summary>
+        private CaveWeb CurrentWeb()
+        {
+            // Центр берём у контроллера, а не у трансформа: у капсулы он смещён, и запрос
+            // от точки объекта щупал бы у ног, а паутина натянута на высоте груди.
+            var center = transform.position + _controller.center;
+
+            var count = Physics.OverlapSphereNonAlloc(center, _controller.radius,
+                _webOverlaps, ~0, QueryTriggerInteraction.Collide);
+
+            for (var i = 0; i < count; i++)
+            {
+                var web = _webOverlaps[i].GetComponent<CaveWeb>();
+
+                if (web != null) return web;
+            }
+
+            return null;
         }
 
         /// <summary>
