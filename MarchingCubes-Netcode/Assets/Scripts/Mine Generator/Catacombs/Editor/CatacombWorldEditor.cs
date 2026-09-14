@@ -502,8 +502,12 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var deep = style == CaveLightStyle.Deep;
 
-            lamp.range = deep ? 11f : 38f;
-            lamp.intensity = deep ? 1.6f : 2.2f;
+            // Было 11/38 и 1.6/2.2. Те же множители, что у ламп на стенах (дальность x2,
+            // яркость x8) — компенсация обратноквадратичного затухания URP, подобранная
+            // замером по метрикам стиля. Замерялся глубокий стиль; ровный получил ту же
+            // пару без отдельной проверки — физика у обоих одна.
+            lamp.range = deep ? 22f : 76f;
+            lamp.intensity = deep ? 12.8f : 17.6f;
             lamp.color = deep ? new Color(1f, 0.88f, 0.68f) : new Color(1f, 0.94f, 0.82f);
 
             lamp.shadows = LightShadows.Soft;
@@ -899,7 +903,9 @@ namespace MineGenerator.Catacombs.EditorTools
 
             if (existing != null) return existing;
 
-            var shader = Shader.Find(CaveShaderName) ?? Shader.Find("Standard");
+            // Запасной — URP-овский Lit. Built-in Standard в URP не собирается вовсе
+            // и даёт розовую породу, то есть «запасной вариант», который хуже отсутствия.
+            var shader = Shader.Find(CaveShaderName) ?? Shader.Find("Universal Render Pipeline/Lit");
 
             var material = new Material(shader);
 

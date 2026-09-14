@@ -21,7 +21,6 @@ namespace MineGenerator.Catacombs
     public sealed class CaveGlowBillboard : MonoBehaviour
     {
         private static Mesh _quad;
-        private static Shader _additive;
 
         // Материал на цвет, а не на ореол: жил в уровне несколько десятков, и все они
         // одного цвета — отдельный материал на каждую ломал бы пакетную отрисовку.
@@ -35,10 +34,14 @@ namespace MineGenerator.Catacombs
         /// <param name="faceCamera">
         /// true — ореол вокруг самого источника, всегда развёрнут к зрителю.
         /// false — пятно света на поверхности: квад остаётся в повороте родителя, то есть
-        /// лежит на стене. Такое пятно нужно потому, что источников в уровне десятки,
-        /// а попиксельных мест в Built-in RP всего четыре: дальние лампы Unity уводит
-        /// в вершинные, и они перестают освещать стену вовсе — остаётся светящаяся точка
-        /// на ровной поверхности, то есть наклейка. Пятно рисуется независимо от этого.
+        /// лежит на стене. Заведено было под Built-in, где попиксельных мест всего четыре:
+        /// дальние лампы Unity уводила в вершинные, и они переставали освещать стену вовсе —
+        /// оставалась светящаяся точка на ровной поверхности, то есть наклейка.
+        ///
+        /// При Forward+ вершинных источников нет и повода к такому вырождению тоже, но
+        /// пятно оставлено: на WebGL2 больше 32 видимых источников в кадре пайплайн
+        /// не возьмёт, и за этим потолком всё повторится один в один. Пятно рисуется
+        /// независимо от того, достался источнику кластер или нет.
         /// </param>
         public static CaveGlowBillboard Attach(Transform parent, float size, Color color, bool faceCamera = true)
         {
@@ -84,34 +87,23 @@ namespace MineGenerator.Catacombs
         /// <summary>
         /// Материал ореола. Цвет запекается в саму текстуру, а не задаётся свойством.
         ///
-        /// Так вышло не от хорошей жизни: у Mobile/Particles/Additive из свойств есть
+        /// Так повелось со времён Built-in: у Mobile/Particles/Additive из свойств есть
         /// только _MainTex — ни _Color, ни _TintColor, и цвет, выставленный через
-        /// material.color, этот шейдер молча игнорирует. Ореолы получались белыми
+        /// material.color, тот шейдер молча игнорировал. Ореолы получались белыми
         /// независимо от того, что им передали, и по кадру это читалось как «аддитивный
         /// слой упёрся в единицу», хотя цвета там не было с самого начала.
         ///
-        /// Можно было взять Legacy Shaders/Particles/Additive с его _TintColor, но тогда
-        /// вид ореола зависел бы ещё и от вершинного цвета меша и от множителя внутри
-        /// того шейдера. Запечённая текстура не зависит ни от чего: что нарисовано,
-        /// то и складывается с кадром.
+        /// Cave Unlit цвет знает, и запекание больше не вынужденное. Оставлено как есть
+        /// намеренно: форма спада у ореола неравномерная по цвету (ядро ярче обода),
+        /// и разложить её обратно на белую текстуру и тинт — это отдельная правка
+        /// с отдельной проверкой по кадрам, а не побочный эффект переезда на URP.
         /// </summary>
         private static Material Material(Color color)
         {
             Material cached;
             if (Materials.TryGetValue(color, out cached) && cached != null) return cached;
 
-            var shader = _additive != null
-                ? _additive
-                : _additive = Shader.Find("Mobile/Particles/Additive")
-                              ?? Shader.Find("Legacy Shaders/Particles/Additive")
-                              ?? Shader.Find("Sprites/Default");
-
-            var material = new Material(shader)
-            {
-                name = "Cave Glow Halo",
-                mainTexture = Falloff(color),
-                hideFlags = HideFlags.HideAndDontSave
-            };
+            var material = CaveMaterials.Additive("Cave Glow Halo", Falloff(color), Color.white);
 
             Materials[color] = material;
             return material;

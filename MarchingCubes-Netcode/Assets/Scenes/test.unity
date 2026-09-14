@@ -162,8 +162,8 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 0.88, b: 0.68, a: 1}
-  m_Intensity: 1.6
-  m_Range: 11
+  m_Intensity: 12.8
+  m_Range: 22
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -354,6 +354,7 @@ MonoBehaviour:
   jumpSpeed: 6
   gravity: -20
   mouseSensitivity: 2.5
+  diggingEnabled: 0
   digRadius: 0
   digStrength: 1
   reach: 60
@@ -451,8 +452,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1348388783}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.034899496, y: 0, z: 0, w: 0.99939084}
-  m_LocalPosition: {x: 71.35, y: 30.55, z: 71.35}
+  m_LocalRotation: {x: -0.0000000015255054, y: 0.99939084, z: -0.034899496, w: -0.00000004368476}
+  m_LocalPosition: {x: 48, y: 25.79091, z: 52}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -576,15 +577,15 @@ MonoBehaviour:
   lampSpacing: 12
   lampHeight: {x: 1.6, y: 2.4}
   lampColor: {r: 1, g: 0.52, b: 0.22, a: 1}
-  lampRange: 9
-  lampIntensity: 3
+  lampRange: 18
+  lampIntensity: 24
   lampShadows: 0
   lampShadowStrength: 0.45
   veinCount: 34
   veinSpacing: 8
   veinColor: {r: 0.24, g: 0.82, b: 1, a: 1}
-  veinRange: 8
-  veinIntensity: 1.8
+  veinRange: 16
+  veinIntensity: 14.4
   probeDistance: 16
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

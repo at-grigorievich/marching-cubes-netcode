@@ -171,14 +171,7 @@ namespace MineGenerator.Catacombs
             if (WebMaterials.TryGetValue(color, out cached) && cached != null) return cached;
 
             // Прозрачный неосвещаемый: паутина — это нити на просвет, а не поверхность.
-            var shader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default");
-
-            var material = new Material(shader)
-            {
-                name = "Cave Web",
-                mainTexture = WebTexture(color),
-                hideFlags = HideFlags.HideAndDontSave
-            };
+            var material = CaveMaterials.AlphaBlended("Cave Web", WebTexture(color), Color.white);
 
             WebMaterials[color] = material;
             return material;
@@ -189,14 +182,17 @@ namespace MineGenerator.Catacombs
             Material cached;
             if (CocoonMaterials.TryGetValue(color, out cached) && cached != null) return cached;
 
-            var material = new Material(Shader.Find("Standard"))
+            // Кокон — единственное здесь, что должно быть освещаемым: ему нужен объём,
+            // иначе он читается тем же пластиком, что и выброшенные кристаллы-осколки.
+            // В URP это Lit, а гладкость называется _Smoothness, а не _Glossiness.
+            var material = new Material(Shader.Find("Universal Render Pipeline/Lit"))
             {
                 name = "Cave Cocoon",
                 color = color,
                 hideFlags = HideFlags.HideAndDontSave
             };
 
-            material.SetFloat("_Glossiness", 0.15f);
+            material.SetFloat("_Smoothness", 0.15f);
 
             CocoonMaterials[color] = material;
             return material;

@@ -47,8 +47,22 @@ namespace MineGenerator.Catacombs
         [SerializeField] private Vector2 lampHeight = new Vector2(1.6f, 2.4f);
 
         [SerializeField] private Color lampColor = new Color(1f, 0.52f, 0.22f);
-        [SerializeField] private float lampRange = 9f;
-        [SerializeField] private float lampIntensity = 3.0f;
+
+        // Дальность и яркость подняты при переезде на URP: было 9 и 3.0.
+        //
+        // В Built-in точечный источник затухал по пологой табличной кривой, в URP —
+        // строго обратноквадратично, да ещё с гладким окном, гасящим свет в ноль
+        // у самой границы дальности. На середине хода это разница в три-семь раз,
+        // и прежние значения давали втрое более тёмную сцену: доля пикселей ниже
+        // порога черноты подскакивала с 23-26% до 65-83%.
+        //
+        // Множители подобраны замером, а не на глаз: перебор яркости от x5 до x12
+        // и дальности от x1.5 до x2 по четырём эталонным ракурсам. x8 и x2 — единственная
+        // пара, попадающая разом во все три метрики стиля (тёмных 25.3%, полоса 0.1-0.3
+        // 73.3%, максимум 0.959). Направленный заполняющий при этом не трогали:
+        // затухания по расстоянию у него нет, компенсировать нечего.
+        [SerializeField] private float lampRange = 18f;
+        [SerializeField] private float lampIntensity = 24f;
 
         /// <summary>
         /// Тени от ламп. Выключены по умолчанию, и это осознанный размен.
@@ -61,14 +75,16 @@ namespace MineGenerator.Catacombs
         /// её гранями. Карта нормалей сделала поверхность детальной и тем самым выставила
         /// этот грубый силуэт напоказ.
         ///
-        /// Смягчить в Built-in RP нечем: мягкие тени точечного источника здесь — маленькое
-        /// PCF-ядро, полутени шириной в пиксель. Снижение силы тени до 0.45 пятно приглушает,
-        /// но полигон остаётся виден.
+        /// Смягчить нечем и в URP: мягкая тень точечного источника — это всё то же
+        /// небольшое PCF-ядро, ширину источника задать негде. Снижение силы тени до 0.45
+        /// пятно приглушает, но полигон остаётся виден.
         ///
-        /// Чем платим за выключение: свет лампы проходит сквозь породу в соседний ход.
-        /// Дальность 9 юнитов это ограничивает, но полностью не убирает.
-        /// Экономия при этом скромная и на неё рассчитывать не надо: тени в Built-in RP
-        /// считают только попиксельные источники, а их и так не больше четырёх.
+        /// Чем платим за выключение: свет лампы проходит сквозь породу в соседний ход,
+        /// и после перехода на URP платим больше — дальность выросла с 9 до 18 юнитов.
+        ///
+        /// Экономия от выключения в URP уже не символическая, в отличие от Built-in:
+        /// при Forward+ попиксельны все источники, а не четверо ближайших, и каждая
+        /// включённая лампа — это ещё одно место в атласе теней дополнительных источников.
         /// </summary>
         [Tooltip("Тени от ламп. Дают резкий полигональный край по граням меша — см. комментарий.")]
         [SerializeField] private bool lampShadows;
@@ -80,8 +96,9 @@ namespace MineGenerator.Catacombs
         [SerializeField] private int veinCount = 34;
         [SerializeField] private float veinSpacing = 8f;
         [SerializeField] private Color veinColor = new Color(0.24f, 0.82f, 1f);
-        [SerializeField] private float veinRange = 8f;
-        [SerializeField] private float veinIntensity = 1.8f;
+        // Те же множители, что у ламп, и по той же причине: было 8 и 1.8.
+        [SerializeField] private float veinRange = 16f;
+        [SerializeField] private float veinIntensity = 14.4f;
 
         /// <summary>
         /// Цвет светильников по этажам.
@@ -232,10 +249,7 @@ namespace MineGenerator.Catacombs
                 if (TooClose(placed, hit.point, spacingSqr)) continue;
 
                 SpawnFixture(hit.point, hit.normal, "Wall Lamp", LampColorFor(node.Level), lampRange, lampIntensity,
-                    // Попиксельные, но не принудительно: Unity сама оставит попиксельными
-                    // ближайшие, а остальные уведёт в вершинные.
-                    LightRenderMode.Auto, lampShadows ? LightShadows.Soft : LightShadows.None,
-                    0.75f, 0.09f);
+                    lampShadows ? LightShadows.Soft : LightShadows.None, 0.75f, 0.09f);
 
                 placed.Add(hit.point);
             }
@@ -269,11 +283,16 @@ namespace MineGenerator.Catacombs
 
                 if (TooClose(placed, hit.point, spacingSqr)) continue;
 
-                // Жилы вершинные и без теней: их десятки, попиксельных мест всего четыре,
-                // и они нужны фонарю с лампами. Задача жилы — цветное пятно в темноте,
+                // Жилы без теней: их десятки, а задача жилы — цветное пятно в темноте,
                 // а не светотень.
+                //
+                // Раньше они были ещё и вершинными: в Built-in попиксельных мест было
+                // всего четыре, и жилы приходилось уводить в вершинные вручную. В Forward+
+                // вершинных источников нет вовсе — свет раздаётся кластерами по тайлам
+                // экрана, и каждый источник попиксельный. Ограничение теперь другое:
+                // на WebGL2 в кадре не больше 32 видимых источников на камеру.
                 SpawnFixture(hit.point, hit.normal, "Vein", VeinColorFor(node.Level), veinRange, veinIntensity,
-                    LightRenderMode.ForceVertex, LightShadows.None, 0.85f, 0.055f);
+                    LightShadows.None, 0.85f, 0.055f);
 
                 placed.Add(hit.point);
             }
@@ -321,7 +340,7 @@ namespace MineGenerator.Catacombs
         }
 
         private void SpawnFixture(Vector3 point, Vector3 normal, string name, Color color, float range,
-            float intensity, LightRenderMode mode, LightShadows shadows, float haloSize, float coreSize)
+            float intensity, LightShadows shadows, float haloSize, float coreSize)
         {
             var fixture = new GameObject(name);
             fixture.transform.SetParent(_container, false);
@@ -341,7 +360,6 @@ namespace MineGenerator.Catacombs
             light.range = range;
             light.intensity = intensity;
             light.color = color;
-            light.renderMode = mode;
             light.shadows = shadows;
 
             if (shadows != LightShadows.None)
@@ -434,12 +452,7 @@ namespace MineGenerator.Catacombs
             Material cached;
             if (CoreMaterials.TryGetValue(color, out cached) && cached != null) return cached;
 
-            var material = new Material(Shader.Find("Unlit/Color"))
-            {
-                name = "Cave Fixture Core",
-                color = color,
-                hideFlags = HideFlags.HideAndDontSave
-            };
+            var material = CaveMaterials.UnlitOpaque("Cave Fixture Core", color);
 
             CoreMaterials[color] = material;
             return material;

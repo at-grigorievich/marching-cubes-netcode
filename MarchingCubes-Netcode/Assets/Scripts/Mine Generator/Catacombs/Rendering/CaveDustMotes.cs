@@ -121,23 +121,14 @@ namespace MineGenerator.Catacombs
         {
             if (_material != null) return _material;
 
-            var shader = Shader.Find("Mobile/Particles/Additive")
-                         ?? Shader.Find("Legacy Shaders/Particles/Additive")
-                         ?? Shader.Find("Sprites/Default");
-
-            _material = new Material(shader)
-            {
-                name = "Cave Dust",
-                mainTexture = Dot(),
-                hideFlags = HideFlags.HideAndDontSave
-            };
+            _material = CaveMaterials.Additive("Cave Dust", Dot(), Color.white);
 
             return _material;
         }
 
         /// <summary>
-        /// Мягкая точка. Цвет запечён в текстуру: у Mobile/Particles/Additive из свойств
-        /// есть только _MainTex, тинта он не знает и любой заданный цвет игнорирует.
+        /// Мягкая точка. Цвет запечён в текстуру — со времён Built-in, где у
+        /// Mobile/Particles/Additive из свойств был только _MainTex и тинта он не знал.
         /// </summary>
         private static Texture2D Dot()
         {

@@ -73,9 +73,13 @@ namespace MineGenerator.Catacombs.EditorTools
             var veins = 0;
             var shadowed = 0;
 
+            // Считаем по имени родителя, а не по renderMode: в Forward+ вершинных
+            // источников нет вовсе, и это поле больше ни на что не влияет.
             foreach (var light in world.GetComponentsInChildren<Light>())
             {
-                if (light.renderMode == LightRenderMode.ForceVertex) veins++;
+                var fixture = light.transform.parent;
+
+                if (fixture != null && fixture.name == "Vein") veins++;
                 else lamps++;
 
                 if (light.shadows != LightShadows.None) shadowed++;

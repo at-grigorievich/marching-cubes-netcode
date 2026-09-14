@@ -124,8 +124,12 @@ namespace MineGenerator.Catacombs
             // а не весь ход. При 20 юнитах в коридоре шириной четыре две шашки заливали
             // кадр целиком, и вместо островов света получался ровный оранжевый суп —
             // ровно тот дефект, от которого всё это и лечится.
-            light.range = 9f;
-            light.intensity = 2.6f;
+            //
+            // Было 9 и 2.6; те же множители, что у остальных точечных при переезде на URP.
+            // «Короткая» тут относительно: у ламп на стенах дальность те же 18, а карман
+            // держится тем, что обратноквадратичное затухание само сажает яркость на краю.
+            light.range = 18f;
+            light.intensity = 20.8f;
 
             // Тёплый, почти красный — против холодного ambient и холодных жил. Тени и форму
             // в кадре делает именно контраст двух температур, а не абсолютная яркость.
@@ -212,9 +216,8 @@ namespace MineGenerator.Catacombs
             // кадр. Ровно на этом Unity ругается «leak materials into the scene».
             if (_glow != null) _glow.transform.localScale = Vector3.one * (_glowScale * visible);
 
-            // Ореол гаснет вместе со светом размером, а не цветом: материал ореола общий,
-            // renderer.material создал бы его копию на каждый вызов, а цвет у шейдера
-            // Mobile/Particles/Additive менять всё равно нечем — он запечён в текстуру.
+            // Ореол гаснет вместе со светом размером, а не цветом: материал ореола общий
+            // на все шашки, и renderer.material создал бы его копию на каждый вызов.
             if (_halo != null) _halo.transform.localScale = Vector3.one * (_haloScale * visible);
         }
 
@@ -228,12 +231,7 @@ namespace MineGenerator.Catacombs
             if (_glowMaterial != null) return _glowMaterial;
 
             // Unlit: шарик должен светиться сам, а не быть освещённым собственным источником.
-            _glowMaterial = new Material(Shader.Find("Unlit/Color"))
-            {
-                name = "Cave Flare Glow",
-                color = new Color(1f, 0.78f, 0.45f),
-                hideFlags = HideFlags.HideAndDontSave
-            };
+            _glowMaterial = CaveMaterials.UnlitOpaque("Cave Flare Glow", new Color(1f, 0.78f, 0.45f));
 
             return _glowMaterial;
         }
