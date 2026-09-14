@@ -19,7 +19,8 @@ namespace MineGenerator.Catacombs.EditorTools
         private static readonly string[] Shaders =
         {
             "Mine Generator/Cave Triplanar",
-            "Mine Generator/Cave Unlit"
+            "Mine Generator/Cave Unlit",
+            "Mine Generator/Cave Crowd"
         };
 
         public static void Run()

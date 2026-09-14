@@ -196,6 +196,65 @@ namespace MineGenerator.Catacombs
             return touched;
         }
 
+        /// <summary>
+        /// Плотность в мировой точке, трилинейно по сетке чанка. Больше IsoLevel — пустота.
+        ///
+        /// Это единственный правильный способ спросить «здесь камень?». Физика на такой
+        /// вопрос отвечает неверно: коллайдеры есть только на поверхностях ходов, внутри
+        /// сплошной породы их нет вовсе, и <c>Physics.CheckSphere</c> посреди камня честно
+        /// рапортует «свободно». На этом в проекте уже обжигались — заливка на физике
+        /// утекала сквозь стены.
+        /// </summary>
+        public bool TrySampleDensity(Vector3 worldPosition, out float density)
+        {
+            density = 0f;
+
+            if (settings == null || _chunks.Count == 0) return false;
+
+            var local = (float3)transform.InverseTransformPoint(worldPosition);
+
+            var size = settings.WorldSizeInChunks;
+            var chunkSize = settings.ChunkWorldSize;
+
+            var coord = math.clamp((int3)math.floor(local / chunkSize), 0,
+                new int3(size.x - 1, size.y - 1, size.z - 1));
+
+            // Порядок совпадает с порядком заполнения в GenerateSteps: x снаружи, z внутри.
+            var index = (coord.x * size.y + coord.y) * size.z + coord.z;
+
+            if (index < 0 || index >= _chunks.Count) return false;
+
+            var chunk = _chunks[index];
+            if (!chunk.HasDensity) return false;
+
+            var dim = settings.SampleDim;
+            var g = (local - (float3)chunk.Origin) / settings.VoxelSize + CatacombSettings.SamplePadding;
+
+            var i0 = (int3)math.floor(g);
+            var f = math.saturate(g - i0);
+
+            var a = math.clamp(i0, 0, dim - 1);
+            var b = math.clamp(i0 + 1, 0, dim - 1);
+
+            var x0 = math.lerp(
+                math.lerp(At(chunk, dim, a.x, a.y, a.z), At(chunk, dim, b.x, a.y, a.z), f.x),
+                math.lerp(At(chunk, dim, a.x, b.y, a.z), At(chunk, dim, b.x, b.y, a.z), f.x), f.y);
+
+            var x1 = math.lerp(
+                math.lerp(At(chunk, dim, a.x, a.y, b.z), At(chunk, dim, b.x, a.y, b.z), f.x),
+                math.lerp(At(chunk, dim, a.x, b.y, b.z), At(chunk, dim, b.x, b.y, b.z), f.x), f.y);
+
+            density = math.lerp(x0, x1, f.z);
+            return true;
+        }
+
+        /// <summary>Внутри ли точка сплошной породы. Соглашение инвертировано: меньше IsoLevel — камень.</summary>
+        public bool IsSolid(Vector3 worldPosition) =>
+            TrySampleDensity(worldPosition, out var density) && density <= settings.IsoLevel;
+
+        private static float At(CatacombChunk chunk, int dim, int x, int y, int z) =>
+            chunk.Density[(x * dim + y) * dim + z];
+
         public bool TryGetSpawnPoint(out Vector3 worldPosition)
         {
             worldPosition = transform.position;

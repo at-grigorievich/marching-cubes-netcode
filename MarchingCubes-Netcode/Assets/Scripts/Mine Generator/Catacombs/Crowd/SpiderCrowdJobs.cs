@@ -328,13 +328,13 @@ namespace MineGenerator.Catacombs
 
             // Оси проверяются по отдельности, чтобы особь скользила вдоль стены, а не
             // вставала в неё. Это тот же приём, что у отладочной камеры в стенде.
-            if (!Field.IsWalkable(Field.CellOf(spider.Position + new float3(step.x, 0f, 0f))))
+            if (!Field.CanStand(spider.Position + new float3(step.x, 0f, 0f)))
             {
                 step.x = 0f;
                 spider.Velocity.x *= 0.2f;
             }
 
-            if (!Field.IsWalkable(Field.CellOf(spider.Position + new float3(0f, 0f, step.z))))
+            if (!Field.CanStand(spider.Position + new float3(0f, 0f, step.z)))
             {
                 step.z = 0f;
                 spider.Velocity.z *= 0.2f;
@@ -499,8 +499,12 @@ namespace MineGenerator.Catacombs
         public float RadiusSq;
         public int Damage;
 
-        /// <summary>Сколько особей убито. Считается атомарно: джоб параллельный.</summary>
-        [NativeDisableParallelForRestriction] public NativeArray<int> Killed;
+        /// <summary>
+        /// Отметки убитых, по одной ячейке на особь. Массив, а не счётчик: джоб
+        /// параллельный, и общий счётчик потребовал бы атомарного сложения ради числа,
+        /// которое всё равно нужно раз в выстрел. Сложить отметки дешевле.
+        /// </summary>
+        [WriteOnly] public NativeArray<int> Killed;
 
         public void Execute(int index)
         {

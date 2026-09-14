@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
+  m_Name: spider_cross
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
+  Mesh: {fileID: 4300000, guid: 304b32633551d5942afee3da57ad6e47, type: 2}
+  Material: {fileID: 2100000, guid: 936e54f76912ff642983c83662b12dd5, type: 2}
+  Positions: {fileID: 2800000, guid: bff58427f861a0349902f6f410f18046, type: 2}
+  Normals: {fileID: 2800000, guid: 56116f051c92f734caf99a4cd1050d32, type: 2}
+  Clips:
+  - Name: walk
+    StartRow: 0
+    FrameCount: 20
+    Length: 0.8
+    Loop: 1
+  - Name: attack_1
+    StartRow: 20
+    FrameCount: 24
+    Length: 0.96
+    Loop: 0
+  - Name: dead
+    StartRow: 44
+    FrameCount: 20
+    Length: 0.8
+    Loop: 0
+  RestBounds:
+    m_Center: {x: 0.0051661134, y: 0.1476106, z: -0.03695014}
+    m_Extent: {x: 0.35833615, y: 0.26269627, z: 0.43889856}
+  Scale: 1
+  ScaleJitter: 0.18
+  MoveSpeed: 3.2
+  SpeedJitter: 0.25
+  TurnSpeed: 540
+  BodyRadius: 0.30722898
+  AttackRange: 1.214458
+  StrideLength: 0.9655769
+  Health: 1
+  CorpseLinger: 2.5

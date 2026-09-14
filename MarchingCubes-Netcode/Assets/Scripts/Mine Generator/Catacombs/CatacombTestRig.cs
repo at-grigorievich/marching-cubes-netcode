@@ -17,6 +17,9 @@ namespace MineGenerator.Catacombs
 
         [SerializeField] private CatacombWorld world;
 
+        [Tooltip("Толпа пауков. Пусто — найдётся на сцене сама.")]
+        [SerializeField] private SpiderCrowd crowd;
+
         [Header("Движение")]
         [SerializeField] private MoveMode mode = MoveMode.Fly;
         [SerializeField] private float flySpeed = 18f;
@@ -45,6 +48,15 @@ namespace MineGenerator.Catacombs
         [Tooltip("Пролетать сквозь породу. Выключено — полёт упирается в стены, как ходьба.")]
         [SerializeField] private bool noclip;
 
+        [Header("Пробный взрыв")]
+        /// <summary>
+        /// Радиус пробного взрыва. Пять юнитов — это верхняя оценка радиуса гранаты
+        /// из открытых вопросов: медиана простреливаемой линии в уровне 14-16 юнитов,
+        /// и взрыв шире пяти-шести начал бы доставать до самого игрока в коридоре.
+        /// </summary>
+        [Tooltip("Радиус пробного взрыва на клавишу B.")]
+        [SerializeField, Range(1f, 12f)] private float blastRadius = 5f;
+
         [Header("Интерфейс")]
         [SerializeField] private bool showOverlay = true;
 
@@ -70,6 +82,7 @@ namespace MineGenerator.Catacombs
             _pitch = angles.x;
 
             if (world == null) world = FindFirstObjectByType<CatacombWorld>();
+            if (crowd == null) crowd = FindFirstObjectByType<SpiderCrowd>();
         }
 
         private void OnEnable()
@@ -273,6 +286,7 @@ namespace MineGenerator.Catacombs
             if (Input.GetKeyDown(KeyCode.P)) DumpViewpoint();
             if (Input.GetKeyDown(KeyCode.T)) TeleportToSpawn();
             if (Input.GetKeyDown(KeyCode.Q)) ThrowFlare();
+            if (Input.GetKeyDown(KeyCode.B)) TestBlast();
 
             if (Input.GetKeyDown(KeyCode.R) && world != null)
             {
@@ -312,6 +326,28 @@ namespace MineGenerator.Catacombs
             var velocity = transform.forward * 8f + Vector3.up * 2.2f;
 
             CaveFlare.Throw(origin, velocity);
+        }
+
+        /// <summary>
+        /// Пробный взрыв под прицелом: рвёт паутину и бьёт пауков.
+        ///
+        /// Это заготовка гранаты, а не механика: VFX и снаряда пока нет, и проверить
+        /// иначе, что оба тракта поражения вообще зовутся, негде. Когда появится граната,
+        /// её попадание должно сделать ровно эти два вызова — и тогда клавиша уйдёт.
+        /// </summary>
+        private void TestBlast()
+        {
+            var origin = transform.position;
+
+            var point = Physics.Raycast(origin, transform.forward, out var hit, reach)
+                ? hit.point
+                : origin + transform.forward * reach;
+
+            var torn = CaveWebs.TearAt(point, blastRadius);
+            var killed = crowd != null ? crowd.DamageAt(point, blastRadius) : 0;
+
+            Debug.Log($"ВЗРЫВ в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}) радиусом {blastRadius:0.0}: " +
+                      $"паутин порвано {torn}, пауков убито {killed}");
         }
 
         private void Modify(bool dig)
@@ -417,7 +453,7 @@ namespace MineGenerator.Catacombs
 
             var style = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
 
-            GUILayout.BeginArea(new Rect(10, 10, 420, 260), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(10, 10, 580, 300), GUI.skin.box);
 
             if (world != null && world.IsGenerating)
             {
@@ -446,6 +482,8 @@ namespace MineGenerator.Catacombs
                                     $"(последний удар {_lastDigVolume:N0})", style);
                 }
 
+                if (crowd != null) GUILayout.Label(crowd.Describe(), style);
+
                 if (!_spawned) GUILayout.Label("<color=yellow>Нажмите T — телепорт к точке входа</color>", style);
             }
             else
@@ -460,6 +498,7 @@ namespace MineGenerator.Catacombs
                   "F — полёт/ходьба    G — сквозь стены    T — к точке входа\n" +
                   $"Q — пробный свет, отладка ({CaveFlare.Live.Count} из {CaveFlare.MaxLive})    " +
                   "R — новый уровень\n" +
+                  $"B — пробный взрыв, радиус {blastRadius:0.0}    " +
                   "P — записать ракурс    Esc — отпустить курсор"
                 : "<color=yellow>Кликните по окну игры, чтобы захватить курсор</color>", style);
 

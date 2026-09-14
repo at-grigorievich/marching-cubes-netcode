@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
@@ -58,6 +59,17 @@ namespace MineGenerator.Catacombs
         /// </summary>
         public NativeArray<float3> WallPush;
 
+        /// <summary>
+        /// 1 — в центре клетки пустота. Не то же самое, что проходимость: проходима
+        /// клетка, стоящая на полу, а открыта — любая, где нет породы.
+        ///
+        /// Нужна для переходов вверх-вниз: спуск с уступа или подъём по стене разрешён
+        /// только если между двумя площадками пусто. Проверять это физикой нельзя
+        /// (коллайдеров внутри породы нет), а плотность к моменту заливки уже выброшена —
+        /// поэтому ответ снимается один раз, при постройке.
+        /// </summary>
+        public NativeArray<byte> Open;
+
         /// <summary>Расстояние до игрока в шагах заливки. Им же отбираются места спавна.</summary>
         public NativeArray<ushort> Distance;
 
@@ -89,7 +101,8 @@ namespace MineGenerator.Catacombs
         /// Массив временный: 100x51x100 сэмплов это около двух мегабайт, и они живут
         /// только внутри этого вызова.
         /// </summary>
-        public void Build(CatacombWorld world, float cellSize, float headroom, float agentStep)
+        public void Build(CatacombWorld world, float cellSize, float headroom, float agentStep,
+            float floorReach = 1.05f)
         {
             Dispose();
 
@@ -106,6 +119,7 @@ namespace MineGenerator.Catacombs
             FloorY = new NativeArray<float>(count, Allocator.Persistent);
             Flow = new NativeArray<float3>(count, Allocator.Persistent);
             WallPush = new NativeArray<float3>(count, Allocator.Persistent);
+            Open = new NativeArray<byte>(count, Allocator.Persistent);
             Distance = new NativeArray<ushort>(count, Allocator.Persistent);
             _queue = new NativeArray<int>(count, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             SpawnCells = new NativeList<int>(math.max(64, count / 16), Allocator.Persistent);
@@ -125,6 +139,7 @@ namespace MineGenerator.Catacombs
                     Walkable = Walkable,
                     FloorY = FloorY,
                     WallPush = WallPush,
+                    Open = Open,
 
                     Dim = Dim,
                     CellSize = CellSize,
@@ -135,12 +150,18 @@ namespace MineGenerator.Catacombs
                     WallProbe = CellSize * 0.8f,
                     WallProbeHeight = headroom * 0.5f,
 
-                    // Ровно на клетку: тогда пол ловит РОВНО один слой клеток — тот,
-                    // чей центр стоит в пределах клетки над полом. Меньше — между слоями
-                    // остаются щели, где пола не видно ни сверху, ни снизу; больше —
-                    // над одним полом появляется второй слой проходимых клеток, и заливка
-                    // считает их разными местами, хотя физически это одна точка.
-                    MaxDrop = CellSize * 1.05f,
+                    // Ровно клетка: на один пол — один слой проходимых клеток.
+                    //
+                    // Больше пробовалось (до четырёх слоёв) и оказалось вредно. Лишние
+                    // слои одной колонки описывают ОДНО И ТО ЖЕ место — у них общий пол,
+                    // щуп находит ту же поверхность, — но заливка считает их разными
+                    // клетками и доходит только до одной. Достижимость от этого падала
+                    // втрое: проходимых клеток втрое больше, а дошли всё те же.
+                    //
+                    // Связность от числа слоёв и не должна зависеть: переход между
+                    // колонками ищется перебором по высоте пола, а не по индексу слоя,
+                    // см. Topology.Step.
+                    MaxDrop = CellSize * math.max(1.05f, floorReach),
                     ProbeStep = math.min(0.25f, settings.VoxelSize * 0.5f),
                     Headroom = headroom
                 };
@@ -171,7 +192,7 @@ namespace MineGenerator.Catacombs
         /// сменил клетку — см. <see cref="SpiderCrowd"/>.
         /// </summary>
         /// <returns>false, если игрок оказался вне проходимых клеток (например, в породе).</returns>
-        public bool Rebuild(float3 localTarget, int spawnMinSteps, int spawnMaxSteps)
+        public bool Rebuild(float3 localTarget, int spawnMinSteps, int spawnMaxSteps, int maxSteps = 120)
         {
             if (!IsCreated) return false;
 
@@ -184,6 +205,7 @@ namespace MineGenerator.Catacombs
             {
                 Walkable = Walkable,
                 FloorY = FloorY,
+                Topology = GetTopology(),
                 Distance = Distance,
                 Flow = Flow,
                 Queue = _queue,
@@ -191,9 +213,9 @@ namespace MineGenerator.Catacombs
 
                 Dim = Dim,
                 CellSize = CellSize,
-                MaxStep = AgentStep,
                 Start = cell,
 
+                MaxSteps = (ushort)math.clamp(maxSteps, 4, Unreachable - 1),
                 SpawnMin = (ushort)math.clamp(spawnMinSteps, 1, Unreachable - 1),
                 SpawnMax = (ushort)math.clamp(spawnMaxSteps, spawnMinSteps + 1, Unreachable - 1)
             };
@@ -269,6 +291,7 @@ namespace MineGenerator.Catacombs
             if (FloorY.IsCreated) FloorY.Dispose();
             if (Flow.IsCreated) Flow.Dispose();
             if (WallPush.IsCreated) WallPush.Dispose();
+            if (Open.IsCreated) Open.Dispose();
             if (Distance.IsCreated) Distance.Dispose();
             if (_queue.IsCreated) _queue.Dispose();
             if (SpawnCells.IsCreated) SpawnCells.Dispose();
@@ -295,7 +318,8 @@ namespace MineGenerator.Catacombs
 
             var chunkDim = settings.SampleDim;
             var cells = settings.ChunkResolution;
-            var size = (int3)(Vector3Int)settings.WorldSizeInChunks;
+            var chunks = settings.WorldSizeInChunks;
+            var size = new int3(chunks.x, chunks.y, chunks.z);
 
             // Сэмплы соседних чанков перекрываются: каждый несёт кольцо запаса шириной
             // в Pad и общий угол. Глобальный сэмпл чанка coord — это coord * cells + s,
@@ -345,9 +369,16 @@ namespace MineGenerator.Catacombs
 
             public void Execute(int index)
             {
-                var x = index % ChunkDim;
-                var y = index / ChunkDim % ChunkDim;
-                var z = index / (ChunkDim * ChunkDim);
+                // Раскладка чанка задана CatacombDensityJob: x снаружи, z внутри,
+                // то есть index = x * Dim^2 + y * Dim + z. Перепутать здесь оси —
+                // значит получить зеркально-транспонированный уровень, в котором
+                // проходимость размечена по чужим стенам.
+                var perSlice = ChunkDim * ChunkDim;
+
+                var x = index / perSlice;
+                var rest = index - x * perSlice;
+                var y = rest / ChunkDim;
+                var z = rest - y * ChunkDim;
 
                 var g = Base + new int3(x, y, z);
 
@@ -373,6 +404,7 @@ namespace MineGenerator.Catacombs
             [WriteOnly] public NativeArray<byte> Walkable;
             [WriteOnly] public NativeArray<float> FloorY;
             [WriteOnly] public NativeArray<float3> WallPush;
+            [WriteOnly] public NativeArray<byte> Open;
 
             public int3 Dim;
             public float CellSize;
@@ -391,6 +423,7 @@ namespace MineGenerator.Catacombs
                 var center = (new float3(x, y, z) + 0.5f) * CellSize;
 
                 Walkable[index] = 0;
+                Open[index] = 0;
                 FloorY[index] = center.y;
                 WallPush[index] = float3.zero;
 
@@ -399,6 +432,8 @@ namespace MineGenerator.Catacombs
                 // Соглашение проекта инвертировано: больше изоуровня — пустота.
                 if (top <= IsoLevel) return;
 
+                Open[index] = 1;
+
                 var steps = (int)math.ceil(MaxDrop / ProbeStep);
 
                 var previousY = center.y;
@@ -406,7 +441,10 @@ namespace MineGenerator.Catacombs
 
                 for (var i = 1; i <= steps; i++)
                 {
-                    var probeY = center.y - i * ProbeStep;
+                    // Щуп не должен уходить глубже MaxDrop: окно высотой ровно в клетку
+                    // ловит РОВНО один центр, а лишние сантиметры вниз впускают второй,
+                    // и в колонке появляется дубль той же площадки.
+                    var probeY = math.max(center.y - MaxDrop, center.y - i * ProbeStep);
                     var d = Sample(new float3(center.x, probeY, center.z));
 
                     if (d > IsoLevel)
@@ -502,6 +540,8 @@ namespace MineGenerator.Catacombs
             [ReadOnly] public NativeArray<byte> Walkable;
             [ReadOnly] public NativeArray<float> FloorY;
 
+            public Topology Topology;
+
             public NativeArray<ushort> Distance;
             public NativeArray<float3> Flow;
             public NativeArray<int> Queue;
@@ -509,9 +549,9 @@ namespace MineGenerator.Catacombs
 
             public int3 Dim;
             public float CellSize;
-            public float MaxStep;
             public int Start;
 
+            public ushort MaxSteps;
             public ushort SpawnMin;
             public ushort SpawnMax;
 
@@ -538,19 +578,23 @@ namespace MineGenerator.Catacombs
                     var current = Queue[head++];
                     var next = (ushort)(Distance[current] + 1);
 
+                    // Дальше предела заливка не идёт, и это не экономия ради экономии:
+                    // толпа рисуется на шесть десятков юнитов, спавнится ещё ближе,
+                    // и путь из дальнего угла уровня никому не нужен. Зато стоимость
+                    // перестаёт зависеть от размера мира — а пересчёт идёт каждый раз,
+                    // когда игрок сменил клетку, то есть несколько раз в секунду на бегу.
+                    if (next > MaxSteps) continue;
+
                     var c = Decode(current);
 
                     for (var n = 0; n < NeighbourCount; n++)
                     {
-                        var offset = Neighbour(n);
-                        var target = c + offset;
+                        var direction = Neighbour(n);
 
-                        if (math.any(target < 0) || math.any(target >= Dim)) continue;
+                        var index = Topology.Step(c, direction);
 
-                        var index = Index(target);
-
-                        if (Walkable[index] == 0 || Distance[index] != Unreachable) continue;
-                        if (!Passable(current, index, c, target, offset)) continue;
+                        if (index < 0 || Distance[index] != Unreachable) continue;
+                        if (!Topology.DiagonalClear(c, direction, index)) continue;
 
                         Distance[index] = next;
                         Queue[tail++] = index;
@@ -572,19 +616,16 @@ namespace MineGenerator.Catacombs
                     for (var n = 0; n < NeighbourCount; n++)
                     {
                         var offset = Neighbour(n);
-                        var target = c + offset;
 
-                        if (math.any(target < 0) || math.any(target >= Dim)) continue;
+                        var index = Topology.Step(c, offset);
 
-                        var index = Index(target);
-
-                        if (Walkable[index] == 0 || Distance[index] >= Distance[i]) continue;
-                        if (!Passable(i, index, c, target, offset)) continue;
+                        if (index < 0 || Distance[index] >= Distance[i]) continue;
+                        if (!Topology.DiagonalClear(c, offset, index)) continue;
 
                         // Складываем ВСЕ направления, которые ведут ближе, а не берём
                         // лучшее. Лучшее даёт восемь фиксированных румбов, и толпа идёт
                         // по ним углами; сумма усредняет их в непрерывное направление.
-                        var step = new float3(offset.x * CellSize, FloorY[index] - FloorY[i], offset.z * CellSize);
+                        var step = new float3(offset.x * CellSize, FloorY[index] - FloorY[i], offset.y * CellSize);
 
                         direction += math.normalizesafe(step) * (Distance[i] - Distance[index]);
                     }
@@ -593,54 +634,331 @@ namespace MineGenerator.Catacombs
                 }
             }
 
-            /// <summary>
-            /// Можно ли шагнуть между клетками. Отсекает две вещи: слишком высокую
-            /// ступеньку и срезку угла по диагонали сквозь породу.
-            /// </summary>
-            private bool Passable(int from, int to, int3 a, int3 b, int3 offset)
-            {
-                if (math.abs(FloorY[to] - FloorY[from]) > MaxStep) return false;
-
-                if (offset.x == 0 || offset.z == 0) return true;
-
-                // Диагональ по горизонтали разрешена только если оба ортогональных
-                // соседа проходимы: иначе особь пролезает сквозь угол между двумя
-                // кусками породы, которого в уровне нет.
-                var sideA = new int3(b.x, a.y + offset.y, a.z);
-                var sideB = new int3(a.x, a.y + offset.y, b.z);
-
-                if (math.any(sideA < 0) || math.any(sideA >= Dim)) return false;
-                if (math.any(sideB < 0) || math.any(sideB >= Dim)) return false;
-
-                return Walkable[Index(sideA)] != 0 && Walkable[Index(sideB)] != 0;
-            }
-
             private int Index(int3 c) => (c.z * Dim.y + c.y) * Dim.x + c.x;
 
             private int3 Decode(int index) =>
                 new int3(index % Dim.x, index / Dim.x % Dim.y, index / (Dim.x * Dim.y));
 
+            private const int NeighbourCount = SpiderFlowField.NeighbourCount;
+
+            private static int2 Neighbour(int n) => SpiderFlowField.Neighbour(n);
+        }
+
+        /// <summary>Восемь направлений по горизонтали. Вертикаль соседом не бывает — см. Topology.</summary>
+        public const int NeighbourCount = 8;
+
+        public static int2 Neighbour(int n)
+        {
+            // Девять клеток три на три, из которых пропускаем среднюю: она и есть
+            // сама клетка, а не сосед.
+            var m = n < 4 ? n : n + 1;
+
+            return new int2(m % 3 - 1, m / 3 - 1);
+        }
+
+        /// <summary>
+        /// Правило перехода между клетками. Отдельной структурой, потому что им ходит
+        /// и заливка (джоб), и разбор связности (обычный код), а разойтись им нельзя:
+        /// тогда диагностика объясняла бы не то, что мешает на самом деле.
+        ///
+        /// Ключевое отличие от наивной сетки: сосед ищется НЕ на фиксированных уровнях
+        /// высоты, а перебором колонки по высоте пола.
+        ///
+        /// Так пришлось сделать после замеров. Сначала соседями считались клетки
+        /// с разницей уровня не больше одного, и уровни уровнями и оставались:
+        /// этажи не связывались НИ при каком размере клетки (от 0.75 до 2), НИ при какой
+        /// высоте шага (от 1.2 до 3), НИ при каком числе слоёв над полом (от 1 до 4) —
+        /// достижимость упрямо держалась около 25%, то есть ровно один этаж из четырёх
+        /// кусков. Причина в том, что уровни сетки стоят на фиксированных высотах,
+        /// а пол пандуса едет наклонно: на пандусе соседняя колонка отличается по уровню
+        /// на сколько придётся, и связность оказывалась заложницей того, куда попала
+        /// сетка, а не того, можно ли туда шагнуть.
+        ///
+        /// Здесь индекс уровня на связность не влияет вовсе. Влияет только разница
+        /// высот пола — то есть ровно то, что мешает или не мешает шагнуть.
+        /// </summary>
+        public struct Topology
+        {
+            [ReadOnly] public NativeArray<byte> Walkable;
+            [ReadOnly] public NativeArray<float> FloorY;
+            [ReadOnly] public NativeArray<byte> Open;
+
+            public int3 Dim;
+            public float MaxStep;
+
             /// <summary>
-            /// Соседи: восемь по горизонтали на трёх уровнях высоты плюс две чистые
-            /// вертикали. Вертикали нужны шахтам серпантина — там ход идёт вверх
-            /// почти отвесно, и без них этажи для толпы не связаны.
+            /// Насколько особь способна спуститься или подняться там, где шагом уже
+            /// не обойтись. Это паук: по отвесной стене он лезет, и уступ в три-четыре
+            /// юнита для него не препятствие, а обычный спуск.
+            ///
+            /// Без этого лестницы между этажами оказывались для толпы тупиком: замер
+            /// показал, что голова лестницы отстоит от пола зала на 3.65 юнита по
+            /// высоте, и шагом туда не попасть ни при каком размере клетки.
             /// </summary>
-            private const int NeighbourCount = 26;
+            public float MaxClimb;
 
-            private static int3 Neighbour(int n)
+            public int Index(int3 c) => (c.z * Dim.y + c.y) * Dim.x + c.x;
+
+            /// <summary>
+            /// Куда приводит шаг в сторону: ищем в целевой колонке проходимую клетку
+            /// с полом, ближайшим по высоте к нашему.
+            /// </summary>
+            /// <returns>Индекс клетки или -1.</returns>
+            public int Step(int3 from, int2 direction)
             {
-                // 0..23 — горизонтальные восьмёрки на dy = -1, 0, +1; 24 и 25 — вертикали.
-                if (n >= 24) return new int3(0, n == 24 ? 1 : -1, 0);
+                var near = StepBy(from, direction, 1);
+                if (near >= 0) return near;
 
-                var dy = n / 8 - 1;
-                var k = n % 8;
-
-                // Девять клеток три на три, из которых пропускаем среднюю: она и есть
-                // сама клетка, а не сосед.
-                var m = k < 4 ? k : k + 1;
-
-                return new int3(m % 3 - 1, dy, m / 3 - 1);
+                // Через клетку — только если вплотную идти некуда.
+                //
+                // Нужно из-за дырок в размеченной поверхности: одна колонка, где пол
+                // попал ровно на границу слоя или не хватило запаса над головой,
+                // разрывает цепочку целиком. Замер показывал такой разрыв на выходе
+                // с лестницы: ближайшая размеченная клетка стояла в 3.35 юнита
+                // по горизонтали, то есть ровно через одну.
+                //
+                // Сквозь породу это не пускает: промежуточная колонка обязана быть
+                // открытой, то есть между площадками должен быть воздух.
+                return StepBy(from, direction, 2);
             }
+
+            private int StepBy(int3 from, int2 direction, int reachCells)
+            {
+                var x = from.x + direction.x * reachCells;
+                var z = from.z + direction.y * reachCells;
+
+                if (x < 0 || z < 0 || x >= Dim.x || z >= Dim.z) return -1;
+
+                if (reachCells > 1)
+                {
+                    var midX = from.x + direction.x;
+                    var midZ = from.z + direction.y;
+
+                    if (midX < 0 || midZ < 0 || midX >= Dim.x || midZ >= Dim.z) return -1;
+                    if (Open[Index(new int3(midX, from.y, midZ))] == 0) return -1;
+                }
+
+                var floor = FloorY[Index(from)];
+
+                var best = -1;
+                var bestDelta = float.MaxValue;
+
+                // Сначала узкий проход — соседние уровни. Обычный шаг по ровному полу
+                // и по пандусу попадает сюда, а это подавляющее большинство переходов;
+                // широкий поиск ради них обходить незачем. Заливка от этого разделения
+                // ускоряется в разы: без него каждая клетка перебирала бы по десятку
+                // уровней в каждом из восьми направлений.
+                var nearLow = math.max(0, from.y - 1);
+                var nearHigh = math.min(Dim.y - 1, from.y + 1);
+
+                for (var y = nearLow; y <= nearHigh; y++)
+                {
+                    var index = Index(new int3(x, y, z));
+
+                    if (Walkable[index] == 0) continue;
+
+                    var delta = math.abs(FloorY[index] - floor);
+
+                    if (delta > MaxStep || delta >= bestDelta) continue;
+
+                    best = index;
+                    bestDelta = delta;
+                }
+
+                if (best >= 0) return best;
+
+                // Широкий поиск — только если шагом не вышло: спуск с уступа, подъём
+                // по стене, выход на лестницу.
+                var span = (int)math.ceil(math.max(MaxStep, MaxClimb) / math.max(0.01f, CellHeight)) + 1;
+
+                var low = math.max(0, from.y - span);
+                var high = math.min(Dim.y - 1, from.y + span);
+
+                for (var y = low; y <= high; y++)
+                {
+                    var index = Index(new int3(x, y, z));
+
+                    if (Walkable[index] == 0) continue;
+
+                    var delta = math.abs(FloorY[index] - floor);
+
+                    if (delta >= bestDelta) continue;
+
+                    // Ступенькой берётся всё, что ниже порога шага. Выше — только лазаньем,
+                    // и лезть можно лишь там, где между площадками действительно пусто:
+                    // иначе особь поднималась бы сквозь перекрытие на этаж выше.
+                    if (delta > MaxStep)
+                    {
+                        if (delta > MaxClimb) continue;
+                        if (!ColumnClear(x, z, from.y, y)) continue;
+                    }
+
+                    best = index;
+                    bestDelta = delta;
+                }
+
+                return best;
+            }
+
+            /// <summary>Пусто ли в колонке между двумя уровнями — путь для спуска или подъёма.</summary>
+            private bool ColumnClear(int x, int z, int fromY, int toY)
+            {
+                var low = math.min(fromY, toY);
+                var high = math.max(fromY, toY);
+
+                for (var y = low; y <= high; y++)
+                {
+                    if (Open[Index(new int3(x, y, z))] == 0) return false;
+                }
+
+                return true;
+            }
+
+            /// <summary>Высота клетки. Хранится отдельно, чтобы Step не тащил весь CellSize.</summary>
+            public float CellHeight;
+
+            /// <summary>
+            /// Можно ли идти по диагонали, или это срезка угла сквозь породу.
+            ///
+            /// Спрашивается про ВОЗДУХ в обеих смежных колонках, а не про пол в них.
+            /// Пол — требование не то: у соседней колонки его запросто нет в пределах
+            /// клетки (там уступ, или ход идёт над пустотой), а пройти по диагонали
+            /// при этом ничто не мешает. Замер на этом и споткнулся: дно лестницы
+            /// упиралось в диагональ, у которой смежные клетки были открыты,
+            /// но полом не размечены, и нижний этаж оставался отрезанным.
+            ///
+            /// Породу же это по-прежнему не пропускает: угол из камня не открыт
+            /// по определению.
+            /// </summary>
+            public bool DiagonalClear(int3 from, int2 direction, int toIndex)
+            {
+                if (direction.x == 0 || direction.y == 0) return true;
+
+                // Уровень, на котором особь проходит угол, лежит где-то между полом
+                // откуда и полом куда. Проверять только уровень источника мало:
+                // при спуске угол открыт уже ниже, и честный проход отвергался.
+                var toY = toIndex / Dim.x % Dim.y;
+
+                return SideOpen(from.x + direction.x, from.z, from.y, toY) &&
+                       SideOpen(from.x, from.z + direction.y, from.y, toY);
+            }
+
+            private bool SideOpen(int x, int z, int yA, int yB)
+            {
+                if (x < 0 || z < 0 || x >= Dim.x || z >= Dim.z) return false;
+
+                var low = math.min(yA, yB);
+                var high = math.max(yA, yB);
+
+                for (var y = low; y <= high; y++)
+                {
+                    if (Open[Index(new int3(x, y, z))] != 0) return true;
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>Насколько особь лезет вверх и спускается вниз сверх обычного шага, юниты.</summary>
+        public float ClimbHeight { get; set; } = 5f;
+
+        public Topology GetTopology() => new Topology
+        {
+            Walkable = Walkable,
+            FloorY = FloorY,
+            Open = Open,
+            Dim = Dim,
+            MaxStep = AgentStep,
+            MaxClimb = ClimbHeight,
+            CellHeight = CellSize
+        };
+
+        /// <summary>
+        /// Разбор границы достижимого: что именно отделяет дошедшую часть уровня
+        /// от недошедшей.
+        ///
+        /// Нужен потому, что общая доля достижимости говорит только «плохо», а причин
+        /// у этого ровно две и лечатся они по-разному: либо ступенька между соседними
+        /// клетками выше, чем особь берёт, либо клетки вообще не соседи — разрыв
+        /// шире одной клетки, и его надо лечить размером клетки, а не высотой шага.
+        /// </summary>
+        public string DescribeFrontier()
+        {
+            if (!IsCreated) return "  граница: поле не построено";
+
+            const int search = 6;
+            const int band = 8;
+
+            var bands = (Dim.y + band - 1) / band;
+
+            var count = new int[bands];
+            var gap = new float[bands];
+            var delta = new float[bands];
+            var where = new float3[bands];
+
+            for (var i = 0; i < bands; i++) gap[i] = float.MaxValue;
+
+            for (var i = 0; i < Walkable.Length; i++)
+            {
+                if (Walkable[i] == 0 || Distance[i] != Unreachable) continue;
+
+                var c = new int3(i % Dim.x, i / Dim.x % Dim.y, i / (Dim.x * Dim.y));
+                var slot = c.y / band;
+
+                count[slot]++;
+
+                var here = CellFloorPoint(i);
+
+                // Насколько близко недостижимая часть подходит к достижимой. Разрез
+                // по полосам высоты нужен потому, что общий минимум по уровню всегда
+                // мал — где-нибудь да найдётся пара соседних клеток.
+                // по полосам высоты нужен потому, что общий минимум по уровню всегда
+                // мал — где-нибудь да найдётся пара соседних клеток. Интересно другое:
+                // что отделяет КАЖДЫЙ отрезанный кусок, и в первую очередь лестницы.
+                for (var dz = -search; dz <= search; dz++)
+                for (var dy = -search; dy <= search; dy++)
+                for (var dx = -search; dx <= search; dx++)
+                {
+                    var t = c + new int3(dx, dy, dz);
+
+                    if (math.any(t < 0) || math.any(t >= Dim)) continue;
+
+                    var index = CellIndex(t);
+                    if (Walkable[index] == 0 || Distance[index] == Unreachable) continue;
+
+                    var there = CellFloorPoint(index);
+                    var distance = math.distance(here, there);
+
+                    if (distance >= gap[slot]) continue;
+
+                    gap[slot] = distance;
+                    delta[slot] = math.abs(there.y - here.y);
+                    where[slot] = here;
+                }
+            }
+
+            var text = new StringBuilder("  чем отрезан каждый кусок (полоса: недостижимо, ближайший подход)");
+
+            for (var i = 0; i < bands; i++)
+            {
+                if (count[i] == 0) continue;
+
+                var low = i * band * CellSize;
+                var high = math.min((i + 1) * band, Dim.y) * CellSize;
+
+                text.AppendLine();
+                text.Append($"    Y {low:0}-{high:0}: недостижимо {count[i]}, ");
+
+                text.Append(gap[i] < float.MaxValue
+                    ? $"ближе всего подходит на {gap[i]:0.00} юнита " +
+                      $"(перепад {delta[i]:0.00}) у ({where[i].x:0.0}, {where[i].y:0.0}, {where[i].z:0.0})"
+                    : $"достижимого нет и на {search * CellSize:0.0} юнита вокруг");
+            }
+
+            text.AppendLine();
+            text.Append($"    порог ступеньки сейчас {AgentStep:0.00}");
+
+            return text.ToString();
         }
 
         /// <summary>Снимок полей для джобов движения: NativeArray передаются по значению.</summary>
@@ -677,6 +995,41 @@ namespace MineGenerator.Catacombs
                 math.all(c >= 0) && math.all(c < Dim) && Walkable[Index(c)] != 0;
 
             /// <summary>
+            /// Клетка, в которой особь реально стоит.
+            ///
+            /// Нельзя просто взять клетку по координате: проходимой считается та, чей
+            /// ЦЕНТР стоит над полом в пределах клетки, а особь стоит на самом полу —
+            /// то есть у её нижней границы. При поле на высоте 2.5 и клетке в 1.5 юнита
+            /// особь лежит в слое 1, а проходим слой 2, и запрос «проходима ли моя
+            /// клетка» отвечает «нет» на совершенно нормальном месте.
+            ///
+            /// Это не мелочь: на этом вся толпа вставала колом там, где появилась, —
+            /// проверка шага по осям отвергала любое движение.
+            /// </summary>
+            public bool ResolveCell(float3 position, out int3 cell)
+            {
+                var c = CellOf(position);
+
+                // Порядок важен: сначала слой над особью (обычный случай), потом её
+                // собственный, потом нижний — на случай, если она чуть провалилась.
+                for (var dy = 1; dy >= -1; dy--)
+                {
+                    var probe = new int3(c.x, c.y + dy, c.z);
+
+                    if (!IsWalkable(probe)) continue;
+
+                    cell = probe;
+                    return true;
+                }
+
+                cell = c;
+                return false;
+            }
+
+            /// <summary>Есть ли под точкой проходимое место — с поправкой на слой, см. ResolveCell.</summary>
+            public bool CanStand(float3 position) => ResolveCell(position, out _);
+
+            /// <summary>
             /// Направление и высота пола с горизонтальным сглаживанием по четырём клеткам.
             ///
             /// Сглаживание идёт с весом по проходимости: непроходимая клетка в выборку
@@ -701,7 +1054,10 @@ namespace MineGenerator.Catacombs
                 var sumFloor = 0f;
                 var sumWeight = 0f;
 
-                var y = math.clamp(CellOf(position).y, 0, Dim.y - 1);
+                // Слой берём тот, в котором особь стоит, а не тот, куда попадает её
+                // координата: иначе выборка идёт из соседнего этажа. См. ResolveCell.
+                ResolveCell(position, out var standing);
+                var y = standing.y;
 
                 for (var dz = 0; dz <= 1; dz++)
                 for (var dx = 0; dx <= 1; dx++)
