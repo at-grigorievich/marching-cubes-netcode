@@ -1,21 +1,18 @@
-﻿using Unity.Burst;
-using UnityEngine;
+using Unity.Mathematics;
 
 namespace MineGenerator
 {
-	[BurstCompile]
 	public static class Noise
 	{
-		public static float PerlinNoise3D(float x, float y, float z)
-		{
-			float xy = Mathf.PerlinNoise(x, y);
-			float xz = Mathf.PerlinNoise(x, z);
-			float yz = Mathf.PerlinNoise(y, z);
-			float yx = Mathf.PerlinNoise(y, x);
-			float zx = Mathf.PerlinNoise(z, x);
-			float zy = Mathf.PerlinNoise(z, y);
-
-			return (xy + xz + yz + yx + zx + zy) / 6;
-		}
+		/// <summary>
+		/// Значение шума в диапазоне [0..1].
+		///
+		/// Раньше здесь складывались шесть вызовов <c>Mathf.PerlinNoise</c>. Это не 3D-шум
+		/// (по диагоналям видны повторы), шесть выборок вместо одной — и главное,
+		/// <c>Mathf.PerlinNoise</c> уходит в нативный вызов движка, который Burst
+		/// скомпилировать не может: джоб с ним молча откатывался на Mono.
+		/// </summary>
+		public static float PerlinNoise3D(float x, float y, float z) =>
+			math.saturate(noise.snoise(new float3(x, y, z)) * 0.5f + 0.5f);
 	}
 }

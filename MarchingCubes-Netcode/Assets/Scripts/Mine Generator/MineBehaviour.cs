@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using Mine_Generator.Data;
 using MineGenerator.Interfaces;
-using UnityEditor;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace MineGenerator
 {

@@ -72,7 +72,7 @@ namespace NaughtyBezierCurves.Editor
 
             // Draw the center of the control point
             Handles.color = Color.yellow;
-            Vector3 newPointPosition = Handles.FreeMoveHandle(point.Position, point.transform.rotation,
+            var fmh_75_79_639246495607886097 = point.transform.rotation; Vector3 newPointPosition = Handles.FreeMoveHandle(point.Position,
                 HandleUtility.GetHandleSize(point.Position) * BezierPoint3DEditor.pointCapSize, Vector3.one * 0.5f, drawPointFunc);
 
             if (point.Position != newPointPosition)
@@ -87,7 +87,7 @@ namespace NaughtyBezierCurves.Editor
             Handles.DrawLine(point.Position, point.RightHandlePosition);
 
             Handles.color = Color.cyan;
-            Vector3 newLeftHandlePosition = Handles.FreeMoveHandle(point.LeftHandlePosition, point.transform.rotation,
+            var fmh_90_94_639246495607908156 = point.transform.rotation; Vector3 newLeftHandlePosition = Handles.FreeMoveHandle(point.LeftHandlePosition,
                 HandleUtility.GetHandleSize(point.LeftHandlePosition) * BezierPoint3DEditor.handleCapSize, Vector3.zero, drawHandleFunc);
 
             if (point.LeftHandlePosition != newLeftHandlePosition)
@@ -96,7 +96,7 @@ namespace NaughtyBezierCurves.Editor
                 point.LeftHandlePosition = newLeftHandlePosition;
             }
 
-            Vector3 newRightHandlePosition = Handles.FreeMoveHandle(point.RightHandlePosition, point.transform.rotation,
+            var fmh_99_96_639246495607916756 = point.transform.rotation; Vector3 newRightHandlePosition = Handles.FreeMoveHandle(point.RightHandlePosition,
                 HandleUtility.GetHandleSize(point.RightHandlePosition) * BezierPoint3DEditor.handleCapSize, Vector3.zero, drawHandleFunc);
 
             if (point.RightHandlePosition != newRightHandlePosition)

@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Project Path="ToonyColorsPro.Editor.csproj" />
+  <Project Path="NaughtyBezierCurves.Core.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="ToonyColorsPro2.Demo.csproj" />
+  <Project Path="NaughtyBezierCurves.Editor.csproj" />
+  <Project Path="ToonyColorsPro.Runtime.csproj" />
+  <Project Path="ToonyColorsPro.Demo.Editor.csproj" />
+  <Project Path="KinoBloom.Runtime.csproj" />
+</Solution>

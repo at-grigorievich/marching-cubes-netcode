@@ -42,16 +42,14 @@ namespace MineGenerator.Containers
 
         private bool IsPointCorner(Vector3 point)
         {
-            bool isNearXBot = Mathf.Abs(point.x - CornersX[0]) <= Mathf.Epsilon;
-            bool isNearXTop = Mathf.Abs(point.x - CornersX[1]) <= Mathf.Epsilon;
+            var tolerance = DeltaStep * 0.5f;
 
-            bool isNearYBot = Mathf.Abs(point.y - CornersY[0]) <= Mathf.Epsilon;
-            bool isNearYTop = Mathf.Abs(point.y - CornersY[1]) <= Mathf.Epsilon;
-
-            bool isNearZBot = Mathf.Abs(point.z - CornersZ[0]) <= Mathf.Epsilon;
-            bool isNearZTop = Mathf.Abs(point.z - CornersZ[1]) <= Mathf.Epsilon;
-
-            return isNearXBot || isNearXTop || isNearYBot || isNearYTop || isNearZBot || isNearZTop;
+            return IsOnBorder(point.x, CornersX, tolerance)
+                   || IsOnBorder(point.y, CornersY, tolerance)
+                   || IsOnBorder(point.z, CornersZ, tolerance);
         }
+
+        private static bool IsOnBorder(float value, Vector2 corners, float tolerance) =>
+            value <= corners[0] + tolerance || value >= corners[1] - tolerance;
     }
 }

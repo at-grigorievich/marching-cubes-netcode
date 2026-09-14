@@ -1,9 +1,11 @@
 using System;
+using MineGenerator.Core;
 using MineGenerator.Data;
 using Unity.Collections;
-using Unity.Jobs;
-using UnityEditor;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace MineGenerator.Containers
 {
@@ -11,10 +13,16 @@ namespace MineGenerator.Containers
     public class MeshContainer
     {
         [SerializeField] private MeshFilter meshFilter;
-        [SerializeField,HideInInspector] private MeshCollider collider;
-        
+        [SerializeField, HideInInspector] private MeshCollider collider;
+
         private Mesh _mesh;
-        
+
+        // Буферы полигонизации одни на всё редактирование: раньше каждый мазок кистью
+        // создавал новые NativeList и новый Mesh, а старый меш никто не удалял.
+        private static ChunkMeshBuilder _sharedBuilder;
+        private static int _sharedCells = -1;
+        private static bool _cleanupRegistered;
+
         public MeshContainer(MeshFilter meshFilter, MeshCollider collider)
         {
             this.meshFilter = meshFilter;
@@ -23,69 +31,80 @@ namespace MineGenerator.Containers
 
         public void UpdateMesh(PointData[] pointsArr)
         {
-            var points = new NativeArray<PointData>(pointsArr, Allocator.TempJob);
-            
-            var vertices = new NativeList<Vector3>(Allocator.TempJob);
-            var normals = new NativeList<Vector3>(Allocator.TempJob);
-            var triangles = new NativeList<int>(Allocator.TempJob);
-            
-            var cubeValues = new NativeArray<PointData>(8,Allocator.TempJob);
+            var gridSize = ChunkData.instance.GridSize;
+            var expected = gridSize * gridSize * gridSize;
 
-            var updateMeshJob = new MarchMeshUpdateJob()
-            {
-                Points = points,
-                Vertices = vertices,
-                Triangles = triangles,
-                Normals = normals,
-                
-                CubeValues = cubeValues,
-                
-                GridSize = ChunkData.instance.GridSize,
-                DeltaStep = ChunkData.instance.DeltaStep,
-                IsoLevel = ChunkData.instance.IsoLevel
-            };
-            
-            JobHandle updateMeshHandle = updateMeshJob.Schedule();
-            updateMeshHandle.Complete();
-            
-            _mesh = new Mesh
-            {
-                name = "mesh",
-                vertices = vertices.ToArray(),
-                triangles = triangles.ToArray(),
-                normals = normals.ToArray()
-            };
+            if (pointsArr == null || pointsArr.Length < expected || meshFilter == null) return;
 
-            vertices.Dispose();
-            triangles.Dispose();
-            points.Dispose();
-            cubeValues.Dispose();
-            normals.Dispose();
-            
-            //mesh.RecalculateNormals();
-            //mesh.Optimize();
-            
-            meshFilter.mesh = _mesh;
-            collider.sharedMesh = _mesh;
+            var density = new NativeArray<float>(expected, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            for (var i = 0; i < expected; i++) density[i] = pointsArr[i].Density;
+
+            var builder = GetBuilder(gridSize - 1);
+
+            builder.Schedule(density, gridSize, 0, ChunkData.instance.DeltaStep, ChunkData.instance.IsoLevel)
+                .Complete();
+
+            if (_mesh == null)
+            {
+                _mesh = new Mesh { name = "chunk" };
+                _mesh.MarkDynamic();
+            }
+
+            builder.Apply(_mesh);
+            density.Dispose();
+
+            // meshFilter.mesh отдаёт копию и плодит по мешу на вызов — нужен sharedMesh.
+            meshFilter.sharedMesh = _mesh;
+
+            if (collider == null) return;
+
+            collider.sharedMesh = null;
+            if (builder.IndexCount > 0) collider.sharedMesh = _mesh;
         }
 
-        public void SaveMeshAsset(string path,string name)
+        public void SaveMeshAsset(string path, string name)
         {
 #if UNITY_EDITOR
-            if(_mesh.vertices.Length <= 0) return;
-            
-            var sharedMesh = new Mesh
-            {
-                name = name,
-                vertices = _mesh.vertices,
-                triangles = _mesh.triangles,
-                normals = _mesh.normals
-            };
-            
-            AssetDatabase.AddObjectToAsset(sharedMesh,path);
-            
+            var source = _mesh != null ? _mesh : meshFilter != null ? meshFilter.sharedMesh : null;
+            if (source == null || source.vertexCount <= 0) return;
+
+            var sharedMesh = UnityEngine.Object.Instantiate(source);
+            sharedMesh.name = name;
+
+            AssetDatabase.AddObjectToAsset(sharedMesh, path);
+
             meshFilter.sharedMesh = sharedMesh;
-            collider.sharedMesh = sharedMesh;
+            if (collider != null) collider.sharedMesh = sharedMesh;
+#endif
+        }
+
+        private static ChunkMeshBuilder GetBuilder(int cells)
+        {
+            if (_sharedBuilder != null && _sharedCells == cells) return _sharedBuilder;
+
+            _sharedBuilder?.Dispose();
+            _sharedBuilder = new ChunkMeshBuilder(cells);
+            _sharedCells = cells;
+
+            RegisterCleanup();
+            return _sharedBuilder;
+        }
+
+        private static void DisposeBuilder()
+        {
+            _sharedBuilder?.Dispose();
+            _sharedBuilder = null;
+            _sharedCells = -1;
+        }
+
+        private static void RegisterCleanup()
+        {
+            if (_cleanupRegistered) return;
+            _cleanupRegistered = true;
+
+            Application.quitting += DisposeBuilder;
+#if UNITY_EDITOR
+            AssemblyReloadEvents.beforeAssemblyReload += DisposeBuilder;
 #endif
         }
     }

@@ -28,6 +28,8 @@ namespace MineGenerator.Containers
 
         public int Count => GridSize * GridSize * GridSize;
 
+        private const int BatchSize = 64;
+
         public bool IsEmptyChunk
         {
             get
@@ -88,10 +90,9 @@ namespace MineGenerator.Containers
             };
 
             JobHandle createPointsHandle = createPointsJob.Schedule();
-            JobHandle setupPointsHandle = 
-                setupPointsJob.Schedule(Count, 0, createPointsHandle);
-            
-            createPointsHandle.Complete();
+            JobHandle setupPointsHandle =
+                setupPointsJob.Schedule(Count, BatchSize, createPointsHandle);
+
             setupPointsHandle.Complete();
 
             points = pointData.ToArray();
@@ -110,7 +111,7 @@ namespace MineGenerator.Containers
                 ModifyData = modifyData
             };
 
-            var handle = updatePointsWeightJob.Schedule(pointData.Length,0);
+            var handle = updatePointsWeightJob.Schedule(pointData.Length, BatchSize);
             handle.Complete();
 
             points = pointData.ToArray();

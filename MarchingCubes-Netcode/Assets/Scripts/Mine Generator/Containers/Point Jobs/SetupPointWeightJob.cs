@@ -56,7 +56,7 @@ namespace MineGenerator.Containers
                 }
                 else if(onSecRadius && !selectedPoint.IsCorner)
                 {
-                    selectedPoint.Density += noise;
+                    selectedPoint.Density = noise;
                     selectedPoint.IsAvailable = true;
                 }
                 else if (onThirdRadius)

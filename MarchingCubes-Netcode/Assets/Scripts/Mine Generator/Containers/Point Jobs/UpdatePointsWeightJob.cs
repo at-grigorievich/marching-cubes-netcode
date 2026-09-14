@@ -36,20 +36,21 @@ namespace MineGenerator.Containers
 
         private void IncreaseWeight(int index, PointData selected, float distance)
         {
-            float density = selected.Density - ModifyData.ModifyIntensity/(distance*distance);
-                
-            selected.Density = Mathf.Clamp01(density);
+            selected.Density = Mathf.Clamp01(selected.Density - ModifyData.ModifyIntensity * Falloff(distance));
             Data[index] = selected;
         }
 
         private void DecreaseWeight(int index, PointData selected, float distance)
         {
-            if(selected.IsCorner) return;
-            
-            float density = selected.Density + ModifyData.ModifyIntensity/(distance*distance);
-                
-            selected.Density = Mathf.Clamp01(density);
+            selected.Density = Mathf.Clamp01(selected.Density + ModifyData.ModifyIntensity * Falloff(distance));
             Data[index] = selected;
+        }
+
+        /// <summary>Плавное затухание от центра кисти к краю: 1 в центре, 0 на радиусе.</summary>
+        private float Falloff(float distance)
+        {
+            var t = 1f - Mathf.Clamp01(distance / Mathf.Max(ModifyData.ModifyRadius, 1e-4f));
+            return t * t;
         }
     }
 }

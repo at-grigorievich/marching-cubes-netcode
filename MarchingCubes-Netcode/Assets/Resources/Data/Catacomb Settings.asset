@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45bc5e8252910d048bbd0da0cc6d673e, type: 3}
+  m_Name: Catacomb Settings
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CatacombSettings
+  presetVersion: 4
+  chunkResolution: 16
+  voxelSize: 1
+  worldSizeInChunks: {x: 5, y: 4, z: 5}
+  boundaryThickness: 3
+  gridStep: 4
+  seed: 1337
+  randomizeSeed: 0
+  levelCount: 3
+  roomsPerLevel: {x: 10, y: 14}
+  roomSize: {x: 6, y: 10}
+  roomHeight: 4.5
+  arenasPerLevel: 0
+  arenaScale: 2.2
+  corridorWidth: 3.5
+  corridorHeight: 3.6
+  extraConnections: 0.6
+  minConnections: 2
+  galleryShare: 0.35
+  galleryMinLength: 20
+  galleryWidthScale: 1.35
+  galleryHeightScale: 1.3
+  pathChaos: 0.6
+  pinchChance: 0.3
+  pinchWidth: 0.55
+  floorWave: 6
+  floorWaveScale: 0.02
+  cornerRounding: 0.9
+  junctionBlend: 0.6
+  levelLinkMode: 0
+  linksBetweenLevels: 2
+  rampRun: 16
+  rampSlope: 0.5
+  noiseScale: 0.12
+  noiseAmplitude: 0.35
+  noiseOctaves: 2
+  isoLevel: 0.5
+  surfaceSoftness: 0.7
+  material: {fileID: 2100000, guid: 75743acb846f4004c8ff621a14b5e26a, type: 2}
+  colliderMode: 1
+  millisecondsPerFrame: 8
