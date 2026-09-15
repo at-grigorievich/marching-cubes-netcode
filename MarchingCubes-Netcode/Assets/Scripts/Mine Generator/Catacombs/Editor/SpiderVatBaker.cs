@@ -466,17 +466,41 @@ namespace MineGenerator.Catacombs.EditorTools
             // но это лишнее требование к платформе там, где хватает обычного атрибута,
             // который всё равно едет в вершинном буфере.
             //
-            // UV1.y СВОБОДЕН. Недолго в нём лежала маска головы под блик глаз, но блик
-            // убран (см. комментарий в CaveCrowd.shader), а данные, которые никто
-            // не читает, потом только сбивают с толку — поэтому и маски здесь больше нет.
+            // UV1.y — маска головы, по которой шейдер зажигает блик глаз.
+            //
+            // Почему маска геометрией, а не по текстуре: глаза в альбедо это просто
+            // тёмные пятна, и выделить их порогом нельзя, такие же есть на брюшке.
+            // А вот ГДЕ голова, меш знает точно: передняя верхняя часть, и «перёд»
+            // у пака известен — минус Z, проверено съёмкой.
+            //
+            // Маска грубая, захватывает всю головогрудь, и это принято сознательно:
+            // блик по ней узкий (степень около двадцати) и гаснет, стоит особи
+            // отвернуться, поэтому светится не вся размеченная область, а лишь пятно
+            // на самой к нам обращённой её части.
             var vat = new Vector2[vertices.Length];
+
+            var span = bounds.size;
+            var headZ = bounds.min.z + span.z * 0.30f;
+            var headY = bounds.center.y;
+
+            var eyes = 0;
 
             for (var i = 0; i < vertices.Length; i++)
             {
-                vat[i] = new Vector2((i + 0.5f) / vertices.Length, 0f);
+                var v = vertices[i];
+
+                // Передняя треть по длине и верхняя половина по высоте: лапы отсекаются
+                // высотой, брюшко — глубиной.
+                var mask = v.z < headZ && v.y > headY ? 1f : 0f;
+
+                if (mask > 0f) eyes++;
+
+                vat[i] = new Vector2((i + 0.5f) / vertices.Length, mask);
             }
 
             mesh.SetUVs(1, vat);
+
+            mesh.name = $"{name} Crowd ({eyes} вершин головы)";
 
             mesh.subMeshCount = 1;
             mesh.SetTriangles(source.triangles, 0);
@@ -522,6 +546,22 @@ namespace MineGenerator.Catacombs.EditorTools
 
             material.SetTexture("_VatPositions", positions);
             material.SetTexture("_VatNormals", normals);
+
+            // Эталонные значения кромки и глаз проставляются ЯВНО, а не оставляются
+            // на умолчания шейдера. Умолчание работает ровно один раз — при создании
+            // материала; дальше значение живёт в ассете и правку в коде не подхватывает.
+            // На этом в проекте уже обжигались (грабли №8), и тот же приём применён
+            // к материалу породы в CatacombWorldEditor.ApplyCaveMaterialPreset.
+            //
+            // Кромка ЧЁРНАЯ по просьбе пользователя: светлая давала мультяшный контур
+            // вокруг каждого тела. Тёмная обводит силуэт, не высветляя его.
+            material.SetColor("_RimColor", Color.black);
+            material.SetFloat("_RimPower", 2.6f);
+            material.SetFloat("_RimStrength", 0.55f);
+
+            material.SetColor("_EyeColor", new Color(1f, 0.55f, 0.15f));
+            material.SetFloat("_EyeGlow", 2.2f);
+            material.SetFloat("_EyeFocus", 18f);
 
             // Без этого RenderMeshInstanced рисует партию одним экземпляром: свойства
             // инстанса просто некуда положить.
