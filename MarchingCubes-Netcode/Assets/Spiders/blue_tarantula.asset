@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
+  m_Name: blue_tarantula
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
+  tuningVersion: 5
+  Mesh: {fileID: 4300000, guid: 5f0348b012ab2af489e7f308b2b019d7, type: 2}
+  Material: {fileID: 2100000, guid: 0f2aafe9a7fc7b740859b3854942227f, type: 2}
+  Positions: {fileID: 2800000, guid: 08295f50af180fe468fc7db3051a294d, type: 2}
+  Normals: {fileID: 2800000, guid: 91c36278ce15e7b4caeecee1a8458d6c, type: 2}
+  Clips:
+  - Name: walk
+    StartRow: 0
+    FrameCount: 20
+    Length: 0.8
+    Loop: 1
+  - Name: attack_1
+    StartRow: 20
+    FrameCount: 24
+    Length: 0.96
+    Loop: 0
+  - Name: dead
+    StartRow: 44
+    FrameCount: 20
+    Length: 0.8
+    Loop: 0
+  - Name: idle
+    StartRow: 64
+    FrameCount: 24
+    Length: 4
+    Loop: 1
+  RestBounds:
+    m_Center: {x: 0.0027109683, y: 0.23469049, z: -0.027214408}
+    m_Extent: {x: 0.35086632, y: 0.26041135, z: 0.47743547}
+  Scale: 3.4
+  Hover: 0.12
+  FacesMinusZ: 1
+  ScaleJitter: 0.18
+  MoveSpeed: 2.4
+  SpeedJitter: 0.25
+  TurnSpeed: 540
+  BodyRadius: 0.47743547
+  AttackRange: 1.554871
+  StrideLength: 1.050358
+  Health: 3
+  CorpseLinger: 2.5
+  LurkShare: 0.35
+  LurkTrigger: 7

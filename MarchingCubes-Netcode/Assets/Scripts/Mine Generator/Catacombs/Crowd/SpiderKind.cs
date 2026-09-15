@@ -72,7 +72,7 @@ namespace MineGenerator.Catacombs
         /// не имеет права их трогать (вдруг их подбирали руками), а с версией знает,
         /// что её значения устарели, и пересчитывает.
         /// </summary>
-        public const int CurrentTuningVersion = 4;
+        public const int CurrentTuningVersion = 5;
 
         [SerializeField, HideInInspector] private int tuningVersion;
 

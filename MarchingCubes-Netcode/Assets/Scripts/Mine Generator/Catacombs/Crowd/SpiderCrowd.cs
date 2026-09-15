@@ -1000,8 +1000,11 @@ namespace MineGenerator.Catacombs
         /// и скорость у вертящейся задом наперёд толпы ровно те же. Поэтому мерится
         /// отдельно и явно.
         ///
-        /// Делает один шаг поведения внутри себя: угловая скорость по одному кадру
-        /// не считается, нужны два.
+        /// Усредняется по нескольким десяткам шагов, а не снимается за один кадр.
+        /// Толпа — система хаотичная, и замер по одному кадру гуляет: на неизменном коде
+        /// он давал от 129 до 207 градусов в секунду, то есть пересекал любой разумный
+        /// порог туда-сюда просто от того, в какой момент его сняли. Усреднение эту
+        /// болтанку убирает, и порог начинает что-то значить.
         /// </summary>
         /// <param name="headingError">Угол между взглядом и направлением бега, градусы. Должен быть мал.</param>
         /// <param name="turnRate">Средняя угловая скорость, градусов в секунду.</param>
@@ -1012,16 +1015,10 @@ namespace MineGenerator.Catacombs
 
             if (!_states.IsCreated || deltaTime <= 0f) return;
 
+            const int samples = 30;
+
             var before = new quaternion[_states.Length];
             var moving = new bool[_states.Length];
-
-            for (var i = 0; i < _states.Length; i++)
-            {
-                before[i] = _states[i].Rotation;
-                moving[i] = _states[i].Active != 0 && _states[i].Clip != (int)SpiderClip.Dead;
-            }
-
-            Simulate(deltaTime);
 
             var headingSum = 0f;
             var headingCount = 0;
@@ -1029,29 +1026,40 @@ namespace MineGenerator.Catacombs
             var turnSum = 0f;
             var turnCount = 0;
 
-            for (var i = 0; i < _states.Length; i++)
+            for (var pass = 0; pass < samples; pass++)
             {
-                var spider = _states[i];
+                for (var i = 0; i < _states.Length; i++)
+                {
+                    before[i] = _states[i].Rotation;
+                    moving[i] = _states[i].Active != 0 && _states[i].Clip != (int)SpiderClip.Dead;
+                }
 
-                if (!moving[i] || spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+                Simulate(deltaTime);
 
-                var dot = math.abs(math.dot(before[i].value, spider.Rotation.value));
+                for (var i = 0; i < _states.Length; i++)
+                {
+                    var spider = _states[i];
 
-                turnSum += math.degrees(2f * math.acos(math.clamp(dot, -1f, 1f)));
-                turnCount++;
+                    if (!moving[i] || spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
 
-                var speed = math.length(spider.Velocity);
-                if (speed < 0.2f) continue;
+                    var dot = math.abs(math.dot(before[i].value, spider.Rotation.value));
 
-                // Куда особь СМОТРИТ. У пака Spiders голова в минус Z, поэтому взгляд
-                // это минус forward; знак живёт в SpiderKind.FacesMinusZ.
-                var sign = _tuning[spider.Kind].FacingSign;
-                var gaze = math.forward(spider.Rotation) * sign;
+                    turnSum += math.degrees(2f * math.acos(math.clamp(dot, -1f, 1f)));
+                    turnCount++;
 
-                headingSum += math.degrees(math.acos(math.clamp(
-                    math.dot(gaze, spider.Velocity / speed), -1f, 1f)));
+                    var speed = math.length(spider.Velocity);
+                    if (speed < 0.2f) continue;
 
-                headingCount++;
+                    // Куда особь СМОТРИТ. У пака Spiders голова в минус Z, поэтому взгляд
+                    // это минус forward; знак живёт в SpiderKind.FacesMinusZ.
+                    var sign = _tuning[spider.Kind].FacingSign;
+                    var gaze = math.forward(spider.Rotation) * sign;
+
+                    headingSum += math.degrees(math.acos(math.clamp(
+                        math.dot(gaze, spider.Velocity / speed), -1f, 1f)));
+
+                    headingCount++;
+                }
             }
 
             if (headingCount > 0) headingError = headingSum / headingCount;

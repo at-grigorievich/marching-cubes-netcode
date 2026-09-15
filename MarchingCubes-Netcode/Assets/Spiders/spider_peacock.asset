@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
+  m_Name: spider_peacock
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
+  tuningVersion: 5
+  Mesh: {fileID: 4300000, guid: 085f33164d10cb6428ce02aa5ec78611, type: 2}
+  Material: {fileID: 2100000, guid: f230338f815252e40ae806f3670c9ff6, type: 2}
+  Positions: {fileID: 2800000, guid: 96959f065b6355c479d1f5540e99c40a, type: 2}
+  Normals: {fileID: 2800000, guid: 022386be17c056c43b5bfcfd0973f460, type: 2}
+  Clips:
+  - Name: walk
+    StartRow: 0
+    FrameCount: 20
+    Length: 0.8
+    Loop: 1
+  - Name: attack_1
+    StartRow: 20
+    FrameCount: 24
+    Length: 0.96
+    Loop: 0
+  - Name: dead
+    StartRow: 44
+    FrameCount: 20
+    Length: 0.8
+    Loop: 0
+  - Name: idle
+    StartRow: 64
+    FrameCount: 24
+    Length: 4
+    Loop: 1
+  RestBounds:
+    m_Center: {x: 0.000024616718, y: 0.19229895, z: -0.06788969}
+    m_Extent: {x: 0.3741856, y: 0.25633216, z: 0.44131374}
+  Scale: 2.4
+  Hover: 0.12
+  FacesMinusZ: 1
+  ScaleJitter: 0.18
+  MoveSpeed: 4.8
+  SpeedJitter: 0.25
+  TurnSpeed: 540
+  BodyRadius: 0.44131374
+  AttackRange: 1.4826275
+  StrideLength: 0.9708903
+  Health: 1
+  CorpseLinger: 2.5
+  LurkShare: 0.2
+  LurkTrigger: 7

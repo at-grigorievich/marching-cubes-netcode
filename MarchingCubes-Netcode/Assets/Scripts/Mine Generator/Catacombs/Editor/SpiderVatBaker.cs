@@ -34,19 +34,32 @@ namespace MineGenerator.Catacombs.EditorTools
         private const string ShaderName = "Mine Generator/Cave Crowd";
 
         /// <summary>
-        /// Виды по умолчанию: два мелких и два крупных.
+        /// Все пауки пака. Одиннадцатый префаб в папке — `Ground`, это декорация
+        /// без скиннинга, и в толпу он не идёт.
         ///
-        /// Не все десять намеренно. Каждый вид это своя пара текстур примерно на
-        /// три четверти мегабайта, и десять видов дали бы семь с лишним мегабайт
-        /// в загрузке WebGL ради разнообразия, которое в тёмном коридоре на дистанции
-        /// боя всё равно не читается. Четырёх хватает, чтобы толпа не выглядела
-        /// размноженной копией; остальные доступны через «запечь выделенные».
+        /// Сначала бралось четыре из экономии: каждый вид это своя пара текстур,
+        /// и полный набор стоит около семи мегабайт в загрузке WebGL. Отказ от шести
+        /// видов эти мегабайты экономил, но ради чего — непонятно: разнообразие орды
+        /// это ровно то, что игрок видит ВСЁ ВРЕМЯ, в отличие от почти любого другого
+        /// ассета. Четыре вида при восьми сотнях особей означают две сотни копий
+        /// каждого в кадре.
+        ///
+        /// Если мегабайты понадобятся, резать надо не число видов, а точность карт:
+        /// позиции лежат в половинной точности на вершину, и квантование в байт
+        /// на канал срезало бы вдвое. Это отдельная правка с отдельной проверкой
+        /// по кадру — см. открытые вопросы.
         /// </summary>
         private static readonly string[] DefaultKinds =
         {
             "little_spider",
             "karakurt",
+            "haymaking",
+            "spider peacock",
+            "spider jumper",
+            "Argiope",
+            "yellow floral spider",
             "spider_cross",
+            "blue tarantula",
             "tarantula"
         };
 
@@ -63,9 +76,15 @@ namespace MineGenerator.Catacombs.EditorTools
         /// </summary>
         private static readonly (string Kind, float Scale)[] Scales =
         {
-            ("little_spider", 2.2f),
             ("karakurt", 2.6f),
+            ("little_spider", 2.2f),
+            ("haymaking", 2.4f),
+            ("spider peacock", 2.4f),
+            ("spider jumper", 2.6f),
+            ("Argiope", 2.8f),
+            ("yellow floral spider", 2.8f),
             ("spider_cross", 3.1f),
+            ("blue tarantula", 3.4f),
             ("tarantula", 3.6f)
         };
 
@@ -109,9 +128,24 @@ namespace MineGenerator.Catacombs.EditorTools
         /// </summary>
         private static readonly (string Kind, float Speed, int Health, float Lurk)[] Roles =
         {
-            ("little_spider", 4.6f, 1, 0.10f),
+            // Мелочь: быстрая, с одного попадания, бежит и почти не сидит в засаде.
+            ("haymaking", 5.4f, 1, 0.10f),
             ("karakurt", 5.2f, 1, 0.15f),
+            ("spider peacock", 4.8f, 1, 0.20f),
+            ("little_spider", 4.6f, 1, 0.10f),
+
+            // Прыгун — единственный, кто по повадке засадник: доля ожидания у него
+            // самая высокая среди быстрых.
+            ("spider jumper", 5.0f, 1, 0.35f),
+
+            // Середина: держит два попадания, ползает заметно медленнее.
+            ("yellow floral spider", 3.8f, 2, 0.25f),
+            ("Argiope", 3.6f, 2, 0.30f),
             ("spider_cross", 3.0f, 2, 0.30f),
+
+            // Тяжёлые: идут первыми и держат удар, но догнать отступающего игрока
+            // сами не могут — этим и задаётся ритм отхода по коридору.
+            ("blue tarantula", 2.4f, 3, 0.35f),
             ("tarantula", 2.2f, 4, 0.40f)
         };
 
@@ -374,11 +408,18 @@ namespace MineGenerator.Catacombs.EditorTools
             var positionMap = WriteTexture($"{OutputFolder}/{safeName} Positions.asset", vertexCount, totalRows,
                 TextureFormat.RGBAHalf, positions);
 
+            // Нормали — RGB24, а не RGBA32: четвёртый канал в них не несёт ничего,
+            // а стоит четверти веса карты. Потеря нулевая, экономия на полном наборе
+            // видов — около полумегабайта загрузки.
             var normalMap = WriteTexture($"{OutputFolder}/{safeName} Normals.asset", vertexCount, totalRows,
-                TextureFormat.RGBA32, normals);
+                TextureFormat.RGB24, normals);
+
+            var headMask = BuildHeadMask(firstFrame, out var eyes);
+
+            report.AppendLine($"    голова: {eyes} вершин из {vertexCount}");
 
             var mesh = WriteMesh($"{OutputFolder}/{safeName} Crowd.asset", safeName, source.sharedMesh,
-                firstFrame, firstNormals, bounds);
+                firstFrame, firstNormals, headMask, bounds);
 
             var material = WriteMaterial($"{OutputFolder}/{safeName} Crowd.mat", shader, source.sharedMaterial,
                 positionMap, normalMap);
@@ -389,7 +430,7 @@ namespace MineGenerator.Catacombs.EditorTools
             report.AppendLine($"  {prefab.name}: вершин {vertexCount}, строк {totalRows} " +
                               $"({string.Join(", ", ranges.Select(r => $"{r.Name} {r.FrameCount}"))}), " +
                               $"габариты {bounds.size.x:0.00}x{bounds.size.y:0.00}x{bounds.size.z:0.00}, " +
-                              $"текстуры {Size(vertexCount * totalRows * 8)} + {Size(vertexCount * totalRows * 4)}");
+                              $"текстуры {Size(vertexCount * totalRows * 8)} + {Size(vertexCount * totalRows * 3)}");
 
             return kind;
         }
@@ -451,8 +492,69 @@ namespace MineGenerator.Catacombs.EditorTools
             return texture;
         }
 
+        /// <summary>
+        /// UV1 меша: x — столбец вершины в карте анимации, y — маска головы под блик глаз.
+        ///
+        /// Считается по ПОЗЕ БЕГА, а не по габаритам всех кадров. Габариты объединяют
+        /// и клип смерти, где паук переворачивается, отчего вертикальный размах
+        /// раздувается вдвое и «верхняя половина» уезжает выше тела целиком. Замер это
+        /// и поймал: у тарантула с каракуртом в маску попадало РОВНО НОЛЬ вершин,
+        /// то есть блик у них не рисовался вовсе, и заметить это по кадру было нельзя —
+        /// выглядело просто как «блик слабый».
+        ///
+        /// Порог по высоте берётся от передней дольки, а не от всей особи: у паука
+        /// лапы расходятся широко и вниз, и половина роста всей туши приходится на них.
+        ///
+        /// Почему маска геометрией, а не по текстуре: глаза в альбедо это просто тёмные
+        /// пятна, и порогом их не отличить от таких же на брюшке. А где голова, меш
+        /// знает точно — передняя часть, и «перёд» у пака известен (минус Z, проверено
+        /// съёмкой).
+        /// </summary>
+        private static Vector2[] BuildHeadMask(Vector3[] vertices, out int eyes)
+        {
+            var minZ = float.MaxValue;
+            var maxZ = float.MinValue;
+
+            foreach (var v in vertices)
+            {
+                minZ = Mathf.Min(minZ, v.z);
+                maxZ = Mathf.Max(maxZ, v.z);
+            }
+
+            // Передняя четверть по длине: головогрудь с хелицеями.
+            var frontZ = minZ + (maxZ - minZ) * 0.25f;
+
+            var frontMinY = float.MaxValue;
+            var frontMaxY = float.MinValue;
+
+            foreach (var v in vertices)
+            {
+                if (v.z > frontZ) continue;
+
+                frontMinY = Mathf.Min(frontMinY, v.y);
+                frontMaxY = Mathf.Max(frontMaxY, v.y);
+            }
+
+            var headY = Mathf.Lerp(frontMinY, frontMaxY, 0.5f);
+
+            var uv = new Vector2[vertices.Length];
+            eyes = 0;
+
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                var v = vertices[i];
+                var mask = v.z <= frontZ && v.y >= headY ? 1f : 0f;
+
+                if (mask > 0f) eyes++;
+
+                uv[i] = new Vector2((i + 0.5f) / vertices.Length, mask);
+            }
+
+            return uv;
+        }
+
         private static Mesh WriteMesh(string path, string name, Mesh source, Vector3[] vertices, Vector3[] normals,
-            Bounds bounds)
+            Vector2[] headMask, Bounds bounds)
         {
             var mesh = new Mesh { name = $"{name} Crowd", indexFormat = source.indexFormat };
 
@@ -466,41 +568,7 @@ namespace MineGenerator.Catacombs.EditorTools
             // но это лишнее требование к платформе там, где хватает обычного атрибута,
             // который всё равно едет в вершинном буфере.
             //
-            // UV1.y — маска головы, по которой шейдер зажигает блик глаз.
-            //
-            // Почему маска геометрией, а не по текстуре: глаза в альбедо это просто
-            // тёмные пятна, и выделить их порогом нельзя, такие же есть на брюшке.
-            // А вот ГДЕ голова, меш знает точно: передняя верхняя часть, и «перёд»
-            // у пака известен — минус Z, проверено съёмкой.
-            //
-            // Маска грубая, захватывает всю головогрудь, и это принято сознательно:
-            // блик по ней узкий (степень около двадцати) и гаснет, стоит особи
-            // отвернуться, поэтому светится не вся размеченная область, а лишь пятно
-            // на самой к нам обращённой её части.
-            var vat = new Vector2[vertices.Length];
-
-            var span = bounds.size;
-            var headZ = bounds.min.z + span.z * 0.30f;
-            var headY = bounds.center.y;
-
-            var eyes = 0;
-
-            for (var i = 0; i < vertices.Length; i++)
-            {
-                var v = vertices[i];
-
-                // Передняя треть по длине и верхняя половина по высоте: лапы отсекаются
-                // высотой, брюшко — глубиной.
-                var mask = v.z < headZ && v.y > headY ? 1f : 0f;
-
-                if (mask > 0f) eyes++;
-
-                vat[i] = new Vector2((i + 0.5f) / vertices.Length, mask);
-            }
-
-            mesh.SetUVs(1, vat);
-
-            mesh.name = $"{name} Crowd ({eyes} вершин головы)";
+            mesh.SetUVs(1, headMask);
 
             mesh.subMeshCount = 1;
             mesh.SetTriangles(source.triangles, 0);

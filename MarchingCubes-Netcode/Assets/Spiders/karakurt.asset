@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: karakurt
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 4
+  tuningVersion: 5
   Mesh: {fileID: 4300000, guid: af5cd036a3fafcb4c805dea604785773, type: 2}
   Material: {fileID: 2100000, guid: 1d74e5b8967279b48a9dbc6d4d8002c1, type: 2}
   Positions: {fileID: 2800000, guid: 6cfa4e316a41edf4e9e0ee699f063ad4, type: 2}
