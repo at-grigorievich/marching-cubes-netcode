@@ -81,13 +81,49 @@ namespace MineGenerator.Catacombs.EditorTools
             return DefaultScale;
         }
 
-        /// <summary>Какие клипы пака во что превращаются. Порядок совпадает с <see cref="SpiderClip"/>.</summary>
-        private static readonly (string Clip, bool Loop)[] Wanted =
+        /// <summary>
+        /// Какие клипы пака во что превращаются. Порядок совпадает с <see cref="SpiderClip"/>.
+        ///
+        /// Потолок кадров задан отдельно, потому что клипы пака очень разной длины.
+        /// Стояние идёт четыре секунды на 25 кадрах — сотня строк в текстуре ради того,
+        /// что почти не шевелится. Прорежаем до двух десятков: у неподвижной твари
+        /// разница не видна, а сотня лишних строк это треть мегабайта на вид в загрузке.
+        /// </summary>
+        private static readonly (string Clip, bool Loop, int MaxFrames)[] Wanted =
         {
-            ("walk", true),
-            ("attack_1", false),
-            ("dead", false)
+            ("walk", true, 128),
+            ("attack_1", false, 128),
+            ("dead", false, 128),
+            ("idle", true, 24)
         };
+
+        /// <summary>
+        /// Роли: кто в орде быстрый и хрупкий, а кто медленный и живучий.
+        ///
+        /// Разброс по скорости здесь важнее, чем кажется: он сам расслаивает толпу
+        /// на набегающую волну и отстающий хвост. При одинаковой скорости орда идёт
+        /// сплошной стеной и через минуту перестаёт читаться как угроза.
+        ///
+        /// Доля засады разведена по тому же принципу: крупным сидеть на своде страшнее,
+        /// мелким свойственнее бежать.
+        /// </summary>
+        private static readonly (string Kind, float Speed, int Health, float Lurk)[] Roles =
+        {
+            ("little_spider", 4.6f, 1, 0.10f),
+            ("karakurt", 5.2f, 1, 0.15f),
+            ("spider_cross", 3.0f, 2, 0.30f),
+            ("tarantula", 2.2f, 4, 0.40f)
+        };
+
+        private static (float Speed, int Health, float Lurk) RoleFor(string name)
+        {
+            foreach (var (kind, speed, health, lurk) in Roles)
+            {
+                if (kind == name) return (speed, health, lurk);
+            }
+
+            return (3.2f, 1, 0.2f);
+        }
 
         /// <summary>
         /// Точка входа для batchmode: запечь набор по умолчанию и выйти с кодом.
@@ -207,7 +243,7 @@ namespace MineGenerator.Catacombs.EditorTools
             var plan = new List<(AnimationClip Clip, bool Loop, int Frames)>();
             var totalRows = 0;
 
-            foreach (var (name, loop) in Wanted)
+            foreach (var (name, loop, maxFrames) in Wanted)
             {
                 if (!clips.TryGetValue(name, out var clip))
                 {
@@ -215,9 +251,10 @@ namespace MineGenerator.Catacombs.EditorTools
                     return null;
                 }
 
-                // Кадров ровно столько, сколько в исходнике: пак нарисован на 25 кадрах
+                // Кадров столько, сколько в исходнике: пак нарисован на 25 кадрах
                 // в секунду, и брать чаще нечего — промежуточных поз в клипе нет.
-                var frames = Mathf.Clamp(Mathf.RoundToInt(clip.length * clip.frameRate), 2, 128);
+                // Сверху ограничено потолком клипа, см. Wanted.
+                var frames = Mathf.Clamp(Mathf.RoundToInt(clip.length * clip.frameRate), 2, maxFrames);
 
                 plan.Add((clip, loop, frames));
                 totalRows += frames;
@@ -425,17 +462,41 @@ namespace MineGenerator.Catacombs.EditorTools
             var uv = source.uv;
             if (uv != null && uv.Length == vertices.Length) mesh.SetUVs(0, uv);
 
-            // UV1 несёт одно число — столбец вершины в карте анимации. Через SV_VertexID
-            // было бы короче, но это лишнее требование к платформе там, где хватает
-            // обычного атрибута, который всё равно едет в вершинном буфере.
+            // UV1.x — столбец вершины в карте анимации. Через SV_VertexID было бы короче,
+            // но это лишнее требование к платформе там, где хватает обычного атрибута,
+            // который всё равно едет в вершинном буфере.
+            //
+            // UV1.y — маска головы, по которой шейдер зажигает блик глаз. Канал был
+            // свободен с первой запечки, отдельный атрибут заводить не пришлось.
+            //
+            // Почему маска геометрией, а не по текстуре: глаза в альбедо — это просто
+            // тёмные пятна, и выделить их порогом нельзя, такие же пятна есть на брюшке.
+            // А вот ГДЕ голова, меш знает точно: это передняя верхняя часть, и «перёд»
+            // у пака известен — минус Z (проверено съёмкой).
             var vat = new Vector2[vertices.Length];
+
+            var span = bounds.size;
+            var headZ = bounds.min.z + span.z * 0.30f;
+            var headY = bounds.center.y;
+
+            var eyes = 0;
 
             for (var i = 0; i < vertices.Length; i++)
             {
-                vat[i] = new Vector2((i + 0.5f) / vertices.Length, 0.5f);
+                var v = vertices[i];
+
+                // Передняя треть по длине и верхняя половина по высоте. Грубо, но ловит
+                // именно головогрудь: лапы отсекаются высотой, брюшко — глубиной.
+                var mask = v.z < headZ && v.y > headY ? 1f : 0f;
+
+                if (mask > 0f) eyes++;
+
+                vat[i] = new Vector2((i + 0.5f) / vertices.Length, mask);
             }
 
             mesh.SetUVs(1, vat);
+
+            mesh.name = $"{name} Crowd ({eyes} вершин головы)";
 
             mesh.subMeshCount = 1;
             mesh.SetTriangles(source.triangles, 0);
@@ -521,6 +582,13 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 kind.Scale = ScaleFor(prefabName);
 
+                var role = RoleFor(prefabName);
+
+                kind.MoveSpeed = role.Speed;
+                kind.Health = role.Health;
+                kind.LurkShare = role.Lurk;
+                kind.LurkTrigger = 7f;
+
                 // Половина поперечника: тела соприкасаются, но не срастаются.
                 //
                 // Было 0.35, и при пауке в юнит это выглядело правильно — особи слегка
@@ -597,6 +665,9 @@ namespace MineGenerator.Catacombs.EditorTools
             go.transform.SetParent(world.transform.parent, false);
 
             var crowd = go.AddComponent<SpiderCrowd>();
+
+            // Голос орды. AudioSource придёт сам по RequireComponent.
+            go.AddComponent<CaveCrowdAudio>();
 
             var serialized = new SerializedObject(crowd);
             serialized.FindProperty("world").objectReferenceValue = world;

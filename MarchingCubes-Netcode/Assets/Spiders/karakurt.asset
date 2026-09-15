@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: karakurt
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 3
+  tuningVersion: 4
   Mesh: {fileID: 4300000, guid: af5cd036a3fafcb4c805dea604785773, type: 2}
   Material: {fileID: 2100000, guid: 1d74e5b8967279b48a9dbc6d4d8002c1, type: 2}
   Positions: {fileID: 2800000, guid: 6cfa4e316a41edf4e9e0ee699f063ad4, type: 2}
@@ -33,14 +33,19 @@ MonoBehaviour:
     FrameCount: 20
     Length: 0.8
     Loop: 0
+  - Name: idle
+    StartRow: 64
+    FrameCount: 24
+    Length: 4
+    Loop: 1
   RestBounds:
-    m_Center: {x: 0.000022158027, y: 0.16448931, z: -0.06358388}
-    m_Extent: {x: 0.21735229, y: 0.20321074, z: 0.30712882}
+    m_Center: {x: 0.000022143126, y: 0.16448931, z: -0.06358388}
+    m_Extent: {x: 0.2173523, y: 0.20321074, z: 0.30712882}
   Scale: 2.6
-  Hover: 0.06
+  Hover: 0.12
   FacesMinusZ: 1
   ScaleJitter: 0.18
-  MoveSpeed: 3.2
+  MoveSpeed: 5.2
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.30712882
@@ -48,3 +53,5 @@ MonoBehaviour:
   StrideLength: 0.67568344
   Health: 1
   CorpseLinger: 2.5
+  LurkShare: 0.15
+  LurkTrigger: 7

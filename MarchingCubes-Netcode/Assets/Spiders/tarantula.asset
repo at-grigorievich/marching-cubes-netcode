@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: tarantula
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 3
+  tuningVersion: 4
   Mesh: {fileID: 4300000, guid: 25512af66a21e314b9d1e95a37f9be3a, type: 2}
   Material: {fileID: 2100000, guid: 5fbaa5a7206e22147914b7b4dc6fea34, type: 2}
   Positions: {fileID: 2800000, guid: f0bfb708ba8944a45904f64ffc00c326, type: 2}
@@ -33,18 +33,25 @@ MonoBehaviour:
     FrameCount: 20
     Length: 0.8
     Loop: 0
+  - Name: idle
+    StartRow: 64
+    FrameCount: 24
+    Length: 4
+    Loop: 1
   RestBounds:
     m_Center: {x: 0.006075233, y: 0.24493441, z: -0.0678221}
     m_Extent: {x: 0.43951017, y: 0.29380888, z: 0.524266}
   Scale: 3.6
-  Hover: 0.06
+  Hover: 0.12
   FacesMinusZ: 1
   ScaleJitter: 0.18
-  MoveSpeed: 3.2
+  MoveSpeed: 2.2
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.524266
   AttackRange: 1.648532
   StrideLength: 1.1533853
-  Health: 1
+  Health: 4
   CorpseLinger: 2.5
+  LurkShare: 0.4
+  LurkTrigger: 7

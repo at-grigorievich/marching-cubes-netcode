@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: spider_cross
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 3
+  tuningVersion: 4
   Mesh: {fileID: 4300000, guid: 304b32633551d5942afee3da57ad6e47, type: 2}
   Material: {fileID: 2100000, guid: 936e54f76912ff642983c83662b12dd5, type: 2}
   Positions: {fileID: 2800000, guid: bff58427f861a0349902f6f410f18046, type: 2}
@@ -33,18 +33,25 @@ MonoBehaviour:
     FrameCount: 20
     Length: 0.8
     Loop: 0
+  - Name: idle
+    StartRow: 64
+    FrameCount: 24
+    Length: 4
+    Loop: 1
   RestBounds:
     m_Center: {x: 0.0051661134, y: 0.1476106, z: -0.03695014}
     m_Extent: {x: 0.35833615, y: 0.26269627, z: 0.43889856}
   Scale: 3.1
-  Hover: 0.06
+  Hover: 0.12
   FacesMinusZ: 1
   ScaleJitter: 0.18
-  MoveSpeed: 3.2
+  MoveSpeed: 3
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.43889856
   AttackRange: 1.4777972
   StrideLength: 0.9655769
-  Health: 1
+  Health: 2
   CorpseLinger: 2.5
+  LurkShare: 0.3
+  LurkTrigger: 7

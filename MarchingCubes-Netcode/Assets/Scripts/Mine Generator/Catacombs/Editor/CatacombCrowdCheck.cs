@@ -290,6 +290,9 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var crowd = go.AddComponent<SpiderCrowd>();
 
+            // Голос орды. AudioSource придёт сам по RequireComponent.
+            go.AddComponent<CaveCrowdAudio>();
+
             var serialized = new SerializedObject(crowd);
             serialized.FindProperty("world").objectReferenceValue = world;
 

@@ -17,7 +17,21 @@ namespace MineGenerator.Catacombs
     {
         Walk = 0,
         Attack = 1,
-        Dead = 2
+        Dead = 2,
+
+        /// <summary>
+        /// Стояние. Вернулось ради засады: особь неподвижно висит на своде, пока игрок
+        /// не подойдёт, и падает ему на голову. Это самое «паучье», чего в толпе не было.
+        ///
+        /// Раньше было выброшено с формулировкой «стоящий паук это просто медленно
+        /// бегущий», и для бегущей орды это верно. Но засада — не медленный бег,
+        /// а полная неподвижность, и бег на нижней границе скорости её не изображает:
+        /// висящая на потолке особь, перебирающая лапами, читается как глюк.
+        ///
+        /// Клип прорежен при запечке (см. SpiderVatBaker.Wanted): в исходнике он четыре
+        /// секунды на 25 кадрах, а неподвижной твари хватает двух десятков.
+        /// </summary>
+        Idle = 3
     }
 
     /// <summary>Где в текстуре анимации лежит один клип.</summary>
@@ -58,7 +72,7 @@ namespace MineGenerator.Catacombs
         /// не имеет права их трогать (вдруг их подбирали руками), а с версией знает,
         /// что её значения устарели, и пересчитывает.
         /// </summary>
-        public const int CurrentTuningVersion = 3;
+        public const int CurrentTuningVersion = 4;
 
         [SerializeField, HideInInspector] private int tuningVersion;
 
@@ -151,9 +165,21 @@ namespace MineGenerator.Catacombs
                  "освободится под новую особь.")]
         [Min(0f)] public float CorpseLinger = 2.5f;
 
+        [Header("Роль в орде")]
+        /// <summary>
+        /// Доля особей этого вида, которые появляются в засаде: висят неподвижно,
+        /// пока игрок не подойдёт. Разная по видам намеренно — крупным сидеть в засаде
+        /// страшнее, мелким свойственнее бежать.
+        /// </summary>
+        [Tooltip("Доля особей вида, которые ждут в засаде вместо того, чтобы бежать.")]
+        [Range(0f, 1f)] public float LurkShare = 0.25f;
+
+        [Tooltip("С какого расстояния засада срывается, юниты.")]
+        [Min(1f)] public float LurkTrigger = 7f;
+
         public bool IsReady =>
             Mesh != null && Material != null && Positions != null && Normals != null &&
-            Clips != null && Clips.Length >= 3;
+            Clips != null && Clips.Length >= 4;
 
         public SpiderClipRange GetClip(SpiderClip clip)
         {

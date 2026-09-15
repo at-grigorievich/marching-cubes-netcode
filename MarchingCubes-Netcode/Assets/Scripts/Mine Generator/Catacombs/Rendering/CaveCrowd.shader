@@ -30,6 +30,20 @@ Shader "Mine Generator/Cave Crowd"
         // Тот же приём, что у породы: паук в неосвещённом коридоре иначе проваливается
         // в чистый чёрный и читается дырой в кадре, а не силуэтом.
         _MinLight ("Пол освещённости", Range(0,1)) = 0.02
+
+        [Header(Glaza)]
+        // Блик глаз. Зажигается по маске головы из UV1.y и только когда особь смотрит
+        // на камеру — то есть ровно тогда, когда это страшно.
+        _EyeColor ("Цвет глаз", Color) = (1.0, 0.55, 0.15, 1)
+        _EyeGlow ("Яркость глаз", Range(0,8)) = 2.2
+        _EyeFocus ("Узость блика", Range(1,64)) = 18
+
+        [Header(Silhouette)]
+        // Контровой свет по кромке. Без него паук на фоне породы того же тона
+        // теряет силуэт: замер по кадру показывал, что дальние особи сливаются со стеной.
+        _RimColor ("Цвет кромки", Color) = (0.55, 0.65, 0.85, 1)
+        _RimPower ("Узость кромки", Range(0.5,8)) = 2.6
+        _RimStrength ("Сила кромки", Range(0,3)) = 0.55
     }
 
     SubShader
@@ -65,6 +79,14 @@ Shader "Mine Generator/Cave Crowd"
             half _Smoothness;
             half _Metallic;
             half _MinLight;
+
+            half4 _EyeColor;
+            half _EyeGlow;
+            half _EyeFocus;
+
+            half4 _RimColor;
+            half _RimPower;
+            half _RimStrength;
         CBUFFER_END
 
         // Состояние анимации особи.
@@ -169,6 +191,7 @@ Shader "Mine Generator/Cave Crowd"
                 float2 uv         : TEXCOORD2;
                 half3 vertexSH    : TEXCOORD3;
                 half fogFactor    : TEXCOORD4;
+                half eyeMask      : TEXCOORD5;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -194,6 +217,10 @@ Shader "Mine Generator/Cave Crowd"
                 output.positionWS = positionInputs.positionWS;
                 output.normalWS = normalInputs.normalWS;
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+
+                // Маска головы приезжает вторым каналом UV1 — тем самым, что оставался
+                // свободным под номер вершины. Отдельного атрибута заводить не пришлось.
+                output.eyeMask = input.vatUV.y;
 
                 OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
 
@@ -237,6 +264,25 @@ Shader "Mine Generator/Cave Crowd"
                 // заливка в bakedGI проходит через модель отражения и на скользящих
                 // углах гасится почти в ноль — ровно там, где паук и теряется.
                 color.rgb = max(color.rgb, surface.albedo * _MinLight);
+
+                half3 normalWS = inputData.normalWS;
+                half3 viewWS = inputData.viewDirectionWS;
+
+                half facing = saturate(dot(normalWS, viewWS));
+
+                // Глаза. Узкий блик по маске головы, зажигающийся только когда особь
+                // повёрнута к камере. Это и есть нужный эффект: десятки огоньков,
+                // которые ЗАГОРАЮТСЯ, когда толпа разворачивается на игрока, а не
+                // светятся постоянно.
+                //
+                // Маска геометрическая, а не по текстуре: глаза в альбедо это просто
+                // тёмные пятна, и порогом их не отличить от таких же пятен на брюшке.
+                color.rgb += _EyeColor.rgb * (_EyeGlow * input.eyeMask * pow(facing, _EyeFocus));
+
+                // Контровой свет по кромке: без него паук на фоне породы того же тона
+                // теряет силуэт, а силуэт здесь — единственное, чем он читается
+                // на дистанции боя.
+                color.rgb += _RimColor.rgb * (_RimStrength * pow(1.0 - facing, _RimPower));
 
                 color.rgb = MixFog(color.rgb, inputData.fogCoord);
 

@@ -49,11 +49,68 @@ namespace MineGenerator.Catacombs
         [Tooltip("Потолок особей. Память под них выделяется один раз и не растёт.")]
         [SerializeField, Range(0, 4000)] private int capacity = 1200;
 
-        [Tooltip("Сколько особей держать живыми.")]
-        [SerializeField, Range(0, 4000)] private int population = 800;
+        /// <summary>
+        /// Сколько особей держать живыми в затишье.
+        ///
+        /// Снижено с восьмисот после того, как кадр показал предел читаемости: в коридоре
+        /// в кадре было 690 особей из 800, и породы за ними не видно вовсе. Орда перестаёт
+        /// пугать, когда становится обоями. Страх теперь добирается не числом,
+        /// а разрежением, волнами и засадами.
+        /// </summary>
+        [Tooltip("Сколько особей держать живыми в затишье.")]
+        [SerializeField, Range(0, 4000)] private int population = 450;
 
         [Tooltip("Сколько особей в секунду досылать взамен убитых.")]
-        [SerializeField, Min(0f)] private float spawnRate = 60f;
+        [SerializeField, Min(0f)] private float spawnRate = 45f;
+
+        [Header("Волны")]
+        /// <summary>
+        /// Во сколько раз население на гребне волны больше, чем в затишье.
+        ///
+        /// Постоянная плотность — главная причина, по которой орда перестаёт читаться
+        /// как угроза через минуту: к ней привыкают. Волна возвращает ритм: затишье,
+        /// нарастание, накат.
+        /// </summary>
+        [Tooltip("Во сколько раз население на гребне волны больше, чем в затишье.")]
+        [SerializeField, Range(1f, 4f)] private float waveScale = 2.2f;
+
+        [Tooltip("Длина полного цикла волны, секунды.")]
+        [SerializeField, Min(1f)] private float wavePeriod = 26f;
+
+        [Tooltip("Какую долю цикла занимает гребень. Остальное — затишье и переходы.")]
+        [SerializeField, Range(0.05f, 0.8f)] private float waveCrest = 0.25f;
+
+        [Header("Ближний круг")]
+        [Tooltip("Радиус ближнего круга, юниты.")]
+        [SerializeField, Range(2f, 30f)] private float nearRadius = 12f;
+
+        /// <summary>
+        /// Сколько особей пускать в ближний круг. Остальные ждут дальше.
+        ///
+        /// Без потолка вся орда сжимается в кольцо вокруг игрока и упирается в него
+        /// сплошной стеной: замер давал 690 видимых особей при полном отсутствии
+        /// негативного пространства. Силуэт читается только тогда, когда вокруг него
+        /// есть пустота.
+        /// </summary>
+        [Tooltip("Сколько особей пускать в ближний круг. Остальные ждут дальше.")]
+        [SerializeField, Range(0, 500)] private int nearCap = 70;
+
+        [Header("Смерть")]
+        [Tooltip("Сила отброса трупа в эпицентре взрыва, юнитов в секунду.")]
+        [SerializeField, Range(0f, 40f)] private float deathImpulse = 14f;
+
+        [Tooltip("Как быстро гаснет полёт трупа, доля в секунду.")]
+        [SerializeField, Range(0.5f, 12f)] private float corpseDrag = 2.5f;
+
+        /// <summary>
+        /// Сколько секунд не досылать пополнение после крупного убийства.
+        ///
+        /// Без паузы досыл затягивает пролом мгновенно, и игрок не видит того, что сделал:
+        /// взрыв убивал сто с лишним особей, а плотность в кадре не менялась. Пауза
+        /// и есть обратная связь.
+        /// </summary>
+        [Tooltip("Сколько секунд не досылать пополнение после крупного убийства.")]
+        [SerializeField, Range(0f, 8f)] private float spawnHoldAfterKill = 2.5f;
 
         /// <summary>
         /// Полоса удаления, в шагах сетки, где появляются новые особи.
@@ -165,6 +222,10 @@ namespace MineGenerator.Catacombs
         private float _flowTimer;
         private int _flowCell = -1;
         private float _spawnCredit;
+
+        /// <summary>Время для волны населения и пауза досыла после крупного убийства.</summary>
+        private float _waveTime;
+        private float _spawnHold;
 
         private readonly Plane[] _planes = new Plane[6];
 
@@ -317,7 +378,13 @@ namespace MineGenerator.Catacombs
             }
 
             UpdateFlow(targetLocal, targetValid != 0, deltaTime);
+
+            _waveTime += deltaTime;
+            _spawnHold = math.max(0f, _spawnHold - deltaTime);
+
             TopUp(deltaTime);
+
+            var near = targetValid != 0 ? CountNear(targetLocal) : 0;
 
             _hash.Clear();
 
@@ -351,7 +418,12 @@ namespace MineGenerator.Catacombs
                 Acceleration = acceleration,
                 CloseRange = closeRange,
                 MaxNeighbours = maxNeighbours,
-                IdleStride = 0.35f
+                IdleStride = 0.35f,
+
+                NearCount = near,
+                NearCap = nearCap,
+                NearRadius = nearRadius,
+                CorpseDrag = corpseDrag
             }.Schedule(_states.Length, 32, handle);
 
             handle = new SpiderPublishJob
@@ -427,11 +499,18 @@ namespace MineGenerator.Catacombs
                 Center = LocalOf(worldPoint),
                 RadiusSq = radius * radius,
                 Damage = math.max(1, damage),
+                Impulse = deathImpulse,
+                Seed = (uint)math.max(1, Environment.TickCount),
                 Killed = _killed
             }.Schedule(_states.Length, 64).Complete();
 
             var killed = 0;
             for (var i = 0; i < _killed.Length; i++) killed += _killed[i];
+
+            // Пролом в толпе должен постоять. Порог по доле ближнего круга, а не по числу:
+            // одиночное попадание не должно останавливать волну, а выкос половины
+            // ближнего круга — должен, иначе игрок не увидит результата.
+            if (killed >= math.max(4, nearCap / 3)) _spawnHold = spawnHoldAfterKill;
 
             return killed;
         }
@@ -478,13 +557,69 @@ namespace MineGenerator.Catacombs
             _flow.Rebuild(targetLocal, spawnSteps.x, spawnSteps.y, floodSteps);
         }
 
+        /// <summary>
+        /// Сколько особей держать сейчас: затишье, нарастание, гребень.
+        ///
+        /// Трапеция, а не синус: у синуса нет ровного затишья и ровного гребня, он всё
+        /// время где-то посередине, и ритм из него не читается. Здесь же есть отчётливое
+        /// «сейчас тихо» и отчётливое «сейчас накат».
+        /// </summary>
+        private int WavePopulation()
+        {
+            if (waveScale <= 1.001f || wavePeriod <= 0f) return population;
+
+            var t = math.frac(_waveTime / wavePeriod);
+            var half = waveCrest * 0.5f;
+
+            // Гребень посередине цикла, по четверти периода с каждой стороны на разгон
+            // и спад. Края цикла — затишье.
+            var rise = math.saturate((t - (0.5f - half - 0.25f)) / 0.25f);
+            var fall = 1f - math.saturate((t - (0.5f + half)) / 0.25f);
+
+            var shape = math.min(rise, fall);
+
+            return (int)math.round(population * math.lerp(1f, waveScale, shape));
+        }
+
+        /// <summary>Сколько живых особей рядом с мировой точкой. Этим же ведётся звук толпы.</summary>
+        public int CountNear(Vector3 worldPoint, float radius) => CountNear(LocalOf(worldPoint), radius);
+
+        /// <summary>Сколько живых особей сейчас в ближнем круге игрока.</summary>
+        private int CountNear(float3 targetLocal) => CountNear(targetLocal, nearRadius);
+
+        private int CountNear(float3 targetLocal, float radius)
+        {
+            if (!_states.IsCreated) return 0;
+
+            var radiusSq = radius * radius;
+            var count = 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+                if (math.lengthsq(spider.Position - targetLocal) > radiusSq) continue;
+
+                count++;
+            }
+
+            return count;
+        }
+
         private void TopUp(float deltaTime)
         {
-            if (Alive >= population || spawnRate <= 0f) return;
+            // Пауза после крупного убийства: пролом в толпе должен постоять, иначе
+            // игрок не увидит того, что сделал.
+            if (_spawnHold > 0f) return;
+
+            var wanted = WavePopulation();
+
+            if (Alive >= wanted || spawnRate <= 0f) return;
 
             _spawnCredit += spawnRate * deltaTime;
 
-            while (_spawnCredit >= 1f && Alive < population)
+            while (_spawnCredit >= 1f && Alive < wanted)
             {
                 _spawnCredit -= 1f;
 
@@ -524,6 +659,11 @@ namespace MineGenerator.Catacombs
 
             point += tangent * spread.x + math.cross(normal, tangent) * spread.y;
 
+            // Засада. Только на стенах и своде: паук, замерший посреди пола в пустом
+            // коридоре, читается не как засада, а как сломавшийся паук. Сверху и сбоку
+            // неподвижность объясняется сама собой.
+            var lurks = normal.y < 0.4f && _random.NextFloat() < kind.LurkShare;
+
             var state = new SpiderState
             {
                 Position = point,
@@ -531,12 +671,13 @@ namespace MineGenerator.Catacombs
                 Up = normal,
                 Rotation = quaternion.LookRotationSafe(tangent * (kind.FacesMinusZ ? -1f : 1f), normal),
                 Phase = _random.NextFloat(),
+                Rank = _random.NextFloat(),
                 Scale = scale,
                 SpeedScale = 1f + _random.NextFloat(-kind.SpeedJitter, kind.SpeedJitter),
                 Tint = _random.NextFloat(0.65f, 1.15f),
                 Timer = 0f,
                 Kind = kindIndex,
-                Clip = (int)SpiderClip.Walk,
+                Clip = (int)(lurks ? SpiderClip.Idle : SpiderClip.Walk),
                 Health = kind.Health,
                 Active = 1
             };
@@ -674,6 +815,7 @@ namespace MineGenerator.Catacombs
                 var walk = kind.GetClip(SpiderClip.Walk);
                 var attack = kind.GetClip(SpiderClip.Attack);
                 var dead = kind.GetClip(SpiderClip.Dead);
+                var idle = kind.GetClip(SpiderClip.Idle);
 
                 _tuning[i] = new SpiderTuning
                 {
@@ -689,10 +831,13 @@ namespace MineGenerator.Catacombs
                     WalkLength = math.max(0.05f, walk.Length),
                     AttackLength = math.max(0.05f, attack.Length),
                     DeadLength = math.max(0.05f, dead.Length),
+                    IdleLength = math.max(0.05f, idle.Length),
+                    LurkTrigger = kind.LurkTrigger,
 
                     WalkRow = new float3(walk.StartRow, walk.FrameCount, walk.Loop ? 1f : 0f),
                     AttackRow = new float3(attack.StartRow, attack.FrameCount, attack.Loop ? 1f : 0f),
-                    DeadRow = new float3(dead.StartRow, dead.FrameCount, dead.Loop ? 1f : 0f)
+                    DeadRow = new float3(dead.StartRow, dead.FrameCount, dead.Loop ? 1f : 0f),
+                    IdleRow = new float3(idle.StartRow, idle.FrameCount, idle.Loop ? 1f : 0f)
                 };
 
                 var extents = kind.RestBounds.extents.magnitude * kind.Scale * (1f + kind.ScaleJitter);

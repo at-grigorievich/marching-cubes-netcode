@@ -41,6 +41,24 @@ namespace MineGenerator.Catacombs
         /// <summary>Сколько лежит труп после конца клипа смерти.</summary>
         public float Timer;
 
+        /// <summary>
+        /// Кувырок трупа, радианы в секунду по трём осям.
+        ///
+        /// Мёртвая особь больше не переключает клип и не ложится на месте: она летит
+        /// от взрыва и кувыркается. Физики здесь нет, только интегрирование — на восьми
+        /// сотнях особей PhysX не нужен и не потянет.
+        /// </summary>
+        public float3 Spin;
+
+        /// <summary>
+        /// Устойчивое случайное число особи, 0..1. Не меняется за её жизнь.
+        ///
+        /// Нужно, чтобы делить толпу на подмножества СТАБИЛЬНО. Например, сдерживание
+        /// ближнего круга: если решать каждый кадр заново, кого пустить к игроку, толпа
+        /// начнёт мигать — одни и те же особи то рвутся вперёд, то отступают.
+        /// </summary>
+        public float Rank;
+
         public int Kind;
 
         /// <summary>Значение <see cref="SpiderClip"/>.</summary>
@@ -71,11 +89,16 @@ namespace MineGenerator.Catacombs
         public float WalkLength;
         public float AttackLength;
         public float DeadLength;
+        public float IdleLength;
+
+        /// <summary>С какого расстояния засада срывается.</summary>
+        public float LurkTrigger;
 
         /// <summary>Где в текстуре анимации лежит клип: x — первая строка, y — кадров, z — кольцевой ли.</summary>
         public float3 WalkRow;
         public float3 AttackRow;
         public float3 DeadRow;
+        public float3 IdleRow;
     }
 
     /// <summary>Общий для джобов ключ пространственной сетки.</summary>
@@ -160,6 +183,25 @@ namespace MineGenerator.Catacombs
         /// <summary>Как быстро перебирают лапами стоящие особи — чтобы не выглядели чучелами.</summary>
         public float IdleStride;
 
+        /// <summary>
+        /// Сколько особей сейчас в ближнем круге и сколько туда пускать.
+        ///
+        /// Ограничение нужно не ради стоимости, а ради картинки: без него вся орда
+        /// сжимается в кольцо вокруг игрока и упирается в него сплошной стеной хитина,
+        /// в которой не различить ни отдельной твари, ни уровня за ней. Замер это и
+        /// показал — в коридоре в кадре было 690 особей из 800, а породы не видно вовсе.
+        /// Лишние держатся дальше и ждут своей очереди.
+        /// </summary>
+        public int NearCount;
+
+        public int NearCap;
+
+        /// <summary>Радиус ближнего круга, юниты.</summary>
+        public float NearRadius;
+
+        /// <summary>Затухание кувырка трупа, доля в секунду.</summary>
+        public float CorpseDrag;
+
         public void Execute(int index)
         {
             var spider = States[index];
@@ -194,6 +236,12 @@ namespace MineGenerator.Catacombs
             var toTarget = Target - spider.Position;
             var distance = math.length(toTarget);
 
+            if (UpdateLurk(ref spider, tuning, distance))
+            {
+                States[index] = spider;
+                return;
+            }
+
             if (spider.Clip == (int)SpiderClip.Attack)
             {
                 UpdateAttack(ref spider, tuning, toTarget, distance, normal, depth, hover, onField);
@@ -209,7 +257,33 @@ namespace MineGenerator.Catacombs
                 return;
             }
 
+            // Сдерживание ближнего круга: когда у игрока уже толпится больше, чем нужно
+            // для картинки, часть особей тормозит и ждёт дальше. Порог по Rank, а не
+            // по случайному числу каждый кадр: иначе одни и те же особи то рвутся вперёд,
+            // то отступают, и толпа мерцает.
+            var crowded = NearCap > 0 && NearCount > NearCap &&
+                          spider.Rank > (float)NearCap / NearCount &&
+                          distance < NearRadius;
+
             var desired = float3.zero;
+
+            if (crowded)
+            {
+                // Не разворачиваем и не отгоняем — просто перестаём тянуть вперёд.
+                // Разворот читался бы как испуг, а орда не пугается.
+                spider.Velocity = math.lerp(spider.Velocity, float3.zero, math.saturate(DeltaTime * 4f));
+
+                desired += Flock(index, ref spider, radius);
+                desired = math.normalizesafe(desired - spider.Up * math.dot(desired, spider.Up));
+
+                spider.Velocity = math.lerp(spider.Velocity, desired * (tuning.MoveSpeed * 0.25f),
+                    math.saturate(DeltaTime * Acceleration));
+
+                Advance(ref spider, tuning, hover, stride, onField);
+
+                States[index] = spider;
+                return;
+            }
 
             if (onField) desired += flow;
 
@@ -238,19 +312,73 @@ namespace MineGenerator.Catacombs
             States[index] = spider;
         }
 
+        /// <summary>
+        /// Труп: летит от взрыва, кувыркается, гаснет и уходит в камень.
+        ///
+        /// Раньше он просто менял клип и оставался лежать там же. Замер этого не ловил
+        /// вовсе, а кадр показал главное: взрыв убивал сто восемнадцать особей из восьми
+        /// сотен, и увидеть это было НЕВОЗМОЖНО — трупы лежали вперемешку с живыми
+        /// в той же позе. Убийство было событием без единого следа.
+        /// </summary>
         private void UpdateCorpse(ref SpiderState spider, SpiderTuning tuning)
         {
+            spider.Timer += DeltaTime;
+
             if (spider.Phase < 1f)
             {
                 spider.Phase = math.min(1f, spider.Phase + DeltaTime / math.max(0.05f, tuning.DeadLength));
-                return;
             }
 
-            spider.Timer += DeltaTime;
+            // Полёт с затуханием. Гравитации нет намеренно: труп летит по камню, а не
+            // в пустоте, и прижим к поверхности всё равно вернёт его на стену — падать
+            // ему некуда, а видимая часть эффекта это именно отброс, а не падение.
+            var drag = math.saturate(DeltaTime * CorpseDrag);
 
-            // Слот освобождается, а не объект уничтожается: массив особей выделен один раз
-            // на всю игру, и место мёртвой особи займёт следующая волна.
+            spider.Velocity = math.lerp(spider.Velocity, float3.zero, drag);
+            spider.Spin = math.lerp(spider.Spin, float3.zero, drag);
+
+            spider.Position += spider.Velocity * DeltaTime;
+
+            var spin = math.length(spider.Spin);
+
+            if (spin > 1e-4f)
+            {
+                spider.Rotation = math.mul(
+                    quaternion.AxisAngle(spider.Spin / spin, spin * DeltaTime), spider.Rotation);
+            }
+
+            // Держим на поверхности, чтобы отброшенный труп не улетел в породу.
+            Field.SampleAt(spider.Position, out _, out var normal, out var depth, out var valid);
+
+            if (valid && depth < 0f) spider.Position -= normal * depth;
+
             if (spider.Timer >= tuning.CorpseLinger) spider.Active = 0;
+        }
+
+        /// <summary>
+        /// Засада: особь висит неподвижно, пока игрок не подойдёт, и срывается.
+        ///
+        /// Это единственное состояние, в котором особь НЕ движется к игроку, и ради него
+        /// вернули выброшенный было клип стояния: бег на нижней границе скорости засаду
+        /// не изображает — висящая на своде тварь, перебирающая лапами, читается как глюк.
+        /// </summary>
+        private bool UpdateLurk(ref SpiderState spider, SpiderTuning tuning, float distance)
+        {
+            if (spider.Clip != (int)SpiderClip.Idle) return false;
+
+            spider.Phase = math.frac(spider.Phase + DeltaTime / math.max(0.05f, tuning.IdleLength));
+            spider.Velocity = float3.zero;
+
+            if (TargetValid == 0 || distance > tuning.LurkTrigger) return true;
+
+            // Сорвалась. Толчок ОТ поверхности, а не к игроку: с потолка тварь должна
+            // упасть, а не спикировать — падение читается как засада, а доводка
+            // до игрока дальше сделается обычным полем потока.
+            spider.Clip = (int)SpiderClip.Walk;
+            spider.Phase = 0f;
+            spider.Velocity = -spider.Up * (tuning.MoveSpeed * 1.5f);
+
+            return false;
         }
 
         private void UpdateAttack(ref SpiderState spider, SpiderTuning tuning, float3 toTarget, float distance,
@@ -502,12 +630,21 @@ namespace MineGenerator.Catacombs
         {
             var spider = States[index];
 
-            var counts = spider.Active != 0 && spider.Clip != (int)SpiderClip.Dead;
+            // Ветвление, а не тернарник. Тернарник Burst превращает в select, то есть
+            // считает ОБЕ стороны, — а значит лезет в Tuning[spider.Kind] и для пустых
+            // слотов тоже. Пока пустой слот хранит нули, это сходит с рук, но стоит
+            // там оказаться мусору, и джоб падает по выходу за границу массива.
+            if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead)
+            {
+                Neighbours[index] = new float4(spider.Position, 0f);
+                Velocities[index] = float3.zero;
+                return;
+            }
 
             Neighbours[index] = new float4(spider.Position,
-                counts ? Tuning[spider.Kind].BodyRadius * spider.Scale : 0f);
+                Tuning[spider.Kind].BodyRadius * spider.Scale);
 
-            Velocities[index] = counts ? spider.Velocity : float3.zero;
+            Velocities[index] = spider.Velocity;
         }
     }
 
@@ -559,15 +696,37 @@ namespace MineGenerator.Catacombs
 
                 var tuning = Tuning[Kind];
 
-                var row = spider.Clip == (int)SpiderClip.Attack ? tuning.AttackRow
-                    : spider.Clip == (int)SpiderClip.Dead ? tuning.DeadRow
-                    : tuning.WalkRow;
+                var row = spider.Clip switch
+                {
+                    (int)SpiderClip.Attack => tuning.AttackRow,
+                    (int)SpiderClip.Dead => tuning.DeadRow,
+                    (int)SpiderClip.Idle => tuning.IdleRow,
+                    _ => tuning.WalkRow
+                };
+
+                var scale = spider.Scale;
+                var tint = spider.Tint;
+
+                if (spider.Clip == (int)SpiderClip.Dead)
+                {
+                    // Труп гаснет и усаживается к концу срока лежания.
+                    //
+                    // Не прозрачностью: материал непрозрачный, и переводить всю толпу
+                    // в прозрачную очередь ради последней секунды жизни трупа значит
+                    // платить сортировкой и перерисовкой за каждого живого паука.
+                    // Усадка с потемнением читается так же, а стоит нуля.
+                    var life = math.saturate(spider.Timer / math.max(0.05f, tuning.CorpseLinger));
+                    var fade = math.saturate((life - 0.6f) / 0.4f);
+
+                    scale *= 1f - fade * 0.85f;
+                    tint *= 1f - fade * 0.7f;
+                }
 
                 Matrices[written] = math.mul(LocalToWorld,
-                    float4x4.TRS(spider.Position, spider.Rotation, spider.Scale));
+                    float4x4.TRS(spider.Position, spider.Rotation, scale));
 
                 AnimState[written] = new float4(row.x, row.y, spider.Phase, row.z);
-                Tints[written] = new float4(spider.Tint, spider.Tint, spider.Tint, 1f);
+                Tints[written] = new float4(tint, tint, tint, 1f);
 
                 written++;
             }
@@ -602,6 +761,12 @@ namespace MineGenerator.Catacombs
         public float RadiusSq;
         public int Damage;
 
+        /// <summary>Сила отброса в эпицентре, юнитов в секунду. У края сферы спадает до нуля.</summary>
+        public float Impulse;
+
+        /// <summary>Сид для разброса кувырка. Одинаковый кувырок у всех читается как ошибка.</summary>
+        public uint Seed;
+
         /// <summary>
         /// Отметки убитых, по одной ячейке на особь. Массив, а не счётчик: джоб
         /// параллельный, и общий счётчик потребовал бы атомарного сложения ради числа,
@@ -614,19 +779,42 @@ namespace MineGenerator.Catacombs
             var spider = States[index];
 
             if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) return;
-            if (math.lengthsq(spider.Position - Center) > RadiusSq) return;
+
+            var away = spider.Position - Center;
+            var distanceSq = math.lengthsq(away);
+
+            if (distanceSq > RadiusSq) return;
 
             spider.Health -= Damage;
 
-            if (spider.Health <= 0)
+            if (spider.Health > 0)
             {
-                spider.Clip = (int)SpiderClip.Dead;
-                spider.Phase = 0f;
-                spider.Timer = 0f;
-                spider.Velocity = float3.zero;
-
-                Killed[index] = 1;
+                States[index] = spider;
+                return;
             }
+
+            spider.Clip = (int)SpiderClip.Dead;
+            spider.Phase = 0f;
+            spider.Timer = 0f;
+
+            // Отброс: у эпицентра полный, у края сферы нулевой. Без него смерть сотни
+            // особей не видна в кадре вовсе — они просто остаются лежать там же,
+            // вперемешку с живыми.
+            var falloff = 1f - math.sqrt(distanceSq / math.max(1e-4f, RadiusSq));
+
+            var direction = math.normalizesafe(away, spider.Up);
+
+            // Сид обязан быть ненулевым: Unity.Mathematics.Random на нуле бросает
+            // исключение, а в джобе под Burst это валит весь проход целиком.
+            var random = new Random(math.max(1u, Seed + (uint)index * 747796405u + 1u));
+
+            spider.Velocity = (direction + random.NextFloat3Direction() * 0.35f) * (Impulse * falloff);
+
+            // Кувырок тем сильнее, чем ближе к эпицентру: у края особь оседает,
+            // у центра её крутит.
+            spider.Spin = random.NextFloat3Direction() * (12f * falloff);
+
+            Killed[index] = 1;
 
             States[index] = spider;
         }
