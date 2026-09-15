@@ -26,15 +26,8 @@ namespace MineGenerator.Catacombs.EditorTools
         private const string ScenePath = "Assets/Scenes/test.unity";
 
         private static readonly float[] CellSizes = { 0.75f, 1f, 1.25f, 1.5f };
-        private static readonly float[] Reaches = { 1.05f };
+        private static readonly float[] Reaches = { 1.2f, 1.6f, 2.2f };
         private static readonly int[] Seeds = { 1337, 2, 777 };
-
-        /// <summary>
-        /// Высота шага держится постоянной: перебор по ней показал, что связность
-        /// от неё практически не зависит — с 1.2 до 3.0 достижимость сдвигалась
-        /// на проценты. Значит, режет не она, и держать её в переборе незачем.
-        /// </summary>
-        private const float StepHeight = 1.4f;
 
         public static void Run()
         {
@@ -62,7 +55,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var text = new StringBuilder();
 
-            text.AppendLine("клетка | слоёв | сид  | клеток сетки | проходимо | достижимо | доля   | постройка | заливка | память");
+            text.AppendLine("клетка | корка | сид  | клеток сетки | проходимо | достижимо | доля   | постройка | заливка | память");
 
             foreach (var cell in CellSizes)
             foreach (var reach in Reaches)
@@ -80,7 +73,7 @@ namespace MineGenerator.Catacombs.EditorTools
                     try
                     {
                         var build = Stopwatch.StartNew();
-                        field.Build(world, cell, 0.7f, StepHeight, reach);
+                        field.Build(world, cell, reach);
                         build.Stop();
 
                         // Связность меряется заливкой БЕЗ предела: предел — это про
@@ -106,9 +99,9 @@ namespace MineGenerator.Catacombs.EditorTools
                         field.Rebuild(local, 12, 40, 250);
                         flood.Stop();
 
-                        // Байты на клетку: направление 12, отжим 12, высота пола 4,
-                        // расстояние 2, проходимость 1, очередь 4.
-                        var memory = field.CellCount * 35L / 1024 / 1024;
+                        // Байты на клетку: направление 12, нормаль 12, глубина 4,
+                        // расстояние 2, проходимость 1, пустота 1, грани 1, очередь 4.
+                        var memory = field.CellCount * 37L / 1024 / 1024;
 
                         text.AppendLine(
                             $"{cell,6:0.00} | {reach,5:0.00} | {seed,4} | {field.CellCount,12:N0} | {field.WalkableCount,9:N0} | " +

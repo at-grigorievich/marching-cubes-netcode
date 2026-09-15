@@ -52,6 +52,20 @@ namespace MineGenerator.Catacombs
     [CreateAssetMenu(fileName = "Spider Kind", menuName = "Mine Generator/Spider Kind", order = 2)]
     public sealed class SpiderKind : ScriptableObject
     {
+        /// <summary>
+        /// Версия набора чисел поведения. Тот же приём, что у <see cref="CatacombSettings"/>:
+        /// ассет переживает правку умолчаний в коде, и без версии повторная запечка
+        /// не имеет права их трогать (вдруг их подбирали руками), а с версией знает,
+        /// что её значения устарели, и пересчитывает.
+        /// </summary>
+        public const int CurrentTuningVersion = 2;
+
+        [SerializeField, HideInInspector] private int tuningVersion;
+
+        public bool IsTuningOutdated => tuningVersion < CurrentTuningVersion;
+
+        public void MarkTuned() => tuningVersion = CurrentTuningVersion;
+
         [Header("Запечённое (правит SpiderVatBaker)")]
         [Tooltip("Меш из префаба плюс UV1 со столбцом вершины в текстуре анимации.")]
         public Mesh Mesh;
@@ -72,8 +86,27 @@ namespace MineGenerator.Catacombs
         public Bounds RestBounds;
 
         [Header("Поведение")]
+        /// <summary>
+        /// Во сколько раз особь крупнее исходного меша.
+        ///
+        /// Разный у разных видов намеренно. В натуральную величину паук из пака около
+        /// юнита поперёк, а коридор — три с половиной: в кадре это читается как мышь,
+        /// а не как угроза. Но и единый крупный размер плох: при поперечнике в три юнита
+        /// одна особь перекрывает ход целиком, и толпа вырождается в очередь по одному.
+        /// Разброс по видам даёт и крупных, и мелких — крупные читаются, мелкие заполняют.
+        /// </summary>
         [Tooltip("Во сколько раз особь крупнее исходного меша.")]
         [Min(0.01f)] public float Scale = 1f;
+
+        /// <summary>
+        /// На сколько центр особи отстоит от поверхности камня.
+        ///
+        /// Мал потому, что начало координат у мешей пака стоит в лапах, а не в теле:
+        /// точка привязки и есть точка касания. Ненулевой, чтобы лапы не тонули в породе
+        /// на выпуклостях, где поверхность уходит из-под них.
+        /// </summary>
+        [Tooltip("На сколько приподнять особь над камнем, в единицах меша.")]
+        [Min(0f)] public float Hover = 0.06f;
 
         [Tooltip("Разброс размера между особями. 0.2 означает от 0.8 до 1.2 от Scale.")]
         [Range(0f, 0.6f)] public float ScaleJitter = 0.18f;

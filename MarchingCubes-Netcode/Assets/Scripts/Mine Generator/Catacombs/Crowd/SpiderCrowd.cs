@@ -47,17 +47,25 @@ namespace MineGenerator.Catacombs
 
         [Header("Население")]
         [Tooltip("Потолок особей. Память под них выделяется один раз и не растёт.")]
-        [SerializeField, Range(0, 2000)] private int capacity = 600;
+        [SerializeField, Range(0, 4000)] private int capacity = 1200;
 
         [Tooltip("Сколько особей держать живыми.")]
-        [SerializeField, Range(0, 2000)] private int population = 400;
+        [SerializeField, Range(0, 4000)] private int population = 800;
 
         [Tooltip("Сколько особей в секунду досылать взамен убитых.")]
-        [SerializeField, Min(0f)] private float spawnRate = 25f;
+        [SerializeField, Min(0f)] private float spawnRate = 60f;
 
-        [Tooltip("На каком удалении от игрока появляться, в шагах сетки потока. " +
-                 "Ближняя граница держит их вне глаз, дальняя — в пределах досягаемости.")]
-        [SerializeField] private Vector2Int spawnSteps = new Vector2Int(12, 40);
+        /// <summary>
+        /// Полоса удаления, в шагах сетки, где появляются новые особи.
+        ///
+        /// Ближе прежнего намеренно. Раньше полоса была 12-40 шагов, и толпа
+        /// размазывалась по половине уровня: живых четыре сотни, а в кадре
+        /// семь десятков. Плотность в кадре задаёт не население, а то, на какой
+        /// площади оно распределено.
+        /// </summary>
+        [Tooltip("На каком удалении от игрока появляться, в шагах сетки. Узкая полоса " +
+                 "ближе к игроку даёт плотную толпу в кадре при том же населении.")]
+        [SerializeField] private Vector2Int spawnSteps = new Vector2Int(6, 26);
 
         [Header("Сетка навигации")]
         /// <summary>
@@ -74,20 +82,20 @@ namespace MineGenerator.Catacombs
         [Tooltip("Сторона клетки поля потока, юниты. Подобрана перебором, см. комментарий.")]
         [SerializeField, Range(0.5f, 4f)] private float cellSize = 1f;
 
-        [Tooltip("Насколько особь лезет вверх и спускается вниз сверх обычного шага. " +
-                 "Это паук: уступ в три-четыре юнита для него обычный спуск, и именно " +
-                 "лазанье связывает этажи через лестницы.")]
-        [SerializeField, Range(0f, 10f)] private float climbHeight = 5f;
+        /// <summary>
+        /// Дальше этого от камня клетка непроходима: держаться не за что.
+        ///
+        /// Задаёт толщину «обитаемой корки» вдоль стен. В коридоре в три с половиной
+        /// юнита полтора юнита покрывают почти всё сечение, то есть толпа заполняет ход
+        /// целиком; в зале остаётся корка по стенам, а середина пустует — и это верно,
+        /// пауку посреди зала держаться не за что.
+        /// </summary>
+        [Tooltip("Дальше этого от камня особь держаться не может, юниты.")]
+        [SerializeField, Range(0.5f, 4f)] private float attachRange = 1.6f;
 
         [Tooltip("Докуда считать путь от игрока, в шагах сетки. Ограничение делает " +
                  "стоимость пересчёта независимой от размера мира.")]
         [SerializeField, Range(32, 512)] private int floodSteps = 250;
-
-        [Tooltip("Сколько свободного места нужно над полом, чтобы клетка считалась проходимой.")]
-        [SerializeField, Range(0.2f, 3f)] private float headroom = 0.7f;
-
-        [Tooltip("Какую ступеньку особь берёт шагом, юниты.")]
-        [SerializeField, Range(0.2f, 3f)] private float stepHeight = 1.2f;
 
         [Tooltip("Не чаще этого пересчитывать поток, секунды. Пересчёт идёт только когда " +
                  "игрок сменил клетку, но при беге по прямой это каждые пол-секунды.")]
@@ -98,14 +106,18 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(0f, 2f)] private float alignment = 0.35f;
         [SerializeField, Range(0f, 2f)] private float cohesion = 0.2f;
 
-        [Tooltip("Насколько сильно отжимает от стен. Ноль — особи размазываются по камню.")]
-        [SerializeField, Range(0f, 8f)] private float wallAvoid = 2.5f;
-
-        [Tooltip("Радиус, в котором особь видит соседей, юниты.")]
-        [SerializeField, Range(0.5f, 6f)] private float neighbourRadius = 1.6f;
+        /// <summary>
+        /// Радиус, в котором особь видит соседей. Он же задаёт клетку пространственной
+        /// сетки, а искать по ней можно только в пределах одной клетки вокруг — значит
+        /// он ОБЯЗАН быть не меньше суммы радиусов двух самых крупных особей, иначе
+        /// они перестанут расталкиваться и начнут слипаться в одну точку.
+        /// </summary>
+        [Tooltip("Радиус, в котором особь видит соседей, юниты. Не меньше поперечника " +
+                 "самой крупной особи — см. комментарий.")]
+        [SerializeField, Range(0.5f, 10f)] private float neighbourRadius = 3.2f;
 
         [Tooltip("Сколько соседей разбирать максимум. Потолок стоимости в давке.")]
-        [SerializeField, Range(4, 64)] private int maxNeighbours = 24;
+        [SerializeField, Range(4, 64)] private int maxNeighbours = 32;
 
         [SerializeField, Range(1f, 30f)] private float acceleration = 9f;
 
@@ -266,8 +278,7 @@ namespace MineGenerator.Catacombs
             var ready = CollectKinds();
             if (ready == 0) return;
 
-            _flow.Build(world, cellSize, headroom, stepHeight);
-            _flow.ClimbHeight = climbHeight;
+            _flow.Build(world, cellSize, attachRange);
 
             if (_flow.WalkableCount == 0)
             {
@@ -284,7 +295,6 @@ namespace MineGenerator.Catacombs
             // к ней ещё не телепортировали, и толпа иначе разошлась бы от старого места.
             var source = target != null ? LocalOf(target.position) : SpawnPointLocal();
 
-            _flow.ClimbHeight = climbHeight;
             _flow.Rebuild(source, spawnSteps.x, spawnSteps.y, floodSteps);
             _flowCell = _flow.SourceCell;
             _flowTimer = 0f;
@@ -337,7 +347,6 @@ namespace MineGenerator.Catacombs
                 SeparationWeight = separation,
                 AlignmentWeight = alignment,
                 CohesionWeight = cohesion,
-                WallWeight = wallAvoid,
 
                 Acceleration = acceleration,
                 CloseRange = closeRange,
@@ -493,39 +502,36 @@ namespace MineGenerator.Catacombs
             if (slot < 0) return false;
 
             var cell = _flow.SpawnCells[_random.NextInt(_flow.SpawnCells.Length)];
-            var point = _flow.CellFloorPoint(cell);
-
-            // Разброс внутри клетки: иначе вся волна выходит из одной точки колонной.
-            // Четверть клетки, а не треть: клетка крупнее хода, и её край у стены
-            // лежит уже в камне.
-            point.x += _random.NextFloat(-0.25f, 0.25f) * _flow.CellSize;
-            point.z += _random.NextFloat(-0.25f, 0.25f) * _flow.CellSize;
-
-            // Отжим от стен применяется сразу при появлении, а не через кадр движения.
-            // Иначе особь рождается в камне и первый кадр стоит в нём — а первый кадр
-            // это ровно тот, в котором игрок её замечает.
-            var sampler = _flow.Sampler;
-            sampler.SampleAt(point, out _, out var push, out var floor, out var onField);
-
-            if (onField)
-            {
-                point.x += push.x * _flow.CellSize * 0.6f;
-                point.z += push.z * _flow.CellSize * 0.6f;
-
-                sampler.SampleAt(point, out _, out _, out floor, out var stillOn);
-                if (stillOn) point.y = floor;
-            }
 
             var kindIndex = _random.NextInt(_runtime.Length);
             var kind = _runtime[kindIndex].Kind;
+
+            var scale = kind.Scale * (1f + _random.NextFloat(-kind.ScaleJitter, kind.ScaleJitter));
+
+            // Сажаем сразу на камень, а не в центр клетки: клетка крупнее точности,
+            // с которой особь должна прилегать к поверхности, и рождённая в её центре
+            // особь первый кадр висит в воздухе или торчит из стены — а первый кадр
+            // это ровно тот, в котором её замечает игрок.
+            var normal = _flow.Normal[cell];
+            var point = _flow.CellSurfacePoint(cell, kind.Hover * scale);
+
+            // Разброс вдоль поверхности, а не по всем осям: поперёк неё разброс означал бы
+            // отрыв от камня. Иначе вся волна выходит из одной точки колонной.
+            var spread = _random.NextFloat2Direction() * (_random.NextFloat() * 0.35f * _flow.CellSize);
+            var tangent = math.normalizesafe(math.cross(normal, math.abs(normal.y) > 0.9f
+                ? new float3(1f, 0f, 0f)
+                : new float3(0f, 1f, 0f)));
+
+            point += tangent * spread.x + math.cross(normal, tangent) * spread.y;
 
             var state = new SpiderState
             {
                 Position = point,
                 Velocity = float3.zero,
-                Yaw = _random.NextFloat(0f, 2f * math.PI),
+                Up = normal,
+                Rotation = quaternion.LookRotationSafe(tangent, normal),
                 Phase = _random.NextFloat(),
-                Scale = kind.Scale * (1f + _random.NextFloat(-kind.ScaleJitter, kind.ScaleJitter)),
+                Scale = scale,
                 SpeedScale = 1f + _random.NextFloat(-kind.SpeedJitter, kind.SpeedJitter),
                 Tint = _random.NextFloat(0.65f, 1.15f),
                 Timer = 0f,
@@ -677,6 +683,7 @@ namespace MineGenerator.Catacombs
                     AttackRange = kind.AttackRange,
                     StrideLength = kind.StrideLength,
                     CorpseLinger = kind.CorpseLinger,
+                    Hover = kind.Hover,
 
                     WalkLength = math.max(0.05f, walk.Length),
                     AttackLength = math.max(0.05f, attack.Length),
@@ -808,6 +815,53 @@ namespace MineGenerator.Catacombs
                 if (!includeDead && spider.Clip == (int)SpiderClip.Dead) continue;
 
                 into.Add(matrix.MultiplyPoint3x4((Vector3)spider.Position));
+            }
+
+            return into.Count;
+        }
+
+        /// <summary>
+        /// Средняя скорость живых особей. Различает два очень разных отказа, которые
+        /// по одному только расстоянию до игрока неотличимы: толпа застряла (скорость
+        /// около нуля) или толпа бодро мечется, но не туда (скорость нормальная,
+        /// расстояние стоит).
+        /// </summary>
+        public float MeanSpeed()
+        {
+            if (!_states.IsCreated) return 0f;
+
+            var sum = 0f;
+            var alive = 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+
+                sum += math.length(spider.Velocity);
+                alive++;
+            }
+
+            return alive == 0 ? 0f : sum / alive;
+        }
+
+        /// <summary>Нормали поверхностей, за которые держатся живые особи — для проверки.</summary>
+        public int CopyNormals(List<Vector3> into)
+        {
+            into.Clear();
+
+            if (!_states.IsCreated) return 0;
+
+            var matrix = world != null ? world.transform.localToWorldMatrix : Matrix4x4.identity;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+
+                into.Add(matrix.MultiplyVector((Vector3)spider.Up).normalized);
             }
 
             return into.Count;

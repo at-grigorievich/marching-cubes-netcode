@@ -322,86 +322,11 @@ Transform:
   m_GameObject: {fileID: 85844946}
   serializedVersion: 2
   m_LocalRotation: {x: -0.0000000015255054, y: 0.99939084, z: -0.034899496, w: -0.00000004368476}
-  m_LocalPosition: {x: 48, y: 25.79091, z: 52}
+  m_LocalPosition: {x: 12, y: 53.806038, z: 36}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2143660869}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &293542490
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 293542492}
-  - component: {fileID: 293542491}
-  m_Layer: 0
-  m_Name: Spider Crowd
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &293542491
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 293542490}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3f789bcc5e591814bbbca140e9b96122, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderCrowd
-  world: {fileID: 711213587}
-  target: {fileID: 85844953}
-  cullCamera: {fileID: 0}
-  kinds:
-  - {fileID: 11400000, guid: 09d93a7994fc3a44cb3293eb62d4b187, type: 2}
-  - {fileID: 11400000, guid: 02de55e2e28d81944ba32c01c7587c4f, type: 2}
-  - {fileID: 11400000, guid: b6d061a9fdd7a00489c0b87f0a0263a1, type: 2}
-  - {fileID: 11400000, guid: 3f36b1cd0a0c37140978052e3e37e007, type: 2}
-  capacity: 600
-  population: 400
-  spawnRate: 25
-  spawnSteps: {x: 12, y: 40}
-  cellSize: 1
-  climbHeight: 5
-  floodSteps: 250
-  headroom: 0.7
-  stepHeight: 1.2
-  flowInterval: 0.25
-  separation: 3.2
-  alignment: 0.35
-  cohesion: 0.2
-  wallAvoid: 2.5
-  neighbourRadius: 1.6
-  maxNeighbours: 24
-  acceleration: 9
-  closeRange: 4
-  drawDistance: 60
-  instancesPerBatch: 128
-  castShadows: 0
-  drawFlowGizmos: 0
-  gizmoRadius: 20
---- !u!4 &293542492
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 293542490}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &711213586
@@ -534,6 +459,78 @@ MonoBehaviour:
   veinRange: 16
   veinIntensity: 14.4
   probeDistance: 16
+--- !u!1 &1753882379
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1753882381}
+  - component: {fileID: 1753882380}
+  m_Layer: 0
+  m_Name: Spider Crowd
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1753882380
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1753882379}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f789bcc5e591814bbbca140e9b96122, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderCrowd
+  world: {fileID: 711213587}
+  target: {fileID: 85844953}
+  cullCamera: {fileID: 0}
+  kinds:
+  - {fileID: 11400000, guid: 09d93a7994fc3a44cb3293eb62d4b187, type: 2}
+  - {fileID: 11400000, guid: 02de55e2e28d81944ba32c01c7587c4f, type: 2}
+  - {fileID: 11400000, guid: b6d061a9fdd7a00489c0b87f0a0263a1, type: 2}
+  - {fileID: 11400000, guid: 3f36b1cd0a0c37140978052e3e37e007, type: 2}
+  capacity: 1200
+  population: 800
+  spawnRate: 60
+  spawnSteps: {x: 6, y: 26}
+  cellSize: 1
+  attachRange: 1.6
+  floodSteps: 250
+  flowInterval: 0.25
+  separation: 3.2
+  alignment: 0.35
+  cohesion: 0.2
+  neighbourRadius: 3.2
+  maxNeighbours: 32
+  acceleration: 9
+  closeRange: 4
+  drawDistance: 60
+  instancesPerBatch: 128
+  castShadows: 0
+  drawFlowGizmos: 0
+  gizmoRadius: 20
+--- !u!4 &1753882381
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1753882379}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1966224323
 GameObject:
   m_ObjectHideFlags: 0
@@ -765,4 +762,4 @@ SceneRoots:
   - {fileID: 711213591}
   - {fileID: 85844953}
   - {fileID: 1966224325}
-  - {fileID: 293542492}
+  - {fileID: 1753882381}

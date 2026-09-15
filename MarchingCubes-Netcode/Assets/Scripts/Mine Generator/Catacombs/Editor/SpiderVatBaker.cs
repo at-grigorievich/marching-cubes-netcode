@@ -50,6 +50,37 @@ namespace MineGenerator.Catacombs.EditorTools
             "tarantula"
         };
 
+        /// <summary>
+        /// Во сколько раз увеличить каждый вид.
+        ///
+        /// В натуральную величину паук из пака около юнита поперёк при коридоре
+        /// в три с половиной — в кадре это мышь, а не угроза. Но и одинаково крупными
+        /// их делать нельзя: при трёх юнитах поперёк одна особь перекрывает ход целиком,
+        /// и толпа вырождается в очередь по одному. Поэтому размер разведён по видам:
+        /// крупные читаются силуэтом, мелкие заполняют промежутки и лезут по стенам.
+        ///
+        /// Кто здесь не назван, получает средний множитель.
+        /// </summary>
+        private static readonly (string Kind, float Scale)[] Scales =
+        {
+            ("little_spider", 2.2f),
+            ("karakurt", 2.6f),
+            ("spider_cross", 3.1f),
+            ("tarantula", 3.6f)
+        };
+
+        private const float DefaultScale = 2.8f;
+
+        private static float ScaleFor(string name)
+        {
+            foreach (var (kind, scale) in Scales)
+            {
+                if (kind == name) return scale;
+            }
+
+            return DefaultScale;
+        }
+
         /// <summary>Какие клипы пака во что превращаются. Порядок совпадает с <see cref="SpiderClip"/>.</summary>
         private static readonly (string Clip, bool Loop)[] Wanted =
         {
@@ -315,7 +346,7 @@ namespace MineGenerator.Catacombs.EditorTools
             var material = WriteMaterial($"{OutputFolder}/{safeName} Crowd.mat", shader, source.sharedMaterial,
                 positionMap, normalMap);
 
-            var kind = WriteKind($"{OutputFolder}/{safeName}.asset", mesh, material, positionMap, normalMap,
+            var kind = WriteKind($"{OutputFolder}/{safeName}.asset", prefab.name, mesh, material, positionMap, normalMap,
                 ranges, bounds);
 
             report.AppendLine($"  {prefab.name}: вершин {vertexCount}, строк {totalRows} " +
@@ -459,7 +490,7 @@ namespace MineGenerator.Catacombs.EditorTools
             return material;
         }
 
-        private static SpiderKind WriteKind(string path, Mesh mesh, Material material, Texture2D positions,
+        private static SpiderKind WriteKind(string path, string prefabName, Mesh mesh, Material material, Texture2D positions,
             Texture2D normals, SpiderClipRange[] clips, Bounds bounds)
         {
             var kind = AssetDatabase.LoadAssetAtPath<SpiderKind>(path);
@@ -478,16 +509,26 @@ namespace MineGenerator.Catacombs.EditorTools
             kind.Clips = clips;
             kind.RestBounds = bounds;
 
-            // Числа поведения трогаем только при создании: повторная запечка не должна
-            // сбрасывать настройку, которую подбирали руками по ощущению от игры.
-            if (created)
+            // Числа поведения трогаем при создании и когда набор в ассете устарел.
+            // Просто «всегда» нельзя: повторная запечка сбрасывала бы настройку,
+            // которую подбирали руками по ощущению от игры. Просто «только при создании»
+            // тоже нельзя: правка умолчаний в коде до готовых ассетов не доходит,
+            // и на этом в проекте уже обжигались (грабли №8).
+            if (created || kind.IsTuningOutdated)
             {
                 var size = bounds.size;
                 var span = Mathf.Max(size.x, size.z);
 
+                kind.Scale = ScaleFor(prefabName);
+
+                // Радиус меньше половины поперечника: пауки должны наползать друг
+                // на друга, а не выстраиваться решёткой.
                 kind.BodyRadius = Mathf.Max(0.12f, span * 0.35f);
                 kind.AttackRange = kind.BodyRadius * 2f + 0.6f;
                 kind.StrideLength = Mathf.Max(0.3f, size.z * 1.1f);
+                kind.Hover = 0.06f;
+
+                kind.MarkTuned();
             }
 
             EditorUtility.SetDirty(kind);

@@ -115,8 +115,10 @@ namespace MineGenerator.Catacombs.EditorTools
             }
 
             var positions = new List<Vector3>();
+            var normals = new List<Vector3>();
 
             crowd.CopyPositions(positions);
+            crowd.CopyNormals(normals);
             var startCount = positions.Count;
             var startDistance = MeanDistance(positions, player.transform.position);
 
@@ -130,12 +132,12 @@ namespace MineGenerator.Catacombs.EditorTools
                 failed++;
             }
 
-            var solidAtSpawn = InsideRock(world, positions);
+            var solidAtSpawn = InsideRock(world, positions, normals);
             text.AppendLine($"  из них внутри породы: {solidAtSpawn} ({Share(solidAtSpawn, startCount):P1})");
 
             if (Share(solidAtSpawn, startCount) > 0.02f)
             {
-                text.AppendLine("  ПЛОХО: спавн кладёт особей в камень — проверьте запас над полом");
+                text.AppendLine("  ПЛОХО: спавн кладёт особей в камень — проверьте посадку на поверхность");
                 failed++;
             }
 
@@ -147,16 +149,18 @@ namespace MineGenerator.Catacombs.EditorTools
             clock.Stop();
 
             crowd.CopyPositions(positions);
+            crowd.CopyNormals(normals);
 
             var endCount = positions.Count;
             var endDistance = MeanDistance(positions, player.transform.position);
-            var solid = InsideRock(world, positions);
+            var solid = InsideRock(world, positions, normals);
 
             text.AppendLine("=== Поведение ===");
             text.AppendLine($"  прогнано {Seconds:0.0} с за {steps} шагов, " +
                             $"{clock.Elapsed.TotalMilliseconds / steps:0.000} мс на шаг " +
                             $"при {endCount} особях");
             text.AppendLine($"  среднее расстояние до игрока: было {startDistance:0.0}, стало {endDistance:0.0}");
+            text.AppendLine($"  средняя скорость особи: {crowd.MeanSpeed():0.00} юнита в секунду");
 
             // Толпа обязана СБЛИЖАТЬСЯ. Если поле потока ведёт не туда или особи
             // застревают на стыках клеток, расстояние стоит на месте — и это ровно
@@ -174,11 +178,16 @@ namespace MineGenerator.Catacombs.EditorTools
             // не работает и толпа размазывается по породе.
             if (Share(solid, endCount) > 0.05f)
             {
-                text.AppendLine("  ПЛОХО: толпа тонет в стенах — проверьте отжим от стен (wallAvoid)");
+                text.AppendLine("  ПЛОХО: толпа тонет в стенах — проверьте прижим к поверхности (Cling и знак глубины)");
                 failed++;
             }
 
             text.AppendLine($"  добежало вплотную к игроку (ближе 3 юнитов): {Near(positions, player.transform.position, 3f)}");
+
+            // Ради этого поле и переписали с высотного на поверхностное: толпа обязана
+            // заполнять ход, а не идти по его дну в одну линию. Считается по нормали
+            // поверхности, за которую особь держится, а не по её высоте.
+            text.AppendLine(Surfaces(crowd, ref failed));
 
             text.AppendLine("=== Отрисовка ===");
 
@@ -365,16 +374,68 @@ namespace MineGenerator.Catacombs.EditorTools
             return walkable == 0 ? 0f : reachable / (float)walkable;
         }
 
-        private static int InsideRock(CatacombWorld world, List<Vector3> positions)
+        /// <summary>
+        /// Как толпа распределилась по поверхности: пол, стены, потолок.
+        ///
+        /// Раскладка по наклону нормали. Пол — нормаль вверх (выше 45 градусов),
+        /// потолок — вниз, всё между ними стена. Если на стенах и потолке пусто,
+        /// значит поле снова свелось к полу, и толпа идёт по дну в одну линию —
+        /// ровно то, ради чего эту сетку и переделывали.
+        /// </summary>
+        private static string Surfaces(SpiderCrowd crowd, ref int failed)
+        {
+            var normals = new List<Vector3>();
+            crowd.CopyNormals(normals);
+
+            if (normals.Count == 0) return "  по поверхностям: особей нет";
+
+            var floor = 0;
+            var wall = 0;
+            var ceiling = 0;
+
+            foreach (var n in normals)
+            {
+                if (n.y > 0.5f) floor++;
+                else if (n.y < -0.5f) ceiling++;
+                else wall++;
+            }
+
+            var offFloor = (wall + ceiling) / (float)normals.Count;
+
+            var text = $"  по поверхностям: пол {floor} ({floor / (float)normals.Count:P0}), " +
+                       $"стены {wall} ({wall / (float)normals.Count:P0}), " +
+                       $"потолок {ceiling} ({ceiling / (float)normals.Count:P0})";
+
+            // Порог невысокий намеренно: пола в пещере больше, чем стен и потолка,
+            // и большинство особей будет на нём всегда. Проверяется не равенство,
+            // а сам факт, что вне пола толпа бывает.
+            if (offFloor >= 0.15f) return text;
+
+            failed++;
+            return text + System.Environment.NewLine +
+                   "  ПЛОХО: толпа сидит на полу — по стенам и потолку почти никого";
+        }
+
+        /// <summary>
+        /// Сколько особей стоит внутри породы. По полю плотности, не физикой (грабли №1).
+        ///
+        /// Щуп идёт вдоль НОРМАЛИ особи, а не вверх. Вверх было верно, пока толпа ходила
+        /// по полу; для паука на потолке «вверх» это прямо в камень, и такая проверка
+        /// записывала в утонувшие всех, кто висит над головой. Замер показывал 97%
+        /// утонувших там, где на деле тонули единицы.
+        /// </summary>
+        private static int InsideRock(CatacombWorld world, List<Vector3> positions, List<Vector3> normals)
         {
             var count = 0;
 
-            foreach (var point in positions)
+            for (var i = 0; i < positions.Count; i++)
             {
-                // Щупаем чуть выше точки посадки: сама точка лежит ровно на поверхности
-                // пола, и там плотность по определению около изоуровня — половина толпы
-                // попадала бы в «камень» из-за округления.
-                if (world.IsSolid(point + Vector3.up * 0.25f)) count++;
+                // Отступ от самой точки посадки обязателен: она лежит ровно на поверхности,
+                // где плотность по определению около изоуровня, и часть толпы попадала бы
+                // в «камень» из-за округления.
+                var away = i < normals.Count ? normals[i] : Vector3.up;
+
+                if (world.IsSolid(positions[i] + away * 0.25f)) count++;
             }
 
             return count;

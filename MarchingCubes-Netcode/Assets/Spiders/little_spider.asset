@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: little_spider
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
+  tuningVersion: 2
   Mesh: {fileID: 4300000, guid: fdd6dbf8780e814489c0b4a943bd7156, type: 2}
   Material: {fileID: 2100000, guid: 90b15aec848eb3e4687e5e87231f734d, type: 2}
   Positions: {fileID: 2800000, guid: 2aa19526244e0ab4a90b3465f6de950b, type: 2}
@@ -35,7 +36,8 @@ MonoBehaviour:
   RestBounds:
     m_Center: {x: 0.0007786453, y: 0.16644111, z: -0.0147636235}
     m_Extent: {x: 0.350439, y: 0.36037007, z: 0.4821911}
-  Scale: 1
+  Scale: 2.2
+  Hover: 0.06
   ScaleJitter: 0.18
   MoveSpeed: 3.2
   SpeedJitter: 0.25
