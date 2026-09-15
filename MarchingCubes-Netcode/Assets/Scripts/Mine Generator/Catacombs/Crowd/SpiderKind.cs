@@ -58,7 +58,7 @@ namespace MineGenerator.Catacombs
         /// не имеет права их трогать (вдруг их подбирали руками), а с версией знает,
         /// что её значения устарели, и пересчитывает.
         /// </summary>
-        public const int CurrentTuningVersion = 2;
+        public const int CurrentTuningVersion = 3;
 
         [SerializeField, HideInInspector] private int tuningVersion;
 
@@ -107,6 +107,19 @@ namespace MineGenerator.Catacombs
         /// </summary>
         [Tooltip("На сколько приподнять особь над камнем, в единицах меша.")]
         [Min(0f)] public float Hover = 0.06f;
+
+        /// <summary>
+        /// Смотрит ли модель в минус Z. У пака Spiders — да.
+        ///
+        /// Проверено съёмкой сверху, а не на глаз по инспектору: паук ставился в ноль
+        /// с палочкой-указателем вдоль +Z, и палочка упиралась в БРЮШКО. Голова
+        /// и хелицеры смотрят в противоположную сторону. Разворот делается здесь,
+        /// а не правкой меша при запечке: меш — это данные пака, и трогать его
+        /// ради соглашения об осях значит прятать факт, который потом придётся
+        /// выяснять заново для следующего пака.
+        /// </summary>
+        [Tooltip("Модель смотрит в минус Z (у пака Spiders — да, проверено съёмкой).")]
+        public bool FacesMinusZ = true;
 
         [Tooltip("Разброс размера между особями. 0.2 означает от 0.8 до 1.2 от Scale.")]
         [Range(0f, 0.6f)] public float ScaleJitter = 0.18f;

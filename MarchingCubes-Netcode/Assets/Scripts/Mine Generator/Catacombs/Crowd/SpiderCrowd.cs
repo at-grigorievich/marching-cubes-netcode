@@ -114,7 +114,7 @@ namespace MineGenerator.Catacombs
         /// </summary>
         [Tooltip("Радиус, в котором особь видит соседей, юниты. Не меньше поперечника " +
                  "самой крупной особи — см. комментарий.")]
-        [SerializeField, Range(0.5f, 10f)] private float neighbourRadius = 3.2f;
+        [SerializeField, Range(0.5f, 10f)] private float neighbourRadius = 4f;
 
         [Tooltip("Сколько соседей разбирать максимум. Потолок стоимости в давке.")]
         [SerializeField, Range(4, 64)] private int maxNeighbours = 32;
@@ -529,7 +529,7 @@ namespace MineGenerator.Catacombs
                 Position = point,
                 Velocity = float3.zero,
                 Up = normal,
-                Rotation = quaternion.LookRotationSafe(tangent, normal),
+                Rotation = quaternion.LookRotationSafe(tangent * (kind.FacesMinusZ ? -1f : 1f), normal),
                 Phase = _random.NextFloat(),
                 Scale = scale,
                 SpeedScale = 1f + _random.NextFloat(-kind.SpeedJitter, kind.SpeedJitter),
@@ -684,6 +684,7 @@ namespace MineGenerator.Catacombs
                     StrideLength = kind.StrideLength,
                     CorpseLinger = kind.CorpseLinger,
                     Hover = kind.Hover,
+                    FacingSign = kind.FacesMinusZ ? -1f : 1f,
 
                     WalkLength = math.max(0.05f, walk.Length),
                     AttackLength = math.max(0.05f, attack.Length),
@@ -844,6 +845,72 @@ namespace MineGenerator.Catacombs
             }
 
             return alive == 0 ? 0f : sum / alive;
+        }
+
+        /// <summary>
+        /// Меряет то, что числами прогона не видно, а глазами видно сразу: бежит ли толпа
+        /// лицом вперёд и не крутится ли она на месте.
+        ///
+        /// Оба отказа прошли бы любую другую проверку с отличием — связность, посадка
+        /// и скорость у вертящейся задом наперёд толпы ровно те же. Поэтому мерится
+        /// отдельно и явно.
+        ///
+        /// Делает один шаг поведения внутри себя: угловая скорость по одному кадру
+        /// не считается, нужны два.
+        /// </summary>
+        /// <param name="headingError">Угол между взглядом и направлением бега, градусы. Должен быть мал.</param>
+        /// <param name="turnRate">Средняя угловая скорость, градусов в секунду.</param>
+        public void MeasureOrientation(float deltaTime, out float headingError, out float turnRate)
+        {
+            headingError = 0f;
+            turnRate = 0f;
+
+            if (!_states.IsCreated || deltaTime <= 0f) return;
+
+            var before = new quaternion[_states.Length];
+            var moving = new bool[_states.Length];
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                before[i] = _states[i].Rotation;
+                moving[i] = _states[i].Active != 0 && _states[i].Clip != (int)SpiderClip.Dead;
+            }
+
+            Simulate(deltaTime);
+
+            var headingSum = 0f;
+            var headingCount = 0;
+
+            var turnSum = 0f;
+            var turnCount = 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (!moving[i] || spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+
+                var dot = math.abs(math.dot(before[i].value, spider.Rotation.value));
+
+                turnSum += math.degrees(2f * math.acos(math.clamp(dot, -1f, 1f)));
+                turnCount++;
+
+                var speed = math.length(spider.Velocity);
+                if (speed < 0.2f) continue;
+
+                // Куда особь СМОТРИТ. У пака Spiders голова в минус Z, поэтому взгляд
+                // это минус forward; знак живёт в SpiderKind.FacesMinusZ.
+                var sign = _tuning[spider.Kind].FacingSign;
+                var gaze = math.forward(spider.Rotation) * sign;
+
+                headingSum += math.degrees(math.acos(math.clamp(
+                    math.dot(gaze, spider.Velocity / speed), -1f, 1f)));
+
+                headingCount++;
+            }
+
+            if (headingCount > 0) headingError = headingSum / headingCount;
+            if (turnCount > 0) turnRate = turnSum / turnCount / deltaTime;
         }
 
         /// <summary>Нормали поверхностей, за которые держатся живые особи — для проверки.</summary>

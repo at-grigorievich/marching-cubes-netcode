@@ -65,6 +65,9 @@ namespace MineGenerator.Catacombs
         /// <summary>На сколько центр тела отстоит от поверхности. Примерно полтолщины особи.</summary>
         public float Hover;
 
+        /// <summary>+1, если модель смотрит в плюс Z, и -1, если в минус. См. SpiderKind.FacesMinusZ.</summary>
+        public float FacingSign;
+
         public float WalkLength;
         public float AttackLength;
         public float DeadLength;
@@ -182,7 +185,11 @@ namespace MineGenerator.Catacombs
 
             Field.SampleAt(spider.Position, out var flow, out var normal, out var depth, out var onField);
 
-            if (onField) spider.Up = normal;
+            if (onField)
+            {
+                spider.Up = math.normalizesafe(
+                    math.lerp(spider.Up, normal, math.saturate(DeltaTime * 8f)), normal);
+            }
 
             var toTarget = Target - spider.Position;
             var distance = math.length(toTarget);
@@ -261,12 +268,10 @@ namespace MineGenerator.Catacombs
             // а не как промах паука.
             spider.Velocity = math.lerp(spider.Velocity, float3.zero, math.saturate(DeltaTime * 12f));
 
-            var up = spider.Up;
-            var forward = math.normalizesafe(toTarget - up * math.dot(toTarget, up), math.forward(spider.Rotation));
-
             if (TargetValid != 0 && distance > 1e-3f)
             {
-                spider.Rotation = Turn(spider.Rotation, forward, up, math.radians(tuning.TurnSpeed) * DeltaTime);
+                spider.Rotation = Turn(spider.Rotation, toTarget, spider.Up, tuning.FacingSign,
+                    math.radians(tuning.TurnSpeed) * DeltaTime);
             }
 
             if (onField) Cling(ref spider, normal, depth, hover);
@@ -371,7 +376,16 @@ namespace MineGenerator.Catacombs
 
             if (valid)
             {
-                spider.Up = normal;
+                // Нормаль для ПОВОРОТА сглаживается, а для прижима берётся сырая.
+                //
+                // Разделение не косметическое. Сырая нормаль скачет на границах клеток —
+                // сетка по юниту, а в коридоре пол и стена стоят под прямым углом, —
+                // и если вести по ней поворот, особь дёргается каждый раз, когда
+                // переступает границу. Прижим же обязан идти по сырой: сглаженная
+                // отстаёт от поверхности и утапливает особь в углах.
+                spider.Up = math.normalizesafe(
+                    math.lerp(spider.Up, normal, math.saturate(DeltaTime * 8f)), normal);
+
                 Cling(ref spider, normal, depth, hover);
             }
             else
@@ -390,21 +404,13 @@ namespace MineGenerator.Catacombs
 
             var speed = math.length(step) / math.max(1e-5f, DeltaTime);
 
-            if (speed > 0.05f)
-            {
-                var up = spider.Up;
-                var forward = math.normalizesafe(spider.Velocity - up * math.dot(spider.Velocity, up),
-                    math.forward(spider.Rotation));
+            // Стоящая особь всё равно доворачивается «ногами к камню»: иначе, переползая
+            // с пола на стену, она едет по ней боком. Направление при этом берётся
+            // прежнее — Turn сам приведёт его к новой касательной плоскости.
+            var heading = speed > 0.05f ? spider.Velocity : math.forward(spider.Rotation) * tuning.FacingSign;
 
-                spider.Rotation = Turn(spider.Rotation, forward, up, math.radians(tuning.TurnSpeed) * DeltaTime);
-            }
-            else
-            {
-                // Даже стоя особь должна довернуться «ногами к камню»: иначе, переползая
-                // с пола на стену, она едет по ней боком.
-                spider.Rotation = Turn(spider.Rotation, math.forward(spider.Rotation), spider.Up,
-                    math.radians(tuning.TurnSpeed) * DeltaTime);
-            }
+            spider.Rotation = Turn(spider.Rotation, heading, spider.Up, tuning.FacingSign,
+                math.radians(tuning.TurnSpeed) * DeltaTime);
 
             // Фаза ведётся пройденным путём, а не временем: иначе лапы скользят по камню,
             // и чем сильнее особь тормозит в давке, тем заметнее. Нижняя граница нужна
@@ -435,10 +441,36 @@ namespace MineGenerator.Catacombs
             spider.Position -= normal * ((depth - hover) * rate);
         }
 
-        /// <summary>Доворот к цели не быстрее заданного.</summary>
-        private static quaternion Turn(quaternion current, float3 forward, float3 up, float maxRadians)
+        /// <summary>
+        /// Доворот к направлению движения, не быстрее заданного.
+        ///
+        /// Направление обязательно приводится к касательной плоскости, и вырожденные
+        /// случаи разбираются явно. Без этого особь крутится как заведённая: стоит
+        /// направлению оказаться почти вдоль нормали — а на стене это происходит
+        /// постоянно, — как LookRotation начинает выдавать произвольный поворот,
+        /// и каждый кадр новый.
+        /// </summary>
+        private static quaternion Turn(quaternion current, float3 direction, float3 up, float facing,
+            float maxRadians)
         {
-            var target = quaternion.LookRotationSafe(forward, up);
+            var tangent = direction - up * math.dot(direction, up);
+
+            if (math.lengthsq(tangent) < 1e-6f)
+            {
+                // Направление выродилось — держим прежнее, спроецированное на ту же плоскость.
+                tangent = math.forward(current) * facing;
+                tangent -= up * math.dot(tangent, up);
+            }
+
+            if (math.lengthsq(tangent) < 1e-6f)
+            {
+                // И оно выродилось: любой касательный вектор лучше, чем мусор.
+                tangent = math.cross(up, math.abs(up.y) > 0.9f ? math.right() : math.up());
+            }
+
+            // facing разворачивает модель, а не движение: у пака Spiders голова смотрит
+            // в минус Z, и без этого толпа бежит на игрока задом.
+            var target = quaternion.LookRotationSafe(math.normalize(tangent) * facing, up);
 
             // Угол между поворотами через скалярное произведение кватернионов: дешевле,
             // чем разбирать их на оси.
