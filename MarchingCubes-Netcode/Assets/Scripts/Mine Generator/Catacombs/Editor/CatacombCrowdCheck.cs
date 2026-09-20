@@ -214,6 +214,30 @@ namespace MineGenerator.Catacombs.EditorTools
                 failed++;
             }
 
+            // Третий отказ того же рода: толпа бьёт с дистанции, на которой до игрока
+            // не дотянуться. Прогон этого не видел — связность, посадка и скорость
+            // при этом ровно те же, а в кадре орда «стреляет» с четырёх юнитов.
+            var attacking = crowd.MeasureAttackGap(out var gapMean, out var gapMin, out var gapMax);
+
+            if (attacking == 0)
+            {
+                text.AppendLine("  бьющих особей в этот момент нет — зазор удара не мерен");
+            }
+            else
+            {
+                text.AppendLine($"  бьют {attacking}, зазор до игрока: средний {gapMean:0.00}, " +
+                                $"от {gapMin:0.00} до {gapMax:0.00} юнита");
+
+                // Порог по верхней границе зазора, а не по среднему: бьёт вся дуга
+                // вокруг игрока, и одна особь, замахнувшаяся из глубины толпы,
+                // видна в кадре так же, как и весь передний ряд.
+                if (gapMax > 1.2f)
+                {
+                    text.AppendLine("  ПЛОХО: особь бьёт, не дотянувшись — проверьте SpiderKind.AttackRange");
+                    failed++;
+                }
+            }
+
             text.AppendLine("=== Отрисовка ===");
 
             var camera = player.GetComponent<Camera>();
@@ -274,7 +298,8 @@ namespace MineGenerator.Catacombs.EditorTools
             return 0;
         }
 
-        private static SpiderCrowd EnsureCrowd(CatacombWorld world, StringBuilder text, ref int failed)
+        /// <summary>Собирает толпу заново. Общая с проверкой света: две копии этого разъехались бы.</summary>
+        internal static SpiderCrowd EnsureCrowd(CatacombWorld world, StringBuilder text, ref int failed)
         {
             // Толпа ПЕРЕСОЗДАЁТСЯ каждый прогон, а не берётся со сцены.
             //

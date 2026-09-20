@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: yellow_floral_spider
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 5
+  tuningVersion: 8
   Mesh: {fileID: 4300000, guid: a61778a2e2360f34084cdbdf1fd1e6fa, type: 2}
   Material: {fileID: 2100000, guid: 20938a512554aca43a14b6a7e2331bfc, type: 2}
   Positions: {fileID: 2800000, guid: 53d50aca3b621114e930c580e88c9f71, type: 2}
@@ -49,8 +49,8 @@ MonoBehaviour:
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.46559802
-  AttackRange: 1.5311961
-  StrideLength: 1.0243157
+  AttackRange: 0.6620266
+  StrideLength: 0.3015873
   Health: 2
   CorpseLinger: 2.5
   LurkShare: 0.25

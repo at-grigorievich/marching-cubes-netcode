@@ -698,7 +698,17 @@ namespace MineGenerator.Catacombs.EditorTools
                 fixtures.Clear();
                 Object.DestroyImmediate(fixtures);
 
-                return "  светильники: убраны";
+                // В ровной заливке весь уровень светится сразу, и генераторам нечего
+                // зажигать: механика темноты в этом стиле не работает в принципе.
+                var strayGenerators = world.GetComponent<CaveGenerators>();
+
+                if (strayGenerators != null)
+                {
+                    strayGenerators.Clear();
+                    Object.DestroyImmediate(strayGenerators);
+                }
+
+                return "  светильники: убраны вместе с генераторами";
             }
 
             // Существующий компонент не донастраиваем, а сносим и создаём заново — иначе
@@ -722,14 +732,51 @@ namespace MineGenerator.Catacombs.EditorTools
 
             fixtures.Rebuild();
 
+            var generators = EnsureGenerators(world, fixtures);
+
             EnsureWebs(world, style);
             EnsureMood(world);
 
             var what = rebuilt ? "пересозданы" : "добавлены";
 
-            return stale > 0
+            var line = stale > 0
                 ? $"  светильники: {what}, убрано битых компонентов {stale}"
                 : $"  светильники: {what}";
+
+            return line + System.Environment.NewLine + generators;
+        }
+
+        /// <summary>
+        /// Генераторы света — цель забега. Пересоздаются так же, как светильники,
+        /// и по той же причине: значения полей живут в сохранённой сцене, и правка
+        /// умолчаний в коде до них не доходит (грабли №8).
+        /// </summary>
+        private static string EnsureGenerators(CatacombWorld world, CaveFixtures fixtures)
+        {
+            var generators = world.GetComponent<CaveGenerators>();
+            var rebuilt = generators != null;
+
+            if (rebuilt)
+            {
+                generators.Clear();
+                Object.DestroyImmediate(generators);
+            }
+
+            generators = world.gameObject.AddComponent<CaveGenerators>();
+
+            var serialized = new SerializedObject(generators);
+            serialized.FindProperty("world").objectReferenceValue = world;
+            serialized.FindProperty("fixtures").objectReferenceValue = fixtures;
+            serialized.FindProperty("crowd").objectReferenceValue =
+                Object.FindFirstObjectByType<SpiderCrowd>();
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            generators.Rebuild();
+
+            var what = rebuilt ? "пересозданы" : "добавлены";
+
+            return $"  генераторы: {what}, расставлено {generators.Count}, " +
+                   $"светильников горит {fixtures.LitCount} из {fixtures.Count}";
         }
 
         /// <summary>

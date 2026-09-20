@@ -90,6 +90,15 @@ namespace MineGenerator.Catacombs.EditorTools
 
         private const float DefaultScale = 2.8f;
 
+        /// <summary>
+        /// Сколько мировых юнитов остаётся между телом особи и осью игрока в момент удара.
+        ///
+        /// Радиус капсулы игрока 0.4 плюс зазор 0.15: особь бьёт, когда её тело
+        /// касается игрока, а не когда она замечает его. В единицы меша переводится
+        /// делением на Scale — иначе константа уезжает вместе с размером особи.
+        /// </summary>
+        private const float PlayerContact = 0.55f;
+
         private static float ScaleFor(string name)
         {
             foreach (var (kind, scale) in Scales)
@@ -424,8 +433,14 @@ namespace MineGenerator.Catacombs.EditorTools
             var material = WriteMaterial($"{OutputFolder}/{safeName} Crowd.mat", shader, source.sharedMaterial,
                 positionMap, normalMap);
 
+            // Истинный ход лапы — в отчёт, чтобы видеть, насколько каденция от него ушла.
+            var footTravel = MeasureStride(positions, vertexCount, ranges[0]);
+
             var kind = WriteKind($"{OutputFolder}/{safeName}.asset", prefab.name, mesh, material, positionMap, normalMap,
-                ranges, bounds);
+                ranges, bounds, footTravel);
+
+            report.AppendLine($"  {prefab.name}: шаг {kind.StrideLength:0.00} при истинном ходе лапы " +
+                              $"{footTravel:0.00}, каденция {WalkCadence:0.0} Гц");
 
             report.AppendLine($"  {prefab.name}: вершин {vertexCount}, строк {totalRows} " +
                               $"({string.Join(", ", ranges.Select(r => $"{r.Name} {r.FrameCount}"))}), " +
@@ -639,8 +654,86 @@ namespace MineGenerator.Catacombs.EditorTools
             return material;
         }
 
+        /// <summary>
+        /// Длина шага: сколько юнитов проходит особь за один цикл бега, в единицах меша.
+        ///
+        /// МЕРЯЕТСЯ по запечённым кадрам, а не берётся от габаритов тела. Раньше здесь
+        /// стояло `size.z * 1.1` — догадка «паук проходит за цикл чуть больше своей
+        /// длины», и она заметно занижала шаг: у каракурта давала 0.68 при измеренных
+        /// по клипу значениях втрое больше. Фаза анимации ведётся пройденным путём
+        /// и делится на эту величину, поэтому заниженный шаг гонит лапы во столько же
+        /// раз быстрее, чем надо, — в кадре это читается как «паук семенит на месте»,
+        /// хотя формально скольжения нет.
+        ///
+        /// Как меряется. Клип бега сделан НА МЕСТЕ: тело стоит, а лапа за цикл уезжает
+        /// назад (опора) и возвращается вперёд (перенос). Размах этого хода вдоль оси
+        /// движения и есть длина шага. Берём размах по Z у каждой вершины за все кадры
+        /// бега и из них девяностую процентиль: максимум по всем вершинам поймал бы
+        /// одинокий выброс на кончике лапы, а медиана — неподвижное туловище.
+        /// </summary>
+        /// <summary>
+        /// Сколько раз в секунду особь перебирает лапами на своей крейсерской скорости.
+        ///
+        /// Это компромисс, и важно понимать, между чем. Замер клипа бега показал, что
+        /// лапа за цикл уезжает всего на 0.15–0.19 единиц меша при теле в 0.61–1.05:
+        /// пак нарисован под медленное переползание. Игра же гоняет пауков на 2.2–5.2
+        /// юнита в секунду. Честно совпасть эти два числа не могут — при истинном ходе
+        /// лапы каденция вышла бы около одиннадцати герц, то есть лапы слились бы в муть.
+        ///
+        /// Поэтому шаг задаётся ОТ КАДЕНЦИИ, а не от геометрии: сколько циклов в секунду
+        /// должно читаться глазами. Ноги при этом проскальзывают — иначе никак, клип
+        /// этого не умеет, — но фаза по-прежнему ведётся пройденным путём, поэтому
+        /// главное свойство сохраняется: тормозя в давке, особь замедляет и лапы.
+        ///
+        /// Что было до этого. Шаг считался как 1.1 длины тела — догадка, дававшая РАЗНУЮ
+        /// каденцию у разных видов: от 2.0 Гц у тарантула (лапы еле шевелятся при полном
+        /// ходе) до 7.5 у haymaking (мельтешение). Общая ручка выравнивает всех.
+        ///
+        /// Число подбирается глазами: четыре с половиной — быстрый уверенный перебор.
+        /// </summary>
+        private const float WalkCadence = 4.5f;
+
+        /// <summary>
+        /// Длина шага в единицах меша: столько юнитов особь проходит за цикл бега.
+        /// Деление на Scale — потому что в джобе шаг обратно на него умножается.
+        /// </summary>
+        private static float StrideFor(float moveSpeed, float scale) =>
+            Mathf.Max(0.05f, moveSpeed / (WalkCadence * Mathf.Max(0.01f, scale)));
+
+        /// <summary>
+        /// Истинный ход лапы за цикл, по запечённым кадрам. В расчёт шага не идёт
+        /// (см. <see cref="WalkCadence"/>), но печатается в отчёте: это единственный
+        /// способ увидеть, насколько выбранная каденция ушла от честной.
+        /// </summary>
+        private static float MeasureStride(Color[] positions, int vertexCount, SpiderClipRange walk)
+        {
+            if (vertexCount <= 0 || walk.FrameCount < 2) return 0.9f;
+
+            var spans = new float[vertexCount];
+
+            for (var v = 0; v < vertexCount; v++)
+            {
+                var min = float.MaxValue;
+                var max = float.MinValue;
+
+                for (var f = 0; f < walk.FrameCount; f++)
+                {
+                    var z = positions[(walk.StartRow + f) * vertexCount + v].b;
+
+                    if (z < min) min = z;
+                    if (z > max) max = z;
+                }
+
+                spans[v] = max - min;
+            }
+
+            System.Array.Sort(spans);
+
+            return spans[Mathf.Clamp(Mathf.RoundToInt(vertexCount * 0.9f), 0, vertexCount - 1)];
+        }
+
         private static SpiderKind WriteKind(string path, string prefabName, Mesh mesh, Material material, Texture2D positions,
-            Texture2D normals, SpiderClipRange[] clips, Bounds bounds)
+            Texture2D normals, SpiderClipRange[] clips, Bounds bounds, float footTravel)
         {
             var kind = AssetDatabase.LoadAssetAtPath<SpiderKind>(path);
             var created = kind == null;
@@ -688,8 +781,20 @@ namespace MineGenerator.Catacombs.EditorTools
                 // Выше половины поднимать не стоит: тогда особи держат дистанцию
                 // по описанной окружности и в узком ходе выстраиваются решёткой.
                 kind.BodyRadius = Mathf.Max(0.12f, span * 0.5f);
-                kind.AttackRange = kind.BodyRadius * 2f + 0.6f;
-                kind.StrideLength = Mathf.Max(0.3f, size.z * 1.1f);
+
+                // Дистанция удара задаётся В МИРОВЫХ ЮНИТАХ и делится на Scale, потому что
+                // в джобе она обратно на него умножается. Было `BodyRadius * 2 + 0.6`
+                // в единицах меша — грабли №20 в чистом виде: вверх с размером особи
+                // уезжали ОБА слагаемых. Полный поперечник вместо половины плюс константа,
+                // разросшаяся в 2.2-3.6 раза, давали в мире от 3.2 до 5.9 юнита при
+                // собственном теле особи в 0.8-1.9. Тарантул заносил лапу в четырёх юнитах
+                // чистого воздуха от игрока — при ширине коридора 3.5 это читается
+                // не как укус, а как выстрел.
+                //
+                // Правильная дистанция — «тела соприкоснулись»: половина длины особи
+                // плюс радиус капсулы игрока с небольшим зазором.
+                kind.AttackRange = kind.BodyRadius + PlayerContact / Mathf.Max(0.01f, kind.Scale);
+                kind.StrideLength = StrideFor(kind.MoveSpeed, kind.Scale);
                 // Зазор до камня. Не косметика: глубина до поверхности интерполируется
                 // линейно по клеткам, и в вогнутом углу она завышена — особь, которую
                 // туда впихнули соседи, по полю стоит снаружи, а по плотности уже в камне.

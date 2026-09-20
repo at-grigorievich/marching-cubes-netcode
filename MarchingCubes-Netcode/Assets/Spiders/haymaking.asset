@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: haymaking
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 5
+  tuningVersion: 8
   Mesh: {fileID: 4300000, guid: 542bc3688b821114cb16440048a2228c, type: 2}
   Material: {fileID: 2100000, guid: a7d662c43ffa3b34ebfe63b66f6e162a, type: 2}
   Positions: {fileID: 2800000, guid: ead1b7db829369e45a6e33d3b30668d9, type: 2}
@@ -49,8 +49,8 @@ MonoBehaviour:
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.4205944
-  AttackRange: 1.4411888
-  StrideLength: 0.9253077
+  AttackRange: 0.6497611
+  StrideLength: 0.5
   Health: 1
   CorpseLinger: 2.5
   LurkShare: 0.1

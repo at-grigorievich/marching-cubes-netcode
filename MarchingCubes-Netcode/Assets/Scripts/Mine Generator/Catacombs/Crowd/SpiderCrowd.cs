@@ -218,6 +218,9 @@ namespace MineGenerator.Catacombs
 
         private KindRuntime[] _runtime;
 
+        /// <summary>Капсула цели, если она есть: по ней толпа целится в тело, а не в глаза.</summary>
+        private CharacterController _targetBody;
+
         private Random _random;
         private float _flowTimer;
         private int _flowCell = -1;
@@ -226,6 +229,48 @@ namespace MineGenerator.Catacombs
         /// <summary>Время для волны населения и пауза досыла после крупного убийства.</summary>
         private float _waveTime;
         private float _spawnHold;
+
+        /// <summary>
+        /// Внешний всплеск населения: его включает запуск генератора на время разгорания.
+        /// Отдельно от трапеции волн, а не подменой её фазы: волна идёт по своим часам
+        /// и должна продолжить идти после того, как всплеск кончится.
+        /// </summary>
+        private float _surgeTimer;
+        private float _surgeScale = 1f;
+
+        /// <summary>
+        /// Паника: сфера, из которой толпа разбегается. Ставится вспышкой света в районе.
+        /// Хранится в локальных координатах мира — в них же живут и особи.
+        /// </summary>
+        private float3 _panicCentre;
+        private float _panicRadius;
+        private float _panicTimer;
+
+        /// <summary>
+        /// Освещённые районы, в которых не заводится пополнение (мировые координаты,
+        /// w — радиус). Забежать за игроком орда туда всё ещё может: свет — не крепость.
+        /// </summary>
+        private readonly List<Vector4> _litZones = new List<Vector4>();
+
+        /// <summary>
+        /// Куда орда стягивается плотнее всего — ближайший незажжённый генератор.
+        /// Пусто, если такого нет: тогда спавн равномерный, как раньше.
+        /// </summary>
+        private Vector3? _hotPoint;
+
+        /// <summary>
+        /// Сколько особей всё-таки завелось внутри освещённого района.
+        ///
+        /// Ответ на «работает ли запрет» прямой, а не через «пустеет ли район». Пустеет
+        /// район по-разному: в проходном он опустеет за десяток секунд, в тупиковом
+        /// особи будут выбираться минуту, и порог по остатку пришлось бы подгонять под
+        /// геометрию каждого. А вот завестись внутри не должен НИ ОДИН, и это число
+        /// от геометрии не зависит вовсе.
+        /// </summary>
+        public int SpawnedInLitZones { get; private set; }
+
+        /// <summary>Обнуляет счётчик спавнов в освещённом — перед замером.</summary>
+        public void ResetLitZoneCounter() => SpawnedInLitZones = 0;
 
         private readonly Plane[] _planes = new Plane[6];
 
@@ -363,6 +408,48 @@ namespace MineGenerator.Catacombs
             FillPopulation(population);
         }
 
+        /// <summary>
+        /// Отрезок, в который целится толпа: ось капсулы цели по высоте.
+        ///
+        /// Точка трансформа для этого не годится. У отладочного стенда она стоит
+        /// на уровне ГЛАЗ — центр капсулы смещён вниз, — и паук, подошедший вплотную
+        /// по полу, оставался в полутора юнитах ПО ПРЯМОЙ просто потому, что цель
+        /// была выше него. Дистанция удара в таких условиях означает гипотенузу,
+        /// а не расстояние между телами.
+        ///
+        /// Берётся из капсулы, если она на цели есть: <c>height * 0.5 - radius</c> —
+        /// это отрезок между центрами полусфер, то есть настоящая ось капсулы.
+        /// Радиус в отрезок не входит намеренно: он учтён в дистанции удара,
+        /// которую считает запекатель.
+        ///
+        /// Смещение центра БЕРЁТСЯ С ПОВОРОТОМ, и это не перестраховка, а замер:
+        /// Unity держит саму капсулу вертикальной при любом повороте, но поле
+        /// <c>center</c> поворачивает вместе с трансформом. У стенда трансформ несёт
+        /// питч до 89 градусов, и при 60 измеренное смещение было (-0.09, -0.10, -0.15)
+        /// вместо записанных (0, -0.2, 0). Читать вместо этого <c>bounds</c> нельзя:
+        /// в режиме полёта стенд выключает контроллер, и габариты у него пропадают.
+        /// </summary>
+        private void ResolveTargetBody(float3 targetLocal, out float low, out float high)
+        {
+            low = targetLocal.y;
+            high = targetLocal.y;
+
+            if (target == null) return;
+
+            if (_targetBody == null || _targetBody.transform != target)
+            {
+                _targetBody = target.GetComponent<CharacterController>();
+            }
+
+            if (_targetBody == null) return;
+
+            var centre = LocalOf(target.position + target.rotation * _targetBody.center).y;
+            var half = math.max(0f, _targetBody.height * 0.5f - _targetBody.radius);
+
+            low = centre - half;
+            high = centre + half;
+        }
+
         /// <summary>Шаг поведения. Отдельно от Update, чтобы инструменты проверки могли шагать сами.</summary>
         public void Simulate(float deltaTime)
         {
@@ -377,10 +464,14 @@ namespace MineGenerator.Catacombs
                 targetValid = 1;
             }
 
+            ResolveTargetBody(targetLocal, out var targetLow, out var targetHigh);
+
             UpdateFlow(targetLocal, targetValid != 0, deltaTime);
 
             _waveTime += deltaTime;
             _spawnHold = math.max(0f, _spawnHold - deltaTime);
+            _surgeTimer = math.max(0f, _surgeTimer - deltaTime);
+            _panicTimer = math.max(0f, _panicTimer - deltaTime);
 
             TopUp(deltaTime);
 
@@ -405,6 +496,8 @@ namespace MineGenerator.Catacombs
                 Field = _flow.Sampler,
 
                 Target = targetLocal,
+                TargetLow = targetLow,
+                TargetHigh = targetHigh,
                 TargetValid = targetValid,
                 DeltaTime = deltaTime,
 
@@ -423,7 +516,12 @@ namespace MineGenerator.Catacombs
                 NearCount = near,
                 NearCap = nearCap,
                 NearRadius = nearRadius,
-                CorpseDrag = corpseDrag
+                CorpseDrag = corpseDrag,
+
+                PanicCentre = _panicCentre,
+                PanicRadiusSq = _panicRadius * _panicRadius,
+                PanicActive = _panicTimer > 0f ? 1 : 0,
+                PanicLeft = _panicTimer
             }.Schedule(_states.Length, 32, handle);
 
             handle = new SpiderPublishJob
@@ -515,6 +613,67 @@ namespace MineGenerator.Catacombs
             return killed;
         }
 
+        /// <summary>
+        /// Разгоняет толпу прочь от точки на несколько секунд.
+        ///
+        /// Зовётся вспышкой света в районе. Это разрядка сразу после самой тяжёлой волны
+        /// забега: игрок полторы минуты держался, свет загорелся — и сотни тварей бегут
+        /// от него. Разбежавшиеся не исчезают, а уходят в соседнюю темноту, то есть
+        /// уплотняют её: чем больше карты засвечено, тем гуще в остатке.
+        ///
+        /// Сфера, а не список районов: паника живёт секунды, и пересечение со сферой
+        /// в джобе стоит одно скалярное произведение на особь.
+        /// </summary>
+        public void Panic(Vector3 worldPoint, float radius, float duration)
+        {
+            if (radius <= 0f || duration <= 0f) return;
+
+            _panicCentre = LocalOf(worldPoint);
+            _panicRadius = radius;
+            _panicTimer = math.max(_panicTimer, duration);
+        }
+
+        /// <summary>
+        /// Поднимает население на заданное время: орда сбегается на запуск генератора.
+        ///
+        /// Множитель идёт ПОВЕРХ трапеции волн, а не вместо неё: у волны свои часы,
+        /// и после всплеска она должна продолжиться с того места, где шла.
+        /// </summary>
+        public void SurgeFor(float seconds, float scale)
+        {
+            if (seconds <= 0f || scale <= 1f) return;
+
+            _surgeTimer = math.max(_surgeTimer, seconds);
+            _surgeScale = math.max(_surgeScale, scale);
+        }
+
+        /// <summary>Снимает всплеск и панику — при перегенерации уровня и провале забега.</summary>
+        public void ClearEvents()
+        {
+            _surgeTimer = 0f;
+            _surgeScale = 1f;
+            _panicTimer = 0f;
+        }
+
+        /// <summary>
+        /// Освещённые районы, в которых не заводится пополнение. Мировые координаты,
+        /// w — радиус. Список копируется: у звонящего он живой и меняется.
+        /// </summary>
+        public void SetLitZones(IReadOnlyList<Vector4> zones)
+        {
+            _litZones.Clear();
+
+            if (zones == null) return;
+
+            for (var i = 0; i < zones.Count; i++) _litZones.Add(zones[i]);
+        }
+
+        /// <summary>
+        /// Точка, вокруг которой толпа гуще всего — ближайший незажжённый генератор.
+        /// Это второй указатель направления, помимо тления жил: стало плотнее — теплее.
+        /// </summary>
+        public void SetHotPoint(Vector3? worldPoint) => _hotPoint = worldPoint;
+
         /// <summary>Мгновенно доводит население до заданного — для замеров и стенда.</summary>
         public void FillPopulation(int count)
         {
@@ -566,7 +725,11 @@ namespace MineGenerator.Catacombs
         /// </summary>
         private int WavePopulation()
         {
-            if (waveScale <= 1.001f || wavePeriod <= 0f) return population;
+            // Всплеск от генератора идёт поверх трапеции и перекрывает её целиком:
+            // пока разгорается свет, ритм затиший не нужен — нужен непрерывный накат.
+            var surge = _surgeTimer > 0f ? _surgeScale : 1f;
+
+            if (waveScale <= 1.001f || wavePeriod <= 0f) return (int)math.round(population * surge);
 
             var t = math.frac(_waveTime / wavePeriod);
             var half = waveCrest * 0.5f;
@@ -578,7 +741,7 @@ namespace MineGenerator.Catacombs
 
             var shape = math.min(rise, fall);
 
-            return (int)math.round(population * math.lerp(1f, waveScale, shape));
+            return (int)math.round(population * math.lerp(1f, waveScale, shape) * surge);
         }
 
         /// <summary>Сколько живых особей рядом с мировой точкой. Этим же ведётся звук толпы.</summary>
@@ -617,7 +780,10 @@ namespace MineGenerator.Catacombs
 
             if (Alive >= wanted || spawnRate <= 0f) return;
 
-            _spawnCredit += spawnRate * deltaTime;
+            // Кредит копится и когда спавнить некуда: игрок стоит в освещённом районе,
+            // и все клетки полосы отвергнуты. Без потолка за минуту такого простоя
+            // накопилось бы на залп в тысячу особей разом, стоило игроку выйти в темноту.
+            _spawnCredit = math.min(_spawnCredit + spawnRate * deltaTime, math.max(1f, spawnRate));
 
             while (_spawnCredit >= 1f && Alive < wanted)
             {
@@ -636,7 +802,12 @@ namespace MineGenerator.Catacombs
             var slot = FindFreeSlot();
             if (slot < 0) return false;
 
-            var cell = _flow.SpawnCells[_random.NextInt(_flow.SpawnCells.Length)];
+            var cell = PickSpawnCell();
+            if (cell < 0) return false;
+
+            // Проверка запрета, а не его повторение: PickSpawnCell уже отвергает клетки
+            // в освещённом, и если сюда что-то доехало, значит отбор промахнулся.
+            if (_litZones.Count > 0 && InLitZone(WorldOf(_flow.CellCentre(cell)))) SpawnedInLitZones++;
 
             var kindIndex = _random.NextInt(_runtime.Length);
             var kind = _runtime[kindIndex].Kind;
@@ -687,6 +858,68 @@ namespace MineGenerator.Catacombs
             _velocities[slot] = float3.zero;
 
             return true;
+        }
+
+        /// <summary>
+        /// Сколько клеток перебрать, выбирая место под новую особь.
+        ///
+        /// Отбор здесь не может быть исчерпывающим: клеток под спавн тысячи, и проверять
+        /// их все на каждую особь — это на порядок дороже самого шага поведения. Четыре
+        /// пробы дают и отсев освещённого (шанс промахнуться мимо запрета падает до долей
+        /// процента при сколько-нибудь заметной доле тёмных клеток), и уклон к генератору.
+        /// </summary>
+        private const int SpawnCellAttempts = 4;
+
+        /// <summary>
+        /// Клетка под новую особь: не в освещённом районе и, по возможности, ближе
+        /// к незажжённому генератору.
+        ///
+        /// Уклон сделан выбором лучшей из нескольких проб, а не взвешенной выборкой по всем
+        /// клеткам: таблица весов пересчитывалась бы на каждой перестройке поля потока
+        /// и на каждом зажжённом районе, а лучшее из четырёх даёт тот же уклон бесплатно.
+        /// </summary>
+        /// <returns>Индекс клетки или -1, если подходящей не нашлось.</returns>
+        private int PickSpawnCell()
+        {
+            var cells = _flow.SpawnCells;
+
+            // Ни запретов, ни цели — прежнее поведение, без единой лишней проверки.
+            if (_litZones.Count == 0 && !_hotPoint.HasValue) return cells[_random.NextInt(cells.Length)];
+
+            var best = -1;
+            var bestDistance = float.MaxValue;
+
+            for (var attempt = 0; attempt < SpawnCellAttempts; attempt++)
+            {
+                var cell = cells[_random.NextInt(cells.Length)];
+                var point = WorldOf(_flow.CellCentre(cell));
+
+                if (InLitZone(point)) continue;
+
+                if (!_hotPoint.HasValue) return cell;
+
+                var distance = (point - _hotPoint.Value).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+
+                best = cell;
+                bestDistance = distance;
+            }
+
+            return best;
+        }
+
+        /// <summary>Внутри ли точка хоть одного освещённого района.</summary>
+        private bool InLitZone(Vector3 worldPoint)
+        {
+            for (var i = 0; i < _litZones.Count; i++)
+            {
+                var zone = _litZones[i];
+                var centre = new Vector3(zone.x, zone.y, zone.z);
+
+                if ((centre - worldPoint).sqrMagnitude <= zone.w * zone.w) return true;
+            }
+
+            return false;
         }
 
         private int _scanCursor;
@@ -915,6 +1148,9 @@ namespace MineGenerator.Catacombs
         private float3 LocalOf(Vector3 worldPoint) =>
             world != null ? (float3)world.transform.InverseTransformPoint(worldPoint) : (float3)worldPoint;
 
+        private Vector3 WorldOf(float3 localPoint) =>
+            world != null ? world.transform.TransformPoint(localPoint) : (Vector3)localPoint;
+
         private float3 SpawnPointLocal()
         {
             if (world != null && world.TryGetSpawnPoint(out var spawn)) return LocalOf(spawn);
@@ -990,6 +1226,68 @@ namespace MineGenerator.Catacombs
             }
 
             return alive == 0 ? 0f : sum / alive;
+        }
+
+        /// <summary>
+        /// Зазор между телом бьющей особи и капсулой игрока, в юнитах. Возвращает,
+        /// сколько особей бьёт прямо сейчас.
+        ///
+        /// Метрика заведена по жалобе «атакуют слишком далеко, как будто стреляют».
+        /// Прогон этого не ловил вовсе: у толпы, заносящей лапу в четырёх юнитах
+        /// от игрока, связность, посадка, скорость и ориентация ровно те же, что
+        /// у толпы, бьющей вплотную. Тот же урок, что грабли №19.
+        ///
+        /// Мерить надо именно ЗАЗОР, а не расстояние до цели: само расстояние ничего
+        /// не значит, пока из него не вычтены половина длины особи и радиус игрока —
+        /// тарантул вдвое длиннее каракурта, и одно и то же расстояние для них
+        /// означает разное. Ноль — тела соприкоснулись.
+        /// </summary>
+        public int MeasureAttackGap(out float mean, out float min, out float max)
+        {
+            mean = 0f;
+            min = 0f;
+            max = 0f;
+
+            if (!_states.IsCreated || !_tuning.IsCreated || target == null) return 0;
+
+            var targetLocal = LocalOf(target.position);
+            ResolveTargetBody(targetLocal, out var low, out var high);
+
+            var playerRadius = _targetBody != null ? _targetBody.radius : 0f;
+
+            var sum = 0f;
+            var count = 0;
+
+            min = float.MaxValue;
+            max = float.MinValue;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip != (int)SpiderClip.Attack) continue;
+
+                var aim = new float3(targetLocal.x, math.clamp(spider.Position.y, low, high), targetLocal.z);
+
+                var gap = math.distance(aim, spider.Position)
+                          - _tuning[spider.Kind].BodyRadius * spider.Scale
+                          - playerRadius;
+
+                sum += gap;
+                min = math.min(min, gap);
+                max = math.max(max, gap);
+                count++;
+            }
+
+            if (count == 0)
+            {
+                min = 0f;
+                max = 0f;
+                return 0;
+            }
+
+            mean = sum / count;
+            return count;
         }
 
         /// <summary>

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: tarantula
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 5
+  tuningVersion: 8
   Mesh: {fileID: 4300000, guid: 25512af66a21e314b9d1e95a37f9be3a, type: 2}
   Material: {fileID: 2100000, guid: 5fbaa5a7206e22147914b7b4dc6fea34, type: 2}
   Positions: {fileID: 2800000, guid: f0bfb708ba8944a45904f64ffc00c326, type: 2}
@@ -49,8 +49,8 @@ MonoBehaviour:
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.524266
-  AttackRange: 1.648532
-  StrideLength: 1.1533853
+  AttackRange: 0.6770438
+  StrideLength: 0.13580248
   Health: 4
   CorpseLinger: 2.5
   LurkShare: 0.4

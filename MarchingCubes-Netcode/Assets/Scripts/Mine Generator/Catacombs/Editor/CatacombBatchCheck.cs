@@ -63,6 +63,18 @@ namespace MineGenerator.Catacombs.EditorTools
 
             world.GenerateImmediate();
 
+            // Эталонные метрики стиля (доля тёмных пикселей, полоса яркости, максимум
+            // в кадре) снимались на ПОЛНОСТЬЮ ЗАЖЖЁННОМ уровне, и сравнивать их
+            // с погашенным не с чем: он чёрный по определению, а не потому, что
+            // со светом что-то не так. Механика темноты проверяется отдельно.
+            var litFixtures = UnityEngine.Object.FindFirstObjectByType<CaveFixtures>();
+
+            if (litFixtures != null)
+            {
+                litFixtures.SetAllLit(true);
+                Debug.Log($"ПРОГОН светильники зажжены принудительно: {litFixtures.LitCount} из {litFixtures.Count}");
+            }
+
             var material = world.Settings.Material;
 
             // Шейдер с ошибкой компиляции даёт розовую породу, и по одним цифрам яркости

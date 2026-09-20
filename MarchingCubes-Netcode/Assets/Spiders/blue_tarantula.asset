@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: blue_tarantula
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 5
+  tuningVersion: 8
   Mesh: {fileID: 4300000, guid: 5f0348b012ab2af489e7f308b2b019d7, type: 2}
   Material: {fileID: 2100000, guid: 0f2aafe9a7fc7b740859b3854942227f, type: 2}
   Positions: {fileID: 2800000, guid: 08295f50af180fe468fc7db3051a294d, type: 2}
@@ -49,8 +49,8 @@ MonoBehaviour:
   SpeedJitter: 0.25
   TurnSpeed: 540
   BodyRadius: 0.47743547
-  AttackRange: 1.554871
-  StrideLength: 1.050358
+  AttackRange: 0.63920015
+  StrideLength: 0.15686275
   Health: 3
   CorpseLinger: 2.5
   LurkShare: 0.35

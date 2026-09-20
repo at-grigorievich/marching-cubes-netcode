@@ -20,6 +20,9 @@ namespace MineGenerator.Catacombs
         [Tooltip("Толпа пауков. Пусто — найдётся на сцене сама.")]
         [SerializeField] private SpiderCrowd crowd;
 
+        [Tooltip("Генераторы света. Пусто — возьмётся со сцены.")]
+        [SerializeField] private CaveGenerators generators;
+
         [Header("Движение")]
         [SerializeField] private MoveMode mode = MoveMode.Fly;
         [SerializeField] private float flySpeed = 18f;
@@ -75,14 +78,26 @@ namespace MineGenerator.Catacombs
 
         private void Awake()
         {
-            _controller = GetComponent<CharacterController>();
+            EnsureRefs();
 
             var angles = transform.eulerAngles;
             _yaw = angles.y;
             _pitch = angles.x;
+        }
 
+        /// <summary>
+        /// Достаёт ссылки на соседей по сцене.
+        ///
+        /// Отдельным методом, а не только в <c>Awake</c>: в режиме редактирования он
+        /// не вызывается вовсе (грабли №17), и у инструментов проверки поля оказались бы
+        /// пустыми. Поэтому его зовёт и публичная точка входа.
+        /// </summary>
+        private void EnsureRefs()
+        {
+            if (_controller == null) _controller = GetComponent<CharacterController>();
             if (world == null) world = FindFirstObjectByType<CatacombWorld>();
             if (crowd == null) crowd = FindFirstObjectByType<SpiderCrowd>();
+            if (generators == null) generators = FindFirstObjectByType<CaveGenerators>();
         }
 
         private void OnEnable()
@@ -151,6 +166,18 @@ namespace MineGenerator.Catacombs
             }
 
             _controller.enabled = true;
+
+            // Пока уровень строится, пола под ногами может не быть вовсе: чанки
+            // появляются один за другим, и тяжесть роняет игрока сквозь недостроенное.
+            // Замер: 100 чанков, 204 мс работы при бюджете 8 мс на кадр — это 25 кадров,
+            // около 0.4 секунды и пара юнитов падения в редакторе. На WebGL кадры длиннее,
+            // и те же 25 кадров дают уже заметный провал. Телепорт в точку входа потом
+            // вернёт игрока наверх, и со стороны это читается как «провалился и встал».
+            if (world != null && world.IsGenerating)
+            {
+                _verticalSpeed = 0f;
+                return;
+            }
 
             // Паутина замедляет только ходьбу: полёт — отладочная камера, и вязнуть ей
             // не в чем. Ищется опросом, а не событиями триггера, см. CaveWeb.
@@ -287,6 +314,7 @@ namespace MineGenerator.Catacombs
             if (Input.GetKeyDown(KeyCode.T)) TeleportToSpawn();
             if (Input.GetKeyDown(KeyCode.Q)) ThrowFlare();
             if (Input.GetKeyDown(KeyCode.B)) TestBlast();
+            if (Input.GetKeyDown(KeyCode.E)) StartGenerator();
 
             if (Input.GetKeyDown(KeyCode.R) && world != null)
             {
@@ -348,6 +376,38 @@ namespace MineGenerator.Catacombs
 
             Debug.Log($"ВЗРЫВ в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}) радиусом {blastRadius:0.0}: " +
                       $"паутин порвано {torn}, пауков убито {killed}");
+        }
+
+        /// <summary>
+        /// Запускает генератор, если игрок рядом. Это и есть цель забега: включённый
+        /// генератор освещает район навсегда и становится выходом.
+        /// </summary>
+        private void StartGenerator()
+        {
+            if (generators == null) return;
+
+            // Shift — дожечь мгновенно. Разгорание длится полторы минуты, и проверять
+            // вспышку, панику и запрет спавна, выжидая их вживую каждый раз, невозможно.
+            // Отладка, а не механика: игроку эти полторы минуты и есть вся кульминация.
+            if (Input.GetKey(KeyCode.LeftShift))
+            {
+                Debug.Log(generators.ForceFinish()
+                    ? "ГЕНЕРАТОР ДОЖЖЁН принудительно (отладка)"
+                    : "дожигать нечего — сначала запустите генератор");
+                return;
+            }
+
+            if (generators.TryActivate(transform.position))
+            {
+                Debug.Log("ГЕНЕРАТОР ЗАПУЩЕН — держитесь, пока разгорается");
+                return;
+            }
+
+            if (generators.TryGetNearestDark(transform.position, out var point, out var distance))
+            {
+                Debug.Log($"Ближайший генератор в {distance:0} юнитах " +
+                          $"({point.x:0}, {point.y:0}, {point.z:0}) — подойдите вплотную");
+            }
         }
 
         private void Modify(bool dig)
@@ -433,18 +493,106 @@ namespace MineGenerator.Catacombs
                 $"{(nearest < float.MaxValue ? nearest.ToString("0.00") + " юнита" : "дальше 50 юнитов")}");
         }
 
-        private void TeleportToSpawn()
+        /// <summary>
+        /// Ставит игрока в точку входа — НОГАМИ на пол, а не трансформом.
+        ///
+        /// Раньше сюда клался трансформ, и это неверно дважды.
+        ///
+        /// Во-первых, трансформ стенда — это ГЛАЗА: у капсулы центр смещён вниз,
+        /// и подошвы лежат на 1.1 юнита ниже точки объекта. Положенный в пол трансформ
+        /// утапливал капсулу в породу целиком, контроллер несколько кадров разбирался
+        /// с начальным пересечением и ронял игрока на настоящий пол — со стороны это
+        /// и читается как «сперва проваливается, потом встаёт».
+        ///
+        /// Во-вторых, точка входа из планировки — это НОМИНАЛЬНЫЙ пол: нижняя грань
+        /// бокса, которым зал вырезан. Настоящая поверхность с ней не совпадает.
+        /// Шум стен двигает её на ±NoiseAmplitude, SmoothMin на стыке с коридором
+        /// выгрызает глубже, а площадка лестницы уводит пол ещё ниже. Замер по сидам
+        /// 1337 / 2 / 777 / 55555: настоящий пол лежит на 0.2-2.3 юнита НИЖЕ номинала,
+        /// и подошвы оказывались то на 0.9 юнита в породе, то на 1.2 в воздухе.
+        ///
+        /// Теперь на всех четырёх сидах зазор под подошвами ровно в толщину скина,
+        /// ног в породе нет, и за секунду под тяжестью игрок опускается на 0.001 юнита.
+        /// </summary>
+        public void TeleportToSpawn()
         {
+            EnsureRefs();
+
             if (world == null || !world.TryGetSpawnPoint(out var spawn)) return;
 
             var wasEnabled = _controller.enabled;
+
+            // Контроллер выключается ДО поиска пола, и это обязательно по двум причинам.
+            // Он держит свою копию позиции в PhysX, и присваивание трансформа на включённом
+            // контроллере она замечает не всегда. А главное — капсула игрока это коллайдер,
+            // и луч из FloorUnder находит её раньше пола: при замере луч из середины зала
+            // упёрся в макушку самого игрока и отчитался о поле на 0.74 юнита выше
+            // настоящего. Переставить эти две строки местами значит поставить игрока
+            // себе на голову.
             _controller.enabled = false;
 
-            transform.position = spawn;
+            transform.position = StandingOn(FloorUnder(spawn));
 
             _controller.enabled = wasEnabled;
             _verticalSpeed = 0f;
             _spawned = true;
+        }
+
+        /// <summary>
+        /// Настоящая поверхность пола под номинальной точкой входа.
+        ///
+        /// Луч ЗДЕСЬ допустим: он начинается в середине зала, то есть в пустоте,
+        /// и ищет пол изнутри. Грабли №1 запрещают лучи, НАЧАТЫЕ в сплошной породе, —
+        /// поэтому старт всё же проверяется по полю плотности, и если зал почему-то
+        /// завален, остаётся номинал: упасть с номинала не хуже, чем встать неизвестно где.
+        /// </summary>
+        private Vector3 FloorUnder(Vector3 nominal)
+        {
+            var height = world.Settings != null ? world.Settings.RoomHeight : 4.5f;
+
+            var from = nominal + Vector3.up * (height * 0.5f);
+            if (world.IsSolid(from)) return nominal;
+
+            // Вниз ищем на две высоты зала: номинал промахивается на пару юнитов
+            // (на сиде 777 пол под точкой входа на 2.3 ниже номинала), а дальше искать
+            // нельзя — 6.75 юнита вниз это уже меньше расстояния между этажами,
+            // и провалившийся глубже луч отправил бы игрока на чужой этаж.
+            return Physics.Raycast(from, Vector3.down, out var hit, height * 2f, ~0, QueryTriggerInteraction.Ignore)
+                ? hit.point
+                : nominal;
+        }
+
+        /// <summary>Позиция трансформа, при которой подошвы капсулы стоят на точке.</summary>
+        private Vector3 StandingOn(Vector3 ground)
+        {
+            var feet = _controller.center.y - _controller.height * 0.5f;
+
+            // Зазор в толщину скина: сесть ровно на поверхность значит начать кадр
+            // в пересечении с ней, а это ровно то, от чего здесь и уходим.
+            return ground + Vector3.up * (_controller.skinWidth - feet);
+        }
+
+        /// <summary>
+        /// Состояние забега одной строкой: сколько районов отвоёвано, что с текущим
+        /// генератором и куда идти за следующим.
+        /// </summary>
+        private string GeneratorText()
+        {
+            var progress = $"Районов засвечено: <b>{generators.LitCount} из {generators.Count}</b>";
+
+            if (generators.Cleared) return progress + "   <color=lime>УРОВЕНЬ ПРОЙДЕН</color>";
+
+            if (generators.Charging > 0f)
+            {
+                return progress + $"   <color=orange>РАЗГОРАЕТСЯ: {generators.Charging:P0}</color>";
+            }
+
+            if (generators.TryGetNearestDark(transform.position, out _, out var distance))
+            {
+                return progress + $"   до ближайшего генератора <b>{distance:0}</b> юнитов";
+            }
+
+            return progress;
         }
 
         private void OnGUI()
@@ -484,6 +632,8 @@ namespace MineGenerator.Catacombs
 
                 if (crowd != null) GUILayout.Label(crowd.Describe(), style);
 
+                if (generators != null && generators.Count > 0) GUILayout.Label(GeneratorText(), style);
+
                 if (!_spawned) GUILayout.Label("<color=yellow>Нажмите T — телепорт к точке входа</color>", style);
             }
             else
@@ -498,6 +648,7 @@ namespace MineGenerator.Catacombs
                   "F — полёт/ходьба    G — сквозь стены    T — к точке входа\n" +
                   $"Q — пробный свет, отладка ({CaveFlare.Live.Count} из {CaveFlare.MaxLive})    " +
                   "R — новый уровень\n" +
+                  "E — запустить генератор    Shift+E — дожечь мгновенно (отладка)\n" +
                   $"B — пробный взрыв, радиус {blastRadius:0.0}    " +
                   "P — записать ракурс    Esc — отпустить курсор"
                 : "<color=yellow>Кликните по окну игры, чтобы захватить курсор</color>", style);

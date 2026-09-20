@@ -676,6 +676,7 @@ namespace MineGenerator.Catacombs
             Normal = Normal,
             Depth = Depth,
             Flow = Flow,
+            Distance = Distance,
             Dim = Dim,
             CellSize = CellSize
         };
@@ -687,6 +688,9 @@ namespace MineGenerator.Catacombs
             [ReadOnly] public NativeArray<float3> Normal;
             [ReadOnly] public NativeArray<float> Depth;
             [ReadOnly] public NativeArray<float3> Flow;
+
+            /// <summary>Шагов заливки до игрока. Нужен бегству: оно идёт в сторону БОЛЬШЕГО.</summary>
+            [ReadOnly] public NativeArray<ushort> Distance;
 
             public int3 Dim;
             public float CellSize;
@@ -718,6 +722,105 @@ namespace MineGenerator.Catacombs
                 SampleAt(position, out _, out _, out var depth, out var valid);
 
                 return valid && depth > 0f;
+            }
+
+            /// <summary>
+            /// Куда бежать ПО ПОВЕРХНОСТИ, когда обратный поток для этого не годится.
+            ///
+            /// Не годится он чаще, чем кажется, и ровно там, где это видно. Особь на
+            /// СВОДЕ прямо над игроком: поток у неё смотрит вниз, «прочь» — строго вверх,
+            /// в породу, а движение идёт в плоскости поверхности — и от направления
+            /// после проекции остаётся ноль. Замер поймал это поимённо: у девяти
+            /// застрявших из двенадцати нормаль была (0, -1, 0), шаг при этом
+            /// разрешён по всем осям. Им просто некуда было идти.
+            ///
+            /// Здесь же берётся честный уклон заливки: соседняя проходимая клетка,
+            /// до которой от игрока ДАЛЬШЕ всего. Она заведомо связана с текущей
+            /// по открытой грани — заливка через породу не течёт, — то есть
+            /// направление на неё это всегда существующий путь, а не догадка.
+            /// </summary>
+            public bool TryEscape(float3 position, float3 up, out float3 direction)
+            {
+                direction = float3.zero;
+
+                var origin = CellOf(position);
+                if (!IsWalkable(origin)) return false;
+
+                var here = Distance[Index(origin)];
+                if (here == Unreachable) return false;
+
+                var best = here;
+                var found = false;
+
+                for (var dz = -1; dz <= 1; dz++)
+                for (var dy = -1; dy <= 1; dy++)
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0 && dz == 0) continue;
+
+                    var c = origin + new int3(dx, dy, dz);
+                    if (!IsWalkable(c)) continue;
+
+                    var distance = Distance[Index(c)];
+                    if (distance == Unreachable || distance <= best) continue;
+
+                    var step = CentreOf(c) - CentreOf(origin);
+                    var tangent = step - up * math.dot(step, up);
+
+                    // Клетка «дальше», но лежащая по нормали (над головой или под ногами),
+                    // никуда не ведёт: по поверхности до неё не дойти.
+                    if (math.lengthsq(tangent) < 1e-4f) continue;
+
+                    best = distance;
+                    direction = math.normalize(tangent);
+                    found = true;
+                }
+
+                return found;
+            }
+
+            /// <summary>
+            /// Точка на поверхности рядом с особью, оказавшейся ВНЕ размеченных клеток.
+            ///
+            /// Без неё такая особь застревает НАВСЕГДА, а не на кадр: держаться ей не за
+            /// что, поэтому шаг откатывается целиком — и следующий, и любой после него.
+            /// Замер ловил это как осадок: до вспышки вне поля стояло 9 особей из 141
+            /// у игрока, после — 17 из 35, то есть бегство само выносит толпу за край
+            /// полосы и там её и оставляет.
+            ///
+            /// Ищем по кубу в две клетки: дальше не надо. Особь, до поверхности которой
+            /// больше двух юнитов, вытаскивать уже некуда — это не край полосы,
+            /// а середина зала или толща породы.
+            /// </summary>
+            public bool TryFindSurface(float3 position, float hover, out float3 point)
+            {
+                point = position;
+
+                var origin = (int3)math.floor(position / CellSize);
+                var bestDistance = float.MaxValue;
+                var found = false;
+
+                for (var dz = -2; dz <= 2; dz++)
+                for (var dy = -2; dy <= 2; dy++)
+                for (var dx = -2; dx <= 2; dx++)
+                {
+                    var c = origin + new int3(dx, dy, dz);
+
+                    if (!IsWalkable(c)) continue;
+
+                    var index = Index(c);
+                    var centre = CentreOf(c);
+
+                    var distance = math.lengthsq(centre - position);
+                    if (distance >= bestDistance) continue;
+
+                    bestDistance = distance;
+                    found = true;
+
+                    point = centre - Normal[index] * (Depth[index] - hover);
+                }
+
+                return found;
             }
 
             /// <summary>

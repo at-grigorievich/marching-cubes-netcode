@@ -59,6 +59,18 @@ namespace MineGenerator.Catacombs
         /// </summary>
         public float Rank;
 
+        /// <summary>
+        /// Сколько секунд этой особи ещё бежать от вспышки.
+        ///
+        /// Паника — свойство ОСОБИ, а не точки пространства, и это не мелочь.
+        /// Пока она проверялась сферой вокруг генератора, край сферы работал стенкой:
+        /// особь выбегала за него, тут же переставала паниковать и разворачивалась
+        /// обратно к игроку. Замер показывал это в чистом виде — в сфере оставалось
+        /// столько же, сколько было (1180 до вспышки, 1165 через десять секунд),
+        /// менялось только распределение внутри: из ближнего круга в кольцо.
+        /// </summary>
+        public float Flee;
+
         public int Kind;
 
         /// <summary>Значение <see cref="SpiderClip"/>.</summary>
@@ -161,6 +173,21 @@ namespace MineGenerator.Catacombs
         /// <summary>Игрок в локальных координатах генерации.</summary>
         public float3 Target;
 
+        /// <summary>
+        /// Низ и верх ОСИ капсулы игрока по высоте, в тех же координатах.
+        ///
+        /// Толпа целится в тело, а не в точку трансформа: у стенда трансформ стоит
+        /// на уровне ГЛАЗ, и паук на полу мерил расстояние по диагонали до макушки —
+        /// больше юнита из замеренного расстояния были чистой высотой. Точка
+        /// прицеливания теперь едет по этому отрезку вслед за высотой особи, поэтому
+        /// паук на полу меряет почти по горизонтали, паук на своде — до макушки,
+        /// и <see cref="SpiderTuning.AttackRange"/> означает ровно расстояние
+        /// между телами, а не гипотенузу.
+        /// </summary>
+        public float TargetLow;
+
+        public float TargetHigh;
+
         public int TargetValid;
         public float DeltaTime;
 
@@ -202,6 +229,25 @@ namespace MineGenerator.Catacombs
         /// <summary>Затухание кувырка трупа, доля в секунду.</summary>
         public float CorpseDrag;
 
+        /// <summary>
+        /// Паника: центр сферы, из которой толпа разбегается, и её радиус в квадрате.
+        ///
+        /// Ставится вспышкой света в районе. Направление берётся ОБРАТНОЕ полю потока,
+        /// а не «прочь от центра»: поле знает, где в породе есть проход, а прямое
+        /// направление от центра упирается в первую же стену, и толпа вжималась бы
+        /// в неё, вместо того чтобы разбегаться по ходам.
+        /// </summary>
+        public float3 PanicCentre;
+        public float PanicRadiusSq;
+        public int PanicActive;
+
+        /// <summary>
+        /// Сколько секунд паники ещё осталось. Столько же и бежать той особи,
+        /// которую вспышка накрыла: её таймер идёт вместе с общим, поэтому
+        /// выбежавшая за край сферы бежит до конца, а не разворачивается на границе.
+        /// </summary>
+        public float PanicLeft;
+
         public void Execute(int index)
         {
             var spider = States[index];
@@ -232,9 +278,53 @@ namespace MineGenerator.Catacombs
                 spider.Up = math.normalizesafe(
                     math.lerp(spider.Up, normal, math.saturate(DeltaTime * 8f)), normal);
             }
+            else if (Field.TryFindSurface(spider.Position, hover, out var anchor))
+            {
+                // Особь вынесло за край размеченной полосы. Это не «она где-то не там»,
+                // это приговор: держаться не за что, и Advance откатывает ей КАЖДЫЙ шаг,
+                // сколько бы кадров ни прошло. Поэтому не идём дальше по поведению,
+                // а подтягиваем её обратно к камню — и только потом она снова живёт.
+                //
+                // Тянем, а не переставляем: скачок на два юнита в кадре читается
+                // как телепорт, а особь в давке видна вплотную.
+                var back = anchor - spider.Position;
+                var reachStep = tuning.MoveSpeed * spider.Scale * 2f * DeltaTime;
 
-            var toTarget = Target - spider.Position;
+                spider.Position += math.normalizesafe(back) * math.min(math.length(back), reachStep);
+                spider.Velocity = float3.zero;
+                spider.Clip = (int)SpiderClip.Walk;
+                spider.Phase = math.frac(spider.Phase + IdleStride * DeltaTime / stride);
+
+                States[index] = spider;
+                return;
+            }
+
+            // Прицеливаемся в ближайшую точку оси капсулы, а не в трансформ игрока.
+            var aim = new float3(Target.x, math.clamp(spider.Position.y, TargetLow, TargetHigh), Target.z);
+
+            var toTarget = aim - spider.Position;
             var distance = math.length(toTarget);
+
+            // Вспышка накрывает особь ОДИН раз — дальше она бежит по своему таймеру,
+            // где бы ни оказалась. Сфера здесь только отбирает, кого накрыло.
+            if (PanicActive != 0 && spider.Flee <= 0f &&
+                math.lengthsq(spider.Position - PanicCentre) <= PanicRadiusSq)
+            {
+                spider.Flee = PanicLeft;
+            }
+
+            // Паника: свет в районе загорелся, и особь убегает. Раньше засады и удара,
+            // потому что перепуганный паук не сидит в засаде и не атакует — иначе
+            // застывшие на своде засадники остались бы висеть посреди вспышки.
+            if (spider.Flee > 0f)
+            {
+                spider.Flee -= DeltaTime;
+
+                Flee(ref spider, tuning, flow, onField, hover, stride);
+
+                States[index] = spider;
+                return;
+            }
 
             if (UpdateLurk(ref spider, tuning, distance))
             {
@@ -310,6 +400,57 @@ namespace MineGenerator.Catacombs
             Advance(ref spider, tuning, hover, stride, onField);
 
             States[index] = spider;
+        }
+
+        /// <summary>
+        /// Бегство от вспышки света.
+        ///
+        /// Направление — обратное полю потока, то есть ровно прочь от игрока по проходимым
+        /// ходам. Клип остаётся беговым: отдельная анимация паники пака не даёт, а бегущий
+        /// задом наперёд паук читался бы как ошибка ориентации — поэтому особь именно
+        /// РАЗВОРАЧИВАЕТСЯ и убегает, а не пятится.
+        ///
+        /// Расталкивание на время паники выключено намеренно: в давке оно гасит скорость
+        /// впятеро, а вся ценность момента в том, что толпа брызжет в стороны быстро.
+        /// Прижим к поверхности при этом остаётся — иначе бегущие отрывались бы от камня.
+        /// </summary>
+        private void Flee(ref SpiderState spider, SpiderTuning tuning, float3 flow, bool onField,
+            float hover, float stride)
+        {
+            var away = onField ? -flow : float3.zero;
+
+            // Вне размеченных клеток поля нет, и убегать не по чему: расходимся от центра
+            // паники напрямую. Это тот же запасной путь, что и у обычного движения.
+            if (math.lengthsq(away) < 1e-6f) away = spider.Position - PanicCentre;
+
+            var up = spider.Up;
+            var tangent = away - up * math.dot(away, up);
+
+            // «Прочь от игрока» и «по поверхности» — разные вещи, и для особи НА СВОДЕ
+            // над игроком они противоположны: прочь это прямо вверх, в камень, а от
+            // направления после проекции на потолок остаётся ноль. Такая особь висела
+            // над игроком всю панику с ненулевой скоростью и нулевым сдвигом — она
+            // и составляла тот осадок, который игрок видел вместо разбегания.
+            //
+            // Спрашиваем тогда у самой заливки, куда с этой клетки есть ход подальше
+            // от игрока: поле знает про породу, а вычитание нормали — нет.
+            if (math.lengthsq(tangent) < 0.04f && Field.TryEscape(spider.Position, up, out var escape))
+            {
+                tangent = escape;
+            }
+
+            away = math.normalizesafe(tangent);
+
+            // Скорость выше обычной: разбегание должно читаться как рывок, а не как
+            // разворот и уход шагом. Множитель поднят с 1.6 до 2.2 по той же причине,
+            // по которой удлинена сама паника, — за пять секунд на прежней скорости
+            // район покидали единицы.
+            spider.Velocity = math.lerp(spider.Velocity, away * (tuning.MoveSpeed * spider.SpeedScale * 2.2f),
+                math.saturate(DeltaTime * Acceleration));
+
+            spider.Clip = (int)SpiderClip.Walk;
+
+            Advance(ref spider, tuning, hover, stride, onField);
         }
 
         /// <summary>
@@ -475,25 +616,40 @@ namespace MineGenerator.Catacombs
         {
             var step = spider.Velocity * DeltaTime;
 
-            // Проверка прохода по осям, чтобы особь скользила вдоль препятствия,
-            // а не вставала в него. Оси мировые, а не касательные: сетка мировая,
-            // и проверять надо в её системе.
-            if (!Field.CanStand(spider.Position + new float3(step.x, 0f, 0f)))
+            // Сначала пробуем шаг ЦЕЛИКОМ, и только если он не проходит — по осям.
+            //
+            // Порядок здесь не косметический. Разбор по осям запрещает диагональ там,
+            // где она разрешена: на наклонной стенке шаг вдоль X в одиночку уходит
+            // в породу (подниматься надо одновременно), а шаг вдоль Y в одиночку —
+            // в пустоту, откуда прижим тут же возвращает. Обе оси по отдельности
+            // «нельзя», вместе — можно. Замер ловил это как застывшую толпу
+            // с НЕНУЛЕВОЙ скоростью: 129 особей стояли у игрока все десять секунд
+            // паники при скорости 2.4 и сдвиге 0.05 юнита в секунду.
+            //
+            // Дороже это не стало: когда шаг проходит целиком (а это обычный случай),
+            // считается одна проверка вместо трёх.
+            if (!Field.CanStand(spider.Position + step))
             {
-                step.x = 0f;
-                spider.Velocity.x *= 0.5f;
-            }
+                // Проверка прохода по осям, чтобы особь скользила вдоль препятствия,
+                // а не вставала в него. Оси мировые, а не касательные: сетка мировая,
+                // и проверять надо в её системе.
+                if (!Field.CanStand(spider.Position + new float3(step.x, 0f, 0f)))
+                {
+                    step.x = 0f;
+                    spider.Velocity.x *= 0.5f;
+                }
 
-            if (!Field.CanStand(spider.Position + new float3(0f, step.y, 0f)))
-            {
-                step.y = 0f;
-                spider.Velocity.y *= 0.5f;
-            }
+                if (!Field.CanStand(spider.Position + new float3(0f, step.y, 0f)))
+                {
+                    step.y = 0f;
+                    spider.Velocity.y *= 0.5f;
+                }
 
-            if (!Field.CanStand(spider.Position + new float3(0f, 0f, step.z)))
-            {
-                step.z = 0f;
-                spider.Velocity.z *= 0.5f;
+                if (!Field.CanStand(spider.Position + new float3(0f, 0f, step.z)))
+                {
+                    step.z = 0f;
+                    spider.Velocity.z *= 0.5f;
+                }
             }
 
             var previous = spider.Position;

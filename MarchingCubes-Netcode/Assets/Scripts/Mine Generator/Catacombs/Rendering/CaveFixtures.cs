@@ -127,6 +127,40 @@ namespace MineGenerator.Catacombs
         public static Color LampColorFor(int level) => LampByLevel[((level % LampByLevel.Length) + LampByLevel.Length) % LampByLevel.Length];
         public static Color VeinColorFor(int level) => VeinByLevel[((level % VeinByLevel.Length) + VeinByLevel.Length) % VeinByLevel.Length];
 
+        [Header("Темнота")]
+        /// <summary>
+        /// Стартовать со всем погашенным светом: зажигают районы генераторы
+        /// (<see cref="CaveGenerators"/>), и это основная механика игры, а не оформление.
+        ///
+        /// Выключать это стоит только для съёмки эталонных кадров и замеров освещённости:
+        /// метрики стиля (доля тёмных пикселей, полоса яркости) считались на полностью
+        /// зажжённом уровне, и с погашенным их не с чем сравнивать.
+        /// </summary>
+        [Tooltip("Стартовать со всем погашенным светом. Районы зажигают генераторы.")]
+        [SerializeField] private bool startDark = true;
+
+        /// <summary>
+        /// Ореол погашенной жилы — единственная навигация игрока в темноте.
+        ///
+        /// Сам источник при этом ВЫКЛЮЧЕН целиком, а не приглушён: на WebGL2 в кадре
+        /// не больше 32 видимых источников на камеру, и восемь десятков еле тлеющих ламп
+        /// съели бы весь бюджет, ничего не освещая. Видно жилу по аддитивному ореолу
+        /// и ядру — они геометрия, в лимит источников не входят и стоят один квад.
+        /// </summary>
+        [Tooltip("Во сколько раз ореол погашенной жилы меньше зажжённой.")]
+        [SerializeField, Range(0f, 1f)] private float darkVeinHalo = 0.34f;
+
+        [Tooltip("Ореол погашенной лампы. Меньше, чем у жилы: лампа в темноте — мёртвая железка, " +
+                 "а жила светится сама, это минерал.")]
+        [SerializeField, Range(0f, 1f)] private float darkLampHalo = 0.12f;
+
+        /// <summary>
+        /// Насколько ярче тлеет жила рядом с генератором. Это подсказка «теплее-холоднее»:
+        /// градиент яркости ведёт к цели без единого маркера на экране.
+        /// </summary>
+        [Tooltip("Прибавка к ореолу погашенной жилы вплотную к генератору.")]
+        [SerializeField, Range(0f, 3f)] private float guideBoost = 1.4f;
+
         [Header("Общее")]
         [Tooltip("Как далеко от центра узла искать поверхность.")]
         [SerializeField] private float probeDistance = 16f;
@@ -136,23 +170,47 @@ namespace MineGenerator.Catacombs
 
         private Transform _container;
 
+        /// <summary>
+        /// Один светильник: и лампа, и жила. Раньше здесь лежали пять параллельных списков
+        /// только под лампы, потому что мерцали только они. С появлением погашенного
+        /// состояния каждый источник обзавёлся состоянием, и списки, которые нужно держать
+        /// в согласии друг с другом по индексу, разъехались бы на первой же правке.
+        ///
+        /// Класс, а не структура: запись правится по месту из нескольких методов, и с копией
+        /// пришлось бы каждый раз класть её обратно в список.
+        /// </summary>
+        private sealed class Fixture
+        {
+            public Light Light;
+            public float Intensity;
+
+            // Ореол мерцает размером, а не цветом, и это не прихоть.
+            //
+            // Материал ореола общий на цвет, поэтому renderer.material для мерцания не годится:
+            // это свойство создаёт КОПИЮ материала на каждый вызов, а в режиме редактирования
+            // копии ещё и оседают в сцене — Unity об этом прямо ругается. Масштаб же
+            // не трогает материал вовсе, а пульсирующее свечение читается даже лучше,
+            // чем меняющий яркость круг.
+            public Transform Halo;
+            public float HaloScale;
+
+            public Vector3 Position;
+
+            /// <summary>Фаза мерцания. Отрицательная у жил: жила — минерал, она не горит.</summary>
+            public float Phase;
+
+            public bool IsLamp;
+            public bool Lit;
+
+            /// <summary>Близость к ближайшему генератору, 0..1. Ведёт игрока в темноте.</summary>
+            public float Guide;
+        }
+
         // Мерцание всех ламп считает один Update на весь компонент, а не по MonoBehaviour
         // на каждую лампу: их полсотни, и полсотни вызовов Update в кадре — это на ровном
         // месте. Ровное дыхание синусом читается как баг освещения, поэтому перлин
         // на двух частотах со своей фазой у каждой лампы.
-        private readonly List<Light> _lamps = new List<Light>();
-        private readonly List<float> _lampIntensity = new List<float>();
-        private readonly List<float> _lampPhase = new List<float>();
-        // Ореол мерцает размером, а не цветом, и это не прихоть.
-        //
-        // Материал ореола общий на цвет, поэтому renderer.material для мерцания не годится:
-        // это свойство создаёт КОПИЮ материала на каждый вызов, а в режиме редактирования
-        // копии ещё и оседают в сцене — Unity об этом прямо ругается. К тому же у шейдера
-        // Mobile/Particles/Additive из свойств есть только _MainTex, цвет в него запечён,
-        // и менять было бы всё равно нечего. Масштаб же не трогает материал вовсе,
-        // а пульсирующее свечение читается даже лучше, чем меняющий яркость круг.
-        private readonly List<Transform> _lampHalo = new List<Transform>();
-        private readonly List<float> _lampHaloScale = new List<float>();
+        private readonly List<Fixture> _fixtures = new List<Fixture>();
 
         private void OnEnable()
         {
@@ -197,11 +255,8 @@ namespace MineGenerator.Catacombs
         /// <summary>Убирает ранее расставленные светильники.</summary>
         public void Clear()
         {
-            _lamps.Clear();
-            _lampIntensity.Clear();
-            _lampPhase.Clear();
-            _lampHalo.Clear();
-            _lampHaloScale.Clear();
+            _fixtures.Clear();
+            LitCount = 0;
 
             if (_container != null)
             {
@@ -300,7 +355,7 @@ namespace MineGenerator.Catacombs
 
         private void Update()
         {
-            if (_lamps.Count == 0) return;
+            if (_fixtures.Count == 0) return;
 
             // Вне игры Time.time стоит, а мерцание хочется видеть и в редакторе. Часы
             // редактора при этом живут в UnityEditor, и прямая ссылка на них из рантайм-скрипта
@@ -311,22 +366,124 @@ namespace MineGenerator.Catacombs
             if (!Application.isPlaying) time = (float)UnityEditor.EditorApplication.timeSinceStartup;
 #endif
 
-            for (var i = 0; i < _lamps.Count; i++)
+            foreach (var fixture in _fixtures)
             {
-                var lamp = _lamps[i];
-                if (lamp == null) continue;
+                if (fixture.Halo == null) continue;
 
-                var phase = _lampPhase[i];
+                if (!fixture.Lit)
+                {
+                    // Погашенная жила дышит: ровное тусклое пятно читается как далёкая лампа,
+                    // а пульс — как «здесь что-то есть». Чем ближе к генератору, тем пульс
+                    // быстрее и ярче, и это единственная подсказка направления в темноте.
+                    if (fixture.IsLamp) continue;
+
+                    var pulse = 0.75f + 0.25f * Mathf.Sin(time * (1.6f + 2.4f * fixture.Guide)
+                                                          + fixture.Position.x + fixture.Position.z);
+
+                    fixture.Halo.localScale = Vector3.one *
+                        (fixture.HaloScale * darkVeinHalo * (1f + guideBoost * fixture.Guide) * pulse);
+
+                    continue;
+                }
+
+                if (!fixture.IsLamp || fixture.Light == null) continue;
 
                 var flicker = 0.86f
-                              + 0.10f * Mathf.PerlinNoise(phase, time * 5.5f)
-                              + 0.04f * Mathf.PerlinNoise(phase + 17f, time * 16f);
+                              + 0.10f * Mathf.PerlinNoise(fixture.Phase, time * 5.5f)
+                              + 0.04f * Mathf.PerlinNoise(fixture.Phase + 17f, time * 16f);
 
-                lamp.intensity = _lampIntensity[i] * flicker;
-
-                var halo = _lampHalo[i];
-                if (halo != null) halo.localScale = Vector3.one * (_lampHaloScale[i] * Mathf.Lerp(0.88f, 1.06f, flicker));
+                fixture.Light.intensity = fixture.Intensity * flicker;
+                fixture.Halo.localScale = Vector3.one * (fixture.HaloScale * Mathf.Lerp(0.88f, 1.06f, flicker));
             }
+        }
+
+        /// <summary>Сколько светильников расставлено всего.</summary>
+        public int Count => _fixtures.Count;
+
+        /// <summary>Сколько из них горит. Этим меряется прогресс игрока по уровню.</summary>
+        public int LitCount { get; private set; }
+
+        /// <summary>
+        /// Зажигает (или гасит) всё в радиусе от точки — район одного генератора.
+        /// </summary>
+        /// <returns>Сколько светильников сменило состояние.</returns>
+        public int SetLit(Vector3 center, float radius, bool lit)
+        {
+            var radiusSqr = radius * radius;
+            var changed = 0;
+
+            foreach (var fixture in _fixtures)
+            {
+                if (fixture.Lit == lit) continue;
+                if ((fixture.Position - center).sqrMagnitude > radiusSqr) continue;
+
+                fixture.Lit = lit;
+                ApplyState(fixture);
+
+                changed++;
+                LitCount += lit ? 1 : -1;
+            }
+
+            return changed;
+        }
+
+        /// <summary>Зажигает или гасит весь уровень разом. Для замеров и отката.</summary>
+        public void SetAllLit(bool lit)
+        {
+            foreach (var fixture in _fixtures)
+            {
+                fixture.Lit = lit;
+                ApplyState(fixture);
+            }
+
+            LitCount = lit ? _fixtures.Count : 0;
+        }
+
+        /// <summary>
+        /// Размечает жилы по близости к ближайшей из точек: чем ближе, тем ярче тление.
+        /// Зовётся генераторами после расстановки.
+        /// </summary>
+        /// <param name="points">Позиции генераторов, мировые.</param>
+        /// <param name="reach">На каком удалении подсказка сходит в ноль.</param>
+        public void ApplyGuide(IReadOnlyList<Vector3> points, float reach)
+        {
+            var falloff = Mathf.Max(0.01f, reach);
+
+            foreach (var fixture in _fixtures)
+            {
+                var nearest = float.MaxValue;
+
+                for (var i = 0; i < points.Count; i++)
+                {
+                    var distance = (points[i] - fixture.Position).sqrMagnitude;
+                    if (distance < nearest) nearest = distance;
+                }
+
+                fixture.Guide = points.Count == 0
+                    ? 0f
+                    : 1f - Mathf.Clamp01(Mathf.Sqrt(nearest) / falloff);
+            }
+        }
+
+        /// <summary>
+        /// Приводит светильник в соответствие своему состоянию.
+        ///
+        /// Источник у погашенного ВЫКЛЮЧАЕТСЯ целиком, а не приглушается: на WebGL2
+        /// потолок в 32 видимых источника на камеру, и восемь десятков тлеющих ламп
+        /// заняли бы его весь, не осветив ничего. Ореол и ядро — геометрия, они в этот
+        /// лимит не входят.
+        /// </summary>
+        private void ApplyState(Fixture fixture)
+        {
+            if (fixture.Light != null) fixture.Light.enabled = fixture.Lit;
+
+            if (fixture.Halo == null) return;
+
+            var scale = fixture.Lit
+                ? fixture.HaloScale
+                : fixture.HaloScale * (fixture.IsLamp ? darkLampHalo : darkVeinHalo);
+
+            fixture.Halo.localScale = Vector3.one * scale;
         }
 
         private static bool TooClose(List<Vector3> placed, Vector3 point, float spacingSqr)
@@ -383,15 +540,27 @@ namespace MineGenerator.Catacombs
             // его нечем — яркость центра задаёт сам цвет источника.
             var halo = CaveGlowBillboard.Attach(lightObject.transform, haloSize, color);
 
-            // В мерцание идут только лампы: жилы — это минерал, он не горит.
-            if (name == "Wall Lamp")
+            var isLamp = name == "Wall Lamp";
+
+            // Имя не fixture: так уже зовётся сам игровой объект светильника выше по методу.
+            var record = new Fixture
             {
-                _lamps.Add(light);
-                _lampIntensity.Add(intensity);
-                _lampPhase.Add((float)_lamps.Count * 7.13f);
-                _lampHalo.Add(halo != null ? halo.transform : null);
-                _lampHaloScale.Add(haloSize);
-            }
+                Light = light,
+                Intensity = intensity,
+                Halo = halo != null ? halo.transform : null,
+                HaloScale = haloSize,
+                Position = point,
+                // В мерцание идут только лампы: жилы — это минерал, он не горит.
+                Phase = isLamp ? (float)_fixtures.Count * 7.13f : -1f,
+                IsLamp = isLamp,
+                Lit = !startDark
+            };
+
+            _fixtures.Add(record);
+
+            if (record.Lit) LitCount++;
+
+            ApplyState(record);
 
             // Ядро тёплое, а не белое. Почти белое ядро пробовалось и читалось как
             // приклеенный к стене овал: аддитивный ореол вокруг него и так пересвечен,
