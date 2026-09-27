@@ -53,19 +53,25 @@ namespace MineGenerator.Catacombs.EditorTools
 
             if (!EditorApplication.ExecuteMenuItem(StyleMenu)) throw new Exception("не найден пункт меню: " + StyleMenu);
 
-            var generators = UnityEngine.Object.FindFirstObjectByType<CaveGenerators>();
-            if (generators == null) throw new Exception("CaveGenerators не появился — починка света не отработала");
+            var director = UnityEngine.Object.FindFirstObjectByType<CaveRunDirector>();
+            if (director == null) throw new Exception("CaveRunDirector не появился — починка света не отработала");
 
-            // Ссылку на толпу «Починить свет» проставляет только если толпа уже есть
-            // на сцене к моменту пересоздания генераторов. Порядок не гарантирован,
-            // поэтому связываем ещё раз и уже наверняка.
+            var queen = UnityEngine.Object.FindFirstObjectByType<CaveQueen>();
+            if (queen == null) throw new Exception("CaveQueen не появилась — починка света не отработала");
+
+            // Ссылку на толпу «Починить свет» проставляет, только если толпа уже есть
+            // на сцене к моменту пересоздания. Порядок не гарантирован, поэтому
+            // связываем ещё раз и уже наверняка.
             var crowd = UnityEngine.Object.FindFirstObjectByType<SpiderCrowd>();
 
             if (crowd != null)
             {
-                var serialized = new SerializedObject(generators);
-                serialized.FindProperty("crowd").objectReferenceValue = crowd;
-                serialized.ApplyModifiedPropertiesWithoutUndo();
+                foreach (var component in new UnityEngine.Object[] { director, queen })
+                {
+                    var serialized = new SerializedObject(component);
+                    serialized.FindProperty("crowd").objectReferenceValue = crowd;
+                    serialized.ApplyModifiedPropertiesWithoutUndo();
+                }
             }
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -73,7 +79,8 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var fixtures = UnityEngine.Object.FindFirstObjectByType<CaveFixtures>();
 
-            Debug.Log($"СЦЕНА ОБНОВЛЕНА и сохранена: генераторов {generators.Count}, " +
+            Debug.Log($"СЦЕНА ОБНОВЛЕНА и сохранена: директор забега и Матка на месте, " +
+                      $"логово {(queen.HasLair ? "есть" : "НЕТ")}, " +
                       $"светильников {(fixtures != null ? fixtures.Count : 0)}, " +
                       $"толпа {(crowd != null ? "привязана" : "НЕ НАЙДЕНА")}");
         }

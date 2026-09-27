@@ -698,17 +698,9 @@ namespace MineGenerator.Catacombs.EditorTools
                 fixtures.Clear();
                 Object.DestroyImmediate(fixtures);
 
-                // В ровной заливке весь уровень светится сразу, и генераторам нечего
-                // зажигать: механика темноты в этом стиле не работает в принципе.
-                var strayGenerators = world.GetComponent<CaveGenerators>();
-
-                if (strayGenerators != null)
-                {
-                    strayGenerators.Clear();
-                    Object.DestroyImmediate(strayGenerators);
-                }
-
-                return "  светильники: убраны вместе с генераторами";
+                // Забегу темнота не обязательна: волны, рои и Матка работают и при ровной
+                // заливке, просто тлению жил там вести некуда.
+                return "  светильники: убраны" + System.Environment.NewLine + EnsureRun(world, null);
             }
 
             // Существующий компонент не донастраиваем, а сносим и создаём заново — иначе
@@ -732,7 +724,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
             fixtures.Rebuild();
 
-            var generators = EnsureGenerators(world, fixtures);
+            var run = EnsureRun(world, fixtures);
 
             EnsureWebs(world, style);
             EnsureMood(world);
@@ -743,40 +735,64 @@ namespace MineGenerator.Catacombs.EditorTools
                 ? $"  светильники: {what}, убрано битых компонентов {stale}"
                 : $"  светильники: {what}";
 
-            return line + System.Environment.NewLine + generators;
+            return line + System.Environment.NewLine + run;
         }
 
         /// <summary>
-        /// Генераторы света — цель забега. Пересоздаются так же, как светильники,
-        /// и по той же причине: значения полей живут в сохранённой сцене, и правка
-        /// умолчаний в коде до них не доходит (грабли №8).
+        /// Забег: директор волн и Матка. Пересоздаются так же, как светильники, и по той же
+        /// причине: значения полей живут в сохранённой сцене, и правка умолчаний в коде
+        /// до них не доходит (грабли №8, №25).
+        ///
+        /// Сцены прошлой версии несут удалённый CaveGenerators битой ссылкой — её снимает
+        /// общая чистка битых компонентов в EnsureFixtures.
         /// </summary>
-        private static string EnsureGenerators(CatacombWorld world, CaveFixtures fixtures)
+        internal static string EnsureRun(CatacombWorld world, CaveFixtures fixtures)
         {
-            var generators = world.GetComponent<CaveGenerators>();
-            var rebuilt = generators != null;
+            if (world == null) return "  забег: мир не найден";
 
-            if (rebuilt)
+            var crowd = Object.FindFirstObjectByType<SpiderCrowd>();
+
+            var queen = world.GetComponent<CaveQueen>();
+            var rebuilt = queen != null;
+
+            if (queen != null)
             {
-                generators.Clear();
-                Object.DestroyImmediate(generators);
+                queen.Clear();
+                Object.DestroyImmediate(queen);
             }
 
-            generators = world.gameObject.AddComponent<CaveGenerators>();
+            var director = world.GetComponent<CaveRunDirector>();
+            if (director != null) Object.DestroyImmediate(director);
 
-            var serialized = new SerializedObject(generators);
-            serialized.FindProperty("world").objectReferenceValue = world;
-            serialized.FindProperty("fixtures").objectReferenceValue = fixtures;
-            serialized.FindProperty("crowd").objectReferenceValue =
-                Object.FindFirstObjectByType<SpiderCrowd>();
-            serialized.ApplyModifiedPropertiesWithoutUndo();
+            // Матка раньше директора: директор при включении подписывается на неё.
+            queen = world.gameObject.AddComponent<CaveQueen>();
 
-            generators.Rebuild();
+            var queenObject = new SerializedObject(queen);
+            queenObject.FindProperty("world").objectReferenceValue = world;
+            queenObject.FindProperty("crowd").objectReferenceValue = crowd;
+            queenObject.FindProperty("fixtures").objectReferenceValue = fixtures;
+            queenObject.FindProperty("target").objectReferenceValue = Object.FindFirstObjectByType<CatacombTestRig>();
+            queenObject.ApplyModifiedPropertiesWithoutUndo();
+
+            director = world.gameObject.AddComponent<CaveRunDirector>();
+
+            var directorObject = new SerializedObject(director);
+            directorObject.FindProperty("world").objectReferenceValue = world;
+            directorObject.FindProperty("crowd").objectReferenceValue = crowd;
+            directorObject.FindProperty("fixtures").objectReferenceValue = fixtures;
+            directorObject.FindProperty("queen").objectReferenceValue = queen;
+            directorObject.ApplyModifiedPropertiesWithoutUndo();
+
+            queen.Rebuild();
+            director.EnsureLinks();
+            director.Restart();
 
             var what = rebuilt ? "пересозданы" : "добавлены";
+            var lair = queen.HasLair
+                ? $"логово в ({queen.LairPosition.x:0}, {queen.LairPosition.y:0}, {queen.LairPosition.z:0})"
+                : "ЛОГОВА НЕТ";
 
-            return $"  генераторы: {what}, расставлено {generators.Count}, " +
-                   $"светильников горит {fixtures.LitCount} из {fixtures.Count}";
+            return $"  директор забега и Матка: {what}, {lair}, толпа {(crowd != null ? "привязана" : "НЕ НАЙДЕНА")}";
         }
 
         /// <summary>

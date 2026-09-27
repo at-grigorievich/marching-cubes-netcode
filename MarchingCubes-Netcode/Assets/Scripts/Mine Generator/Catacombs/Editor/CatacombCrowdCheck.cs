@@ -36,6 +36,15 @@ namespace MineGenerator.Catacombs.EditorTools
 
         private const float Step = 1f / 60f;
 
+        /// <summary>Сколько ещё гонять после основного прогона, прежде чем мерить натиск.</summary>
+        private const float PressSeconds = 10f;
+
+        /// <summary>
+        /// В каком радиусе мерить натиск. Пятнадцать — чуть шире прежнего ближнего круга
+        /// (12): стоявшие за его краем в очереди и есть те, на кого жаловались.
+        /// </summary>
+        private const float PressRadius = 15f;
+
         public static void Run()
         {
             var code = 0;
@@ -238,6 +247,108 @@ namespace MineGenerator.Catacombs.EditorTools
                 }
             }
 
+            // Натиск: что делает толпа, когда дошла. Ещё десять секунд, чтобы у игрока
+            // собрались все, а не только первые добежавшие.
+            for (var i = 0; i < Mathf.RoundToInt(PressSeconds / Step); i++) crowd.Simulate(Step);
+
+            var press = crowd.MeasureEngagement(PressRadius);
+            var engaged = press.Attacking + press.Climbing + press.Moving;
+            var active = press.Near - press.Lurking;
+
+            text.AppendLine($"=== Натиск (через {Seconds + PressSeconds:0} с, ближе {PressRadius:0} юнитов) ===");
+            text.AppendLine($"  рядом {press.Near}: бьют {press.Attacking}, лезут поверх {press.Climbing} " +
+                            $"(выше всех на {press.MaxClimb:0.0}), бегут {press.Moving}, " +
+                            $"толкутся {press.Jostling}, стоят {press.Stalled}, в засаде {press.Lurking}");
+            text.AppendLine($"  стоят без дела: {Share(press.Stalled, active):P0} от не-засадников");
+            text.AppendLine($"  держатся: пол {press.OnFloor}, стены {press.OnWall}, свод {press.OnCeiling} " +
+                            $"({Share(press.OnWall + press.OnCeiling, press.Near):P0} не на полу)");
+            text.AppendLine($"  поднимаются сейчас {press.Rising}: ставят лапы на спину соседа стоя {press.Rearing}, " +
+                            $"лифтом (стоя и с ровным телом) {press.Elevator}");
+            text.AppendLine($"  на верхних поверхностях (свод, стены выше глаз): {press.Upper} " +
+                            $"({Share(press.Upper, press.Near):P0}); " +
+                            $"куча в трёх юнитах от игрока высотой до {press.CloseClimb:0.0}");
+
+            var inside = crowd.CountBodyOverlaps(PressRadius, out var nearForOverlap, out var deep);
+
+            text.AppendLine($"  телом в другой особи (на одном ярусе): {inside} из {nearForOverlap} " +
+                            $"({Share(inside, nearForOverlap):P0}), из них глубоко, почти целиком: {deep} " +
+                            $"({Share(deep, nearForOverlap):P0})");
+
+            // Жалоба «пауки залезают друг в друга, а не друг на друга». До твёрдых тел
+            // у игрока сидели телом в другой 92%, и глубоко — большинство.
+            if (Share(deep, nearForOverlap) > 0.1f)
+            {
+                text.AppendLine("  ПЛОХО: тела проходят друг в друга — проверьте ядра тел в Flock и Block");
+                failed++;
+            }
+
+            var riders = crowd.MeasureRiders(PressRadius, out var floating, out var onAttackers, out var stacked);
+
+            text.AppendLine($"  наездников {riders} ({Share(riders, press.Near):P0} от тех, кто рядом): " +
+                            $"висят в воздухе, выше горба спины под собой, {floating} ({Share(floating, riders):P0}); " +
+                            $"лежат на спинах бьющих {onAttackers}, на других наездниках (третий ярус и выше) {stacked}");
+
+            // Жалоба «должны залазить лапками друг на друга, а не висеть в воздухе». До горба
+            // спины наездник стоял на полной её высоте и над кончиками лап соседа, и перед ним,
+            // пока поднимался на дыбах: из 77 у игрока на теле соседа лежали 27.
+            if (Share(floating, riders) > 0.1f)
+            {
+                text.AppendLine("  ПЛОХО: наездники висят в воздухе — проверьте горб (SpiderTuning.Hump) и UpdateClimb");
+                failed++;
+            }
+
+            // Стенолазы: пользователь просил, чтобы часть толпы ползла по верхним стенкам
+            // и своду, обволакивала их. До стенолазов там было 34%, с ними 56-57%.
+            if (Share(press.Upper, press.Near) < 0.4f)
+            {
+                text.AppendLine("  ПЛОХО: толпа у игрока не лезет на стены и свод — проверьте ClimberShare");
+                failed++;
+            }
+
+            // Заход в толпу: игрок идёт к самому плотному месту рядом на скорости ходьбы.
+            // Стоит глазами на своей высоте, а не на полу, как в прогоне выше: там точка
+            // входа кладёт трансформ (то есть глаза) прямо в пол, и пол вокруг считался бы
+            // «у самой камеры». Жалоба была ровно на это: зашёл внутрь — и на экране
+            // «куча-мала» из лап.
+            text.AppendLine(WalkIn(world, crowd, player, ref failed));
+
+            // Дрожь: у дальних небьющих позиция не должна скакать туда-обратно от кадра к кадру.
+            // Жалоба «дальние пауки синхронно трясутся» пришла после твёрдых тел: все
+            // раздвигались разом по позициям прошлого кадра, и тряслись 68-99% особей.
+            // У толпы без твёрдых тел этот замер даёт 8%: толкотня стаи подрагивает всегда.
+            var shaking = Shaking(crowd, out var watched);
+
+            text.AppendLine($"  дрожат (позиция скачет больше 2 см за кадр) дальше шести юнитов: " +
+                            $"{Share(shaking, watched):P0} из {watched}");
+
+            if (Share(shaking, watched) > 0.25f)
+            {
+                text.AppendLine("  ПЛОХО: толпа трясётся — проверьте контакт и раздвигание тел в Flock");
+                failed++;
+            }
+
+            // Жалоба «доходят до игрока и плавно взлетают вверх»: подъём обязан идти на ходу.
+            if (press.Elevator > press.Rising / 10)
+            {
+                text.AppendLine("  ПЛОХО: особи поднимаются стоя, как на лифте — проверьте UpdateClimb");
+                failed++;
+            }
+
+            // Порог — по жалобе «только малая часть атакует, остальные айдлят вдалеке».
+            // До ярусов стояло 40%; стоящих в давке ноль не будет никогда — кто-то всегда
+            // упирается в спину соседа, пока не полез, — но это должны быть единицы.
+            if (Share(press.Stalled, active) > 0.2f)
+            {
+                text.AppendLine("  ПЛОХО: толпа у игрока стоит, а не лезет — проверьте ярусы (Flock, UpdateClimb)");
+                failed++;
+            }
+
+            if (press.Climbing == 0)
+            {
+                text.AppendLine("  ПЛОХО: никто не лезет по спинам — куча не собирается");
+                failed++;
+            }
+
             text.AppendLine("=== Отрисовка ===");
 
             var camera = player.GetComponent<Camera>();
@@ -299,6 +410,107 @@ namespace MineGenerator.Catacombs.EditorTools
         }
 
         /// <summary>Собирает толпу заново. Общая с проверкой света: две копии этого разъехались бы.</summary>
+        /// <summary>
+        /// Заход в толпу: полторы секунды шага к самому плотному месту рядом и секунда
+        /// стояния внутри. Меряет, расступается ли толпа — сколько особей в личном
+        /// пространстве игрока, — и возвращает игрока, где он стоял.
+        /// </summary>
+        private static string WalkIn(CatacombWorld world, SpiderCrowd crowd, CatacombTestRig player, ref int failed)
+        {
+            var start = player.transform.position;
+            var eye = start + Vector3.up * 1.2f;
+
+            player.transform.position = eye;
+
+            var positions = new List<Vector3>();
+            crowd.CopyPositions(positions);
+
+            var near = positions.Where(p => (p - eye).magnitude < 12f).ToList();
+            var centre = near.Count > 0 ? near.Aggregate(Vector3.zero, (a, b) => a + b) / near.Count : eye;
+            var direction = Vector3.ProjectOnPlane(centre - eye, Vector3.up).normalized;
+
+            for (var i = 0; i < 90; i++)
+            {
+                var next = player.transform.position + direction * (6f * Step);
+
+                // По полю плотности, а не физикой: грабли №1.
+                if (!world.IsSolid(next) && !world.IsSolid(next + Vector3.down)) player.transform.position = next;
+
+                crowd.Simulate(Step);
+            }
+
+            var walked = (player.transform.position - eye).magnitude;
+
+            for (var i = 0; i < 60; i++) crowd.Simulate(Step);
+
+            var inside = crowd.MeasureEngagement(PressRadius);
+
+            player.transform.position = start;
+
+            var line = $"  зашёл в толпу на {walked:0.0} юнита: рядом {inside.Near}, в личном пространстве " +
+                       $"{inside.Intruding}, куча в трёх юнитах до {inside.CloseClimb:0.0}";
+
+            // Порог — единицы процента: кто-то всегда оказывается вплотную в момент замера,
+            // пока его сдвигает. До личного пространства было 70-75 при стоящем игроке.
+            if (inside.Intruding > inside.Near * 0.03f)
+            {
+                failed++;
+                return line + Environment.NewLine +
+                       "  ПЛОХО: толпа не расступается — проверьте KeepOut в SpiderMoveJob";
+            }
+
+            return line;
+        }
+
+        /// <summary>
+        /// Доля дрожащих: по трём кадрам подряд, вторая разность позиции на камне больше 2 см.
+        /// У плавного движения она близка к нулю, у колебания «туда-сюда» с частотой кадра —
+        /// порядка удвоенного сдвига. Берутся дальние (дальше шести юнитов), небьющие и не в засаде.
+        /// </summary>
+        private static int Shaking(SpiderCrowd crowd, out int watched)
+        {
+            var shaking = 0;
+            watched = 0;
+
+            for (var pass = 0; pass < 10; pass++)
+            {
+                var frames = new List<Dictionary<int, SpiderState>>();
+
+                for (var f = 0; f < 3; f++)
+                {
+                    if (f > 0) crowd.Simulate(Step);
+
+                    var list = new List<SpiderState>();
+                    crowd.CopyStates(list);
+
+                    var map = new Dictionary<int, SpiderState>();
+                    foreach (var s in list) map[s.Serial] = s;
+
+                    frames.Add(map);
+                }
+
+                var target = (float3)crowd.TargetLocal;
+
+                foreach (var pair in frames[2])
+                {
+                    var s2 = pair.Value;
+
+                    if (s2.Clip != (int)SpiderClip.Walk || s2.Ebb != 0) continue;
+                    if (math.distance(s2.Position, target) < 6f) continue;
+                    if (!frames[0].TryGetValue(pair.Key, out var s0) || !frames[1].TryGetValue(pair.Key, out var s1)) continue;
+
+                    var g0 = s0.Position - s0.Up * s0.Climb;
+                    var g1 = s1.Position - s1.Up * s1.Climb;
+                    var g2 = s2.Position - s2.Up * s2.Climb;
+
+                    watched++;
+                    if (math.length(g2 - 2f * g1 + g0) > 0.02f) shaking++;
+                }
+            }
+
+            return shaking;
+        }
+
         internal static SpiderCrowd EnsureCrowd(CatacombWorld world, StringBuilder text, ref int failed)
         {
             // Толпа ПЕРЕСОЗДАЁТСЯ каждый прогон, а не берётся со сцены.

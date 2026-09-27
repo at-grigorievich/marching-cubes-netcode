@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Unity.Burst;
 using Unity.Collections;
@@ -242,6 +243,57 @@ namespace MineGenerator.Catacombs
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// Шагов по ходам от точки до каждой клетки в пределах <paramref name="maxSteps"/> —
+        /// отдельной заливкой, не трогая поток к игроку.
+        ///
+        /// Нужна, когда «далеко ли» спрашивают не от игрока. Пилоны Матки ставятся вокруг
+        /// НЕЁ, а игрок в этот момент может кружить в тридцати юнитах. И евклидово
+        /// «в пятнадцати юнитах» тут не годится: соседний ход за стенкой близок по прямой
+        /// и далёк по пути, и пилон за стеной стоил бы игроку полминуты обхода.
+        ///
+        /// Управляемая, а не джоб: зовётся пару раз за бой, а заливка на три десятка
+        /// шагов трогает несколько тысяч клеток.
+        /// </summary>
+        /// <returns>Клетка, с которой пошла заливка, или -1, если рядом нет проходимой.</returns>
+        public int Reach(float3 localFrom, int maxSteps, Dictionary<int, int> steps)
+        {
+            steps.Clear();
+
+            if (!IsCreated) return -1;
+
+            var start = FindNearestWalkable(localFrom, 4);
+            if (start < 0) return -1;
+
+            var topology = GetTopology();
+            var queue = new Queue<int>();
+
+            steps[start] = 0;
+            queue.Enqueue(start);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                var next = steps[current] + 1;
+
+                if (next > maxSteps) continue;
+
+                var c = new int3(current % Dim.x, current / Dim.x % Dim.y, current / (Dim.x * Dim.y));
+
+                for (var n = 0; n < NeighbourCount; n++)
+                {
+                    var index = topology.Step(c, Neighbour(n));
+
+                    if (index < 0 || steps.ContainsKey(index)) continue;
+
+                    steps[index] = next;
+                    queue.Enqueue(index);
+                }
+            }
+
+            return start;
         }
 
         public void Dispose()

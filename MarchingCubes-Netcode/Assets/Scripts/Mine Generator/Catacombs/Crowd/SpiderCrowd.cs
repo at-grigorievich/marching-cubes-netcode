@@ -81,19 +81,117 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(0.05f, 0.8f)] private float waveCrest = 0.25f;
 
         [Header("Ближний круг")]
-        [Tooltip("Радиус ближнего круга, юниты.")]
+        [Tooltip("Радиус ближнего круга, юниты. В нём же толпа лезет друг на друга — дальше только держится.")]
         [SerializeField, Range(2f, 30f)] private float nearRadius = 12f;
 
         /// <summary>
-        /// Сколько особей пускать в ближний круг. Остальные ждут дальше.
+        /// Сколько особей пускать в ближний круг, остальные ждут дальше. Ноль — без потолка.
         ///
-        /// Без потолка вся орда сжимается в кольцо вокруг игрока и упирается в него
-        /// сплошной стеной: замер давал 690 видимых особей при полном отсутствии
-        /// негативного пространства. Силуэт читается только тогда, когда вокруг него
-        /// есть пустота.
+        /// Был 70: без потолка вся орда сжималась в кольцо у игрока, и в кадре терялся
+        /// силуэт. Пользователь это решение отменил: «остальные пауки айдлят вдалеке
+        /// и ничего не делают, из-за этого чувство страха и противности теряется —
+        /// пусть ползают друг по другу, лезут на игрока, заполняют пространство перед
+        /// ним». Замер при потолке: у игрока 839 особей, из них бьют 70, стоят 308 —
+        /// 40% от всех, кто не в засаде. Теперь давка разрешается не ожиданием,
+        /// а ярусами: упёршийся лезет соседу на спину.
         /// </summary>
-        [Tooltip("Сколько особей пускать в ближний круг. Остальные ждут дальше.")]
-        [SerializeField, Range(0, 500)] private int nearCap = 70;
+        [Tooltip("Сколько особей пускать в ближний круг. 0 — без потолка: все лезут к игроку.")]
+        [SerializeField, Range(0, 500)] private int nearCap;
+
+        [Tooltip("Сколько убитых разом останавливают досыл на паузу — пролом в толпе должен постоять.")]
+        [SerializeField, Range(1, 500)] private int holdKillCount = 24;
+
+        [Tooltip("И какую долю из тех, кто был в ближнем круге вокруг взрыва, они должны составлять.")]
+        [SerializeField, Range(0f, 1f)] private float holdShare = 0.4f;
+
+        [Header("Куча")]
+        [Tooltip("Выше этого особь по спинам соседей не лезет, юниты. Страховка: высоту кучи " +
+                 "задаёт число ярусов, а свод срезает её по месту.")]
+        [SerializeField, Range(0f, 4f)] private float maxClimb = 2.4f;
+
+        /// <summary>
+        /// Сколько ярусов в куче, считая стоящих на камне. Пользователь: «чтобы могли залезать
+        /// друг на друга не только в два ряда, а например и в три — полностью заполняли пространство».
+        /// </summary>
+        [Tooltip("Сколько ярусов в куче, считая стоящих на камне. 2 — наездники только на стоящих.")]
+        [SerializeField, Range(2, 6)] private int pileTiers = 3;
+
+        [Tooltip("С какой скоростью упёршаяся ставит передние лапы на спину соседа, юниты в секунду. " +
+                 "Дальше она всходит по горбу его спины на ходу, со скоростью, которую требует крутизна.")]
+        [SerializeField, Range(0.5f, 20f)] private float climbRate = 3f;
+
+        [Tooltip("Ускорение падения, когда опоры не стало, юниты в секунду за секунду.")]
+        [SerializeField, Range(1f, 100f)] private float gravity = 30f;
+
+        [Tooltip("Насколько упёршаяся особь берёт вбок — в обход затора, на стену и на свод.")]
+        [SerializeField, Range(0f, 4f)] private float detourWeight = 1.2f;
+
+        [Tooltip("Ближе этого к игроку особь идёт на него прямо по своей поверхности, " +
+                 "а не по полю потока — так стенные остаются на стенах.")]
+        [SerializeField, Range(0f, 30f)] private float wallRange = 8f;
+
+        [Header("Личное пространство игрока")]
+        /// <summary>
+        /// Ближе этого к камере особь не бывает: её сдвигает вбок по поверхности.
+        ///
+        /// Без этого, стоило зайти в толпу, особи оказывались вплотную к камере, и экран
+        /// целиком занимали огромные лапы — пользователь назвал это «куча-мала».
+        /// </summary>
+        [Tooltip("Ближе этого к камере особь не бывает, юниты.")]
+        [SerializeField, Range(0f, 4f)] private float eyeRadius = 1.4f;
+
+        [Tooltip("С какой скоростью влезших в личное пространство сдвигает прочь, юниты в секунду.")]
+        [SerializeField, Range(0.5f, 30f)] private float shoveSpeed = 8f;
+
+        [Header("Стенолазы")]
+        [Tooltip("Какая доля толпы тянется на стены и вверх по ним, к своду.")]
+        [SerializeField, Range(0f, 1f)] private float climberShare = 0.35f;
+
+        [Tooltip("Насколько сильно стенолаз тянется вверх по стене.")]
+        [SerializeField, Range(0f, 3f)] private float climberPull = 0.9f;
+
+        /// <summary>
+        /// Сколько секунд засада ждёт игрока в среднем (разброс от 0.6 до 1.4 этого).
+        ///
+        /// Без терпения засада копилась: засадник срывается, только когда игрок подойдёт
+        /// на семь юнитов, а в боковые ходы игрок не заходит. К концу стадии 95% живых
+        /// висели по стенам, занимали место в населении, и досыла не было — ещё одна
+        /// причина жалобы «остальные айдлят вдалеке».
+        ///
+        /// Десять, а не двадцать: при двадцати засадников в установившемся режиме висело
+        /// за сотню (четверть досыла на гребне — шесть в секунду — на двадцать секунд),
+        /// и в разборе 141 из 206 дальних стоял неподвижно.
+        /// </summary>
+        [Tooltip("Сколько секунд засада ждёт игрока в среднем. Не дождалась — срывается сама.")]
+        [SerializeField, Range(1f, 120f)] private float lurkPatience = 10f;
+
+        [Header("Отлив")]
+        /// <summary>
+        /// Сколько особей в секунду уходит, когда волна спала.
+        ///
+        /// Без отлива спад волны меняет только скорость досыла: пауки сами не умирают,
+        /// и те, кто ждёт за ближним кругом, стоят там до конца стадии. Замер это
+        /// и показал — в передышке живых было 722 при цели 249, перед финалом 1009
+        /// при 372. Передышка, которой не видно, — не передышка.
+        /// </summary>
+        [Tooltip("Сколько особей в секунду уходит в темноту, когда волна спала.")]
+        [SerializeField, Range(0f, 200f)] private float ebbRate = 25f;
+
+        /// <summary>
+        /// Сколько секунд уходящая особь бежит прочь. Потом, если она уже далеко, уходит
+        /// в щель; если рядом — возвращается в строй.
+        ///
+        /// Недолго, и это не про скорость. Катакомбы без тупиков, и бег «прочь по потоку»
+        /// кончается в дальней точке петли вокруг игрока — а она часто ближе полосы спавна.
+        /// Первая версия ждала там двенадцать секунд и возвращала особь в кольцо: замер
+        /// давал 2341 вернувшихся на 484 ушедших и 909 живых перед финалом при цели 372.
+        /// </summary>
+        [Tooltip("Сколько секунд уходящая особь бежит прочь, прежде чем уйти в щель или вернуться.")]
+        [SerializeField, Range(1f, 30f)] private float ebbSeconds = 6f;
+
+        [Tooltip("Насколько живых должно быть больше цели, чтобы начался отлив. " +
+                 "Запас нужен, чтобы толпа не дёргалась туда-сюда на каждой ряби.")]
+        [SerializeField, Range(1f, 2f)] private float ebbSlack = 1.1f;
 
         [Header("Смерть")]
         [Tooltip("Сила отброса трупа в эпицентре взрыва, юнитов в секунду.")]
@@ -211,6 +309,9 @@ namespace MineGenerator.Catacombs
         private NativeArray<SpiderState> _states;
         private NativeArray<float4> _neighbours;
         private NativeArray<float3> _velocities;
+        private NativeArray<float> _heights;
+        private NativeArray<float> _climbs;
+        private NativeArray<int> _tiers;
         private NativeArray<SpiderTuning> _tuning;
         private NativeArray<float4> _frustum;
         private NativeArray<int> _killed;
@@ -231,12 +332,24 @@ namespace MineGenerator.Catacombs
         private float _spawnHold;
 
         /// <summary>
-        /// Внешний всплеск населения: его включает запуск генератора на время разгорания.
-        /// Отдельно от трапеции волн, а не подменой её фазы: волна идёт по своим часам
-        /// и должна продолжить идти после того, как всплеск кончится.
+        /// Директива забега. Пока её нет, толпа живёт по своим полям — так её меряет
+        /// проверка толпы, отдельно от сложности. Раньше на этом месте был всплеск
+        /// от генератора; генераторы стали пилонами Матки, и всплеск ушёл вместе с ними:
+        /// население теперь целиком ведёт директор.
         /// </summary>
-        private float _surgeTimer;
-        private float _surgeScale = 1f;
+        private bool _directed;
+        private CrowdDirective _directive;
+
+        /// <summary>Сквозной номер появления — см. <see cref="SpiderState.Serial"/>.</summary>
+        private int _serial;
+
+        /// <summary>Самый лёгкий и самый тяжёлый вид по живучести: запасной для отбора и вид элиты.</summary>
+        private int _lightest;
+        private int _heaviest;
+
+        /// <summary>Буфер заливки под выводок и пилоны, чтобы не выделять его на каждый вызов.</summary>
+        private readonly Dictionary<int, int> _reach = new Dictionary<int, int>();
+        private readonly List<int> _cellBuffer = new List<int>();
 
         /// <summary>
         /// Паника: сфера, из которой толпа разбегается. Ставится вспышкой света в районе.
@@ -279,6 +392,36 @@ namespace MineGenerator.Catacombs
         public int Batches { get; private set; }
         public bool HasField => _flow.IsCreated;
         public SpiderFlowField Field => _flow;
+
+        /// <summary>Сколько особей появилось за всё время. Прямой ответ на «идёт ли досыл».</summary>
+        public int SpawnedTotal { get; private set; }
+
+        /// <summary>Сколько раз крупное убийство ставило досыл на паузу, и сколько секунд он стоял.</summary>
+        public int HoldsTriggered { get; private set; }
+
+        public float HeldSeconds { get; private set; }
+
+        /// <summary>Потолок особей: столько слотов выделено.</summary>
+        public int Capacity => _states.IsCreated ? _states.Length : capacity;
+
+        /// <summary>Собственные числа толпы — от них директор считает свои.</summary>
+        public int DefaultPopulation => population;
+        public int DefaultNearCap => nearCap;
+        public float DefaultSpawnRate => spawnRate;
+
+        public bool IsDirected => _directed;
+        public CrowdDirective Directive => _directive;
+
+        /// <summary>Готовые виды в порядке индексов, которыми их знают джобы.</summary>
+        public int KindCount => _runtime != null ? _runtime.Length : 0;
+
+        public SpiderKind KindAt(int index) =>
+            _runtime != null && index >= 0 && index < _runtime.Length ? _runtime[index].Kind : null;
+
+        /// <summary>Индекс вида элиты — самого живучего.</summary>
+        public int HeaviestKind => _heaviest;
+
+        private int EffectiveNearCap => _directed ? _directive.NearCap : nearCap;
 
         /// <summary>Готовые к отрисовке буферы одного вида.</summary>
         private sealed class KindRuntime
@@ -405,7 +548,13 @@ namespace MineGenerator.Catacombs
             _flowCell = _flow.SourceCell;
             _flowTimer = 0f;
 
-            FillPopulation(population);
+            // Под директором заселять мгновенно нельзя. Директива в этот момент может быть
+            // ещё от прошлого уровня — финальный рой на тысячу с лишним особей, — а свежую
+            // директор выставит в том же событии генерации, но в неизвестном порядке
+            // относительно этого вызова. Досыл за первые секунды доведёт толпу до числа
+            // уже новой директивы, и это заодно правильный старт: забег Megabonk
+            // начинается с редких врагов.
+            if (!_directed) FillPopulation(population);
         }
 
         /// <summary>
@@ -469,11 +618,12 @@ namespace MineGenerator.Catacombs
             UpdateFlow(targetLocal, targetValid != 0, deltaTime);
 
             _waveTime += deltaTime;
+            if (_spawnHold > 0f) HeldSeconds += math.min(_spawnHold, deltaTime);
             _spawnHold = math.max(0f, _spawnHold - deltaTime);
-            _surgeTimer = math.max(0f, _surgeTimer - deltaTime);
             _panicTimer = math.max(0f, _panicTimer - deltaTime);
 
             TopUp(deltaTime);
+            UpdateEbb(targetLocal, targetValid != 0, deltaTime);
 
             var near = targetValid != 0 ? CountNear(targetLocal) : 0;
 
@@ -491,6 +641,9 @@ namespace MineGenerator.Catacombs
                 States = _states,
                 Neighbours = _neighbours,
                 Velocities = _velocities,
+                Heights = _heights,
+                Climbs = _climbs,
+                Tiers = _tiers,
                 Hash = _hash,
                 Tuning = _tuning,
                 Field = _flow.Sampler,
@@ -514,14 +667,27 @@ namespace MineGenerator.Catacombs
                 IdleStride = 0.35f,
 
                 NearCount = near,
-                NearCap = nearCap,
+                NearCap = EffectiveNearCap,
                 NearRadius = nearRadius,
                 CorpseDrag = corpseDrag,
 
                 PanicCentre = _panicCentre,
                 PanicRadiusSq = _panicRadius * _panicRadius,
                 PanicActive = _panicTimer > 0f ? 1 : 0,
-                PanicLeft = _panicTimer
+                PanicLeft = _panicTimer,
+
+                MaxClimb = maxClimb,
+                PileTiers = math.max(2, pileTiers),
+                ClimbRate = climbRate,
+                Gravity = gravity,
+                DetourWeight = detourWeight,
+                WallRange = wallRange,
+                EyeRadius = eyeRadius,
+                ShoveSpeed = shoveSpeed,
+                ClimberShare = climberShare,
+                ClimberPull = climberPull,
+                LurkPatience = lurkPatience,
+                PileRadius = nearRadius
             }.Schedule(_states.Length, 32, handle);
 
             handle = new SpiderPublishJob
@@ -529,7 +695,10 @@ namespace MineGenerator.Catacombs
                 States = _states,
                 Tuning = _tuning,
                 Neighbours = _neighbours,
-                Velocities = _velocities
+                Velocities = _velocities,
+                Heights = _heights,
+                Climbs = _climbs,
+                Tiers = _tiers
             }.Schedule(_states.Length, 64, handle);
 
             handle.Complete();
@@ -591,10 +760,13 @@ namespace MineGenerator.Catacombs
 
             for (var i = 0; i < _killed.Length; i++) _killed[i] = 0;
 
+            var centre = LocalOf(worldPoint);
+            var around = CountNear(centre, nearRadius);
+
             new SpiderDamageJob
             {
                 States = _states,
-                Center = LocalOf(worldPoint),
+                Center = centre,
                 RadiusSq = radius * radius,
                 Damage = math.max(1, damage),
                 Impulse = deathImpulse,
@@ -605,10 +777,19 @@ namespace MineGenerator.Catacombs
             var killed = 0;
             for (var i = 0; i < _killed.Length; i++) killed += _killed[i];
 
-            // Пролом в толпе должен постоять. Порог по доле ближнего круга, а не по числу:
-            // одиночное попадание не должно останавливать волну, а выкос половины
-            // ближнего круга — должен, иначе игрок не увидит результата.
-            if (killed >= math.max(4, nearCap / 3)) _spawnHold = spawnHoldAfterKill;
+            // Пролом в толпе должен постоять — но только если это ПРОЛОМ, то есть выбита
+            // заметная доля тех, кто был вокруг, а не два десятка из кучи в несколько сотен.
+            //
+            // Порог числом держался, пока толпа ждала в очереди и у игрока стояло семь
+            // десятков. Когда очередь сняли, почти любой взрыв по куче убивал больше двух
+            // десятков, и досыл стоял на паузе половину стадии — 240 секунд из 480,
+            // 148 раз подряд. Сильный игрок выключал себе волны, то есть ровно обратное
+            // реактивному спавну Megabonk: убиваешь быстрее — досылают быстрее.
+            if (killed >= holdKillCount && killed >= around * holdShare)
+            {
+                _spawnHold = spawnHoldAfterKill;
+                HoldsTriggered++;
+            }
 
             return killed;
         }
@@ -633,26 +814,542 @@ namespace MineGenerator.Catacombs
             _panicTimer = math.max(_panicTimer, duration);
         }
 
-        /// <summary>
-        /// Поднимает население на заданное время: орда сбегается на запуск генератора.
-        ///
-        /// Множитель идёт ПОВЕРХ трапеции волн, а не вместо неё: у волны свои часы,
-        /// и после всплеска она должна продолжиться с того места, где шла.
-        /// </summary>
-        public void SurgeFor(float seconds, float scale)
-        {
-            if (seconds <= 0f || scale <= 1f) return;
-
-            _surgeTimer = math.max(_surgeTimer, seconds);
-            _surgeScale = math.max(_surgeScale, scale);
-        }
-
-        /// <summary>Снимает всплеск и панику — при перегенерации уровня и провале забега.</summary>
+        /// <summary>Снимает панику и паузу досыла — при перегенерации уровня и рестарте забега.</summary>
         public void ClearEvents()
         {
-            _surgeTimer = 0f;
-            _surgeScale = 1f;
             _panicTimer = 0f;
+            _spawnHold = 0f;
+        }
+
+        /// <summary>
+        /// Директор забега говорит, сколько держать и кого заводить. Зовётся каждый кадр:
+        /// директива дешёвая, а сложность меняется непрерывно.
+        /// </summary>
+        public void SetDirective(in CrowdDirective directive)
+        {
+            _directive = directive;
+            _directed = true;
+        }
+
+        /// <summary>Возвращает толпу к её собственным числам.</summary>
+        public void ClearDirective() => _directed = false;
+
+        /// <summary>
+        /// Заводит элиту — самого живучего паука, увеличенного и перекрашенного.
+        ///
+        /// Элита рождается в той же полосе, что и рядовые: мини-босс Megabonk приходит
+        /// из толпы, а не падает с неба рядом с игроком. Засады у неё нет — неподвижный
+        /// мини-босс на своде просто не встретился бы игроку.
+        /// </summary>
+        /// <returns>Ссылка на особь или <see cref="SpiderHandle.None"/>, если места не нашлось.</returns>
+        public SpiderHandle SpawnElite(float sizeScale, float healthScale, float speedScale, Vector3 hue)
+        {
+            if (_runtime == null || !_flow.SpawnCells.IsCreated || _flow.SpawnCells.Length == 0)
+            {
+                return SpiderHandle.None;
+            }
+
+            var slot = FindFreeSlot();
+            if (slot < 0) return SpiderHandle.None;
+
+            var cell = PickSpawnCell();
+            if (cell < 0) return SpiderHandle.None;
+
+            var kind = _runtime[_heaviest].Kind;
+            var health = math.max(1, (int)math.round(kind.Health * healthScale));
+
+            Place(slot, cell, _heaviest, sizeScale, health, speedScale, hue, false, 0f, true);
+            Alive++;
+
+            return new SpiderHandle(slot, _states[slot].Serial);
+        }
+
+        /// <summary>
+        /// Выводок: особи появляются в проходимых клетках вокруг точки, связанных с ней
+        /// ходами. Зовётся Маткой — её подкрепления в Megabonk приходят по таймеру.
+        ///
+        /// Клетки берутся заливкой, а не кубом вокруг: куб захватывает соседний ход
+        /// за стенкой, и выводок Матки вылезал бы из-за стены в чужом коридоре.
+        /// </summary>
+        /// <returns>Сколько особей появилось.</returns>
+        public int SpawnAround(Vector3 worldPoint, int count, int radiusSteps, int maxKindHealth)
+        {
+            if (_runtime == null || !_flow.IsCreated || count <= 0) return 0;
+
+            if (_flow.Reach(LocalOf(worldPoint), math.max(1, radiusSteps), _reach) < 0) return 0;
+
+            _cellBuffer.Clear();
+            foreach (var pair in _reach) _cellBuffer.Add(pair.Key);
+
+            if (_cellBuffer.Count == 0) return 0;
+
+            var healthScale = _directed ? _directive.HealthScale : 1f;
+            var speedScale = _directed ? _directive.SpeedScale : 1f;
+            var hue = _directed ? (float3)_directive.Hue : new float3(1f);
+
+            var spawned = 0;
+
+            for (var i = 0; i < count; i++)
+            {
+                var slot = FindFreeSlot();
+                if (slot < 0) break;
+
+                var cell = _cellBuffer[_random.NextInt(_cellBuffer.Count)];
+                var kindIndex = PickKind(maxKindHealth, false);
+
+                Place(slot, cell, kindIndex, 1f, RollHealth(_runtime[kindIndex].Kind.Health * healthScale),
+                    speedScale, hue, false, _random.NextFloat(), false);
+
+                spawned++;
+                Alive++;
+            }
+
+            return spawned;
+        }
+
+        /// <summary>Жива ли особь по ссылке, и где она. Здоровье — сколько попаданий ей осталось.</summary>
+        public bool TryGetSpider(SpiderHandle handle, out Vector3 worldPosition, out int health)
+        {
+            worldPosition = Vector3.zero;
+            health = 0;
+
+            if (!_states.IsCreated || handle.Slot < 0 || handle.Slot >= _states.Length) return false;
+
+            var spider = _states[handle.Slot];
+
+            if (spider.Active == 0 || spider.Serial != handle.Serial || spider.Clip == (int)SpiderClip.Dead)
+            {
+                return false;
+            }
+
+            worldPosition = WorldOf(spider.Position);
+            health = spider.Health;
+            return true;
+        }
+
+        /// <summary>Что делает толпа вокруг игрока — разбивка для прогона.</summary>
+        public struct Engagement
+        {
+            public int Near;
+            public int Attacking;
+            public int Climbing;
+            public int Moving;
+
+            /// <summary>Стоят: не двигаются вовсе и не бьют. Это и есть «айдлят вдалеке».</summary>
+            public int Stalled;
+
+            /// <summary>
+            /// Толкутся: движутся, но вперёд не продвигаются — очередь за кучей в заторе.
+            /// Отдельно от стоящих: в очереди лапы скребут и тела ходят, в кадре это давка,
+            /// а не безделье.
+            /// </summary>
+            public int Jostling;
+
+            public int Lurking;
+            public float MaxClimb;
+
+            /// <summary>На чём держатся: пол, стены, свод.</summary>
+            public int OnFloor;
+            public int OnWall;
+            public int OnCeiling;
+
+            /// <summary>Поднимаются прямо сейчас — и из них «лифтом», почти без хода вперёд.</summary>
+            public int Rising;
+            public int Elevator;
+
+            /// <summary>
+            /// Ставят передние лапы на спину соседа, в которого упёрлись: поднимаются стоя, задрав нос.
+            /// Это только шаг на край горба; дальше подъём идёт на ходу.
+            /// </summary>
+            public int Rearing;
+
+            /// <summary>На верхних поверхностях: на своде или на стене выше глаз игрока.</summary>
+            public int Upper;
+
+            /// <summary>
+            /// Влезли в личное пространство игрока: ближе своей дистанции удара к его оси
+            /// или к самой камере. Отсюда «куча-мала» вплотную и лапы сквозь экран.
+            /// </summary>
+            public int Intruding;
+
+            /// <summary>Самая высокая куча в трёх юнитах от игрока — то, что закрывает обзор.</summary>
+            public float CloseClimb;
+        }
+
+        /// <summary>
+        /// Разбивка живых особей в радиусе от игрока: бьют, лезут поверх, бегут, стоят, в засаде.
+        ///
+        /// Заведена по жалобе «только малая часть толпы атакует, остальные стоят вдалеке
+        /// и ничего не делают». Прогон этого не видел: связность, скорость и расстояние
+        /// до игрока у стоящей кольцом толпы ровно те же, что у давящей.
+        /// </summary>
+        public Engagement MeasureEngagement(float radius)
+        {
+            var result = new Engagement();
+
+            if (!_states.IsCreated || target == null) return result;
+
+            var targetLocal = LocalOf(target.position);
+            var radiusSq = radius * radius;
+
+            ResolveTargetBody(targetLocal, out var bodyLow, out var bodyHigh);
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead || spider.Ebb != 0) continue;
+                if (math.lengthsq(spider.Position - targetLocal) > radiusSq) continue;
+
+                result.Near++;
+                result.MaxClimb = math.max(result.MaxClimb, spider.Climb);
+
+                if (spider.Up.y > 0.5f) result.OnFloor++;
+                else if (spider.Up.y < -0.5f) result.OnCeiling++;
+                else result.OnWall++;
+
+                if (spider.ClimbVel > 0.3f)
+                {
+                    result.Rising++;
+
+                    // Лифт — это подъём стоя И с ровным телом. Подъём стоя с задранным носом —
+                    // шаг передними лапами на спину соседа, так и задумано. «Ровное» — меньше
+                    // 0.2 рад: нос задирается за пару кадров, и только что начавший подниматься
+                    // при пороге 0.35 попадал в лифт — проверка через раз падала на своих же.
+                    if (math.length(spider.Velocity) < 0.5f)
+                    {
+                        if (spider.Pitch < 0.2f) result.Elevator++;
+                        else result.Rearing++;
+                    }
+                }
+
+                if (spider.Up.y < -0.5f || (math.abs(spider.Up.y) <= 0.5f && spider.Position.y > targetLocal.y))
+                {
+                    result.Upper++;
+                }
+
+                // Личное пространство: та же мера, что держит его в джобе.
+                var axis = new float3(targetLocal.x, math.clamp(spider.Position.y, bodyLow, bodyHigh), targetLocal.z);
+                var keep = _tuning[spider.Kind].AttackRange * spider.Scale * 0.85f;
+
+                if (math.distance(spider.Position, axis) < keep || math.distance(spider.Position, targetLocal) < eyeRadius)
+                {
+                    result.Intruding++;
+                }
+
+                if (math.distance(spider.Position.xz, targetLocal.xz) < 3f)
+                {
+                    result.CloseClimb = math.max(result.CloseClimb, spider.Climb);
+                }
+
+                if (spider.Climb > SpiderTuning.RideLevel) result.Climbing++;
+
+                // «Бежит» — это ПРОДВИГАЕТСЯ к игроку, а не просто движется: сдержанная
+                // особь ползала вбок на четверти скорости и честно считалась бы бегущей.
+                //
+                // Продвижение — по полю потока, а не по прямой. Путь к игроку по катакомбам
+                // петляет, и особь, бегущая по нему во весь дух, по прямой может от игрока
+                // даже удаляться: первый замер записал в стоящие 220 таких бегущих
+                // со скоростью три-четыре юнита в секунду.
+                var sampler = _flow.Sampler;
+                sampler.SampleAt(spider.Position - spider.Up * spider.Climb, out var flow, out _, out _,
+                    out var onField);
+
+                var toward = onField && math.lengthsq(flow) > 0.01f
+                    ? flow
+                    : math.normalizesafe(targetLocal - spider.Position);
+
+                var closing = math.dot(spider.Velocity, toward);
+
+                if (spider.Clip == (int)SpiderClip.Attack) result.Attacking++;
+                else if (spider.Clip == (int)SpiderClip.Idle) result.Lurking++;
+                else if (closing >= 0.4f || spider.Climb >= SpiderTuning.RideLevel) result.Moving++;
+                else if (math.length(spider.Velocity) < 0.4f) result.Stalled++;
+                else result.Jostling++;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Копия состояний живых особей — для разбора поимённо в инструментах проверки.
+        /// Позиции в локальных координатах генерации. Копией, а не выдачей массива:
+        /// см. <see cref="CopyPositions"/>.
+        /// </summary>
+        public int CopyStates(List<SpiderState> into)
+        {
+            into.Clear();
+
+            if (!_states.IsCreated) return 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                if (_states[i].Active != 0) into.Add(_states[i]);
+            }
+
+            return into.Count;
+        }
+
+        /// <summary>Игрок в тех же локальных координатах, что и <see cref="CopyStates"/>.</summary>
+        public Vector3 TargetLocal => target != null ? (Vector3)LocalOf(target.position) : Vector3.zero;
+
+        /// <summary>
+        /// Сколько особей рядом с игроком сидит ТЕЛОМ в другой — на одном ярусе и ближе
+        /// трёх четвертей суммы радиусов тел. Лапы в расчёт не идут: им переплетаться можно.
+        ///
+        /// Заведено по жалобе «пауки залезают друг в друга, а не друг на друга». Все прежние
+        /// замеры этого не видели: связность, посадка, раскладка по поверхностям и даже
+        /// «лезут поверх» у проникающей друг в друга толпы ровно те же.
+        /// </summary>
+        public int CountBodyOverlaps(float radius, out int near, out int deep)
+        {
+            const float LyingShare = 0.95f;
+
+            near = 0;
+            deep = 0;
+
+            if (!_states.IsCreated || !_tuning.IsCreated || target == null) return 0;
+
+            var targetLocal = LocalOf(target.position);
+            var picked = new List<int>();
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead || spider.Ebb != 0) continue;
+                if (math.distance(spider.Position, targetLocal) > radius) continue;
+
+                picked.Add(i);
+            }
+
+            near = picked.Count;
+            var overlapping = 0;
+
+            foreach (var i in picked)
+            {
+                var a = _states[i];
+                var ta = _tuning[a.Kind];
+
+                var coreA = ta.BodyRadius * a.Scale * SpiderTuning.CoreShare;
+                var heightA = ta.Height * a.Scale * SpiderTuning.BackShare;
+
+                foreach (var k in picked)
+                {
+                    if (k == i) continue;
+
+                    var b = _states[k];
+                    var tb = _tuning[b.Kind];
+
+                    var delta = a.Position - b.Position;
+                    var vertical = math.dot(delta, a.Up);
+
+                    // Не один ярус: один лежит на другом. С допуском в двадцатую долю спины:
+                    // наездник на горбе лежит ровно на высоте спины нижнего, и нормали двух особей,
+                    // расходящиеся на градус-другой, опускали его на волос ниже границы — замер
+                    // записывал лежащего на спине в сидящих внутри. Таких было больше половины
+                    // «глубоких» пар.
+                    if (vertical >= tb.Height * b.Scale * SpiderTuning.BackShare * LyingShare ||
+                        vertical <= -heightA * LyingShare) continue;
+
+                    var planar = math.length(delta - a.Up * vertical);
+                    var coreSum = coreA + tb.BodyRadius * b.Scale * SpiderTuning.CoreShare;
+
+                    if (planar >= coreSum * 0.75f) continue;
+
+                    overlapping++;
+
+                    // Глубоко — центры ближе половины суммы ядер: тело почти целиком
+                    // в другом. Это и видно в кадре как «друг в друге»; лёгкое касание
+                    // ядер в давке неизбежно и глазом не читается.
+                    if (planar < coreSum * 0.5f) deep++;
+
+                    break;
+                }
+            }
+
+            return overlapping;
+        }
+
+        /// <summary>
+        /// Наездники рядом с игроком: сколько их, сколько висит в воздухе — выше горба спины
+        /// под собой больше чем на 0.15 юнита (чуть больше мёртвой зоны спуска), — и сколько лежит
+        /// на спинах бьющих. Порог был треть юнита, пока спины считались по раздутым габаритам;
+        /// при настоящих, 0.37-0.68, треть юнита — это почти целая спина.
+        ///
+        /// Заведено по жалобе «должны залазить лапками друг на друга, а не висеть в воздухе».
+        /// «Лезут поверх» в разбивке натиска этого не видел: наездник, поднятый на полную спину
+        /// соседа и стоящий над кончиками его лап, считался там ровно так же, как лежащий на теле.
+        /// Горб — тот же, что в джобе (<see cref="SpiderTuning.Hump"/>), и опора — те же стоящие
+        /// на камне вровень.
+        /// </summary>
+        /// <param name="stacked">Лежат на наезднике — третий ярус и выше.</param>
+        public int MeasureRiders(float radius, out int floating, out int onAttackers, out int stacked)
+        {
+            floating = 0;
+            onAttackers = 0;
+            stacked = 0;
+
+            if (!_states.IsCreated || !_tuning.IsCreated || target == null) return 0;
+
+            var targetLocal = LocalOf(target.position);
+            var picked = new List<int>();
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead || spider.Ebb != 0) continue;
+
+                // Опоры берутся и чуть дальше радиуса: наездник на краю круга стоит на том, кто за краем.
+                if (math.distance(spider.Position, targetLocal) > radius + 4f) continue;
+
+                picked.Add(i);
+            }
+
+            var riders = 0;
+
+            foreach (var i in picked)
+            {
+                var rider = _states[i];
+
+                if (rider.Climb <= SpiderTuning.RideLevel || math.distance(rider.Position, targetLocal) > radius) continue;
+
+                riders++;
+
+                var ground = rider.Position - rider.Up * rider.Climb;
+                var riderRadius = _tuning[rider.Kind].BodyRadius * rider.Scale;
+
+                var best = 0f;
+                var bestAttacking = false;
+                var bestRaised = false;
+
+                foreach (var k in picked)
+                {
+                    var under = _states[k];
+
+                    if (k == i) continue;
+
+                    var delta = under.Position - ground;
+                    var above = math.dot(delta, rider.Up);
+
+                    // Опора — на нашей поверхности (её камень вровень с нашим) и не выше нас лапами:
+                    // то же, что держит в джобе, вместе с теми, на кого наездник ещё только всходит.
+                    if (math.abs(above - under.Climb) >= SpiderTuning.LevelTolerance || above > rider.Climb) continue;
+
+                    var planar = math.length(delta - rider.Up * above);
+                    var tuning = _tuning[under.Kind];
+
+                    // Мельче наездника — не опора: см. SpiderTuning.SturdyShare.
+                    if (tuning.BodyRadius * under.Scale < riderRadius * SpiderTuning.SturdyShare) continue;
+
+                    var hump = above + SpiderTuning.Hump(planar, tuning.BodyRadius * under.Scale,
+                        tuning.Height * under.Scale, riderRadius, out _);
+
+                    if (hump <= best) continue;
+
+                    best = hump;
+                    bestAttacking = under.Clip == (int)SpiderClip.Attack;
+                    bestRaised = under.Climb > SpiderTuning.RideLevel;
+                }
+
+                if (rider.Climb > best + 0.15f)
+                {
+                    floating++;
+                    continue;
+                }
+
+                if (bestAttacking) onAttackers++;
+                if (bestRaised) stacked++;
+            }
+
+            return riders;
+        }
+
+        /// <summary>Сколько живых особей данного вида. Этим прогон проверяет, что рой — именно рой.</summary>
+        public int CountAlive(int kindIndex)
+        {
+            if (!_states.IsCreated) return 0;
+
+            var count = 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+                if (spider.Kind == kindIndex) count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Точки на ПОЛУ, связанные ходами с заданной и удалённые от неё на
+        /// [minSteps, maxSteps] шагов, разнесённые друг от друга как можно дальше.
+        /// Под пилоны Матки.
+        ///
+        /// Разнос жадный, «самая дальняя от уже выбранных»: случайный выбор ставил бы
+        /// два пилона бок о бок, и третий приходился бы на другой конец зала —
+        /// бег между ними превращался бы в стояние на месте плюс одну пробежку.
+        /// </summary>
+        /// <param name="avoid">Точки, от которых тоже держаться подальше — прежние пилоны, сама Матка.</param>
+        public int PickFloorPoints(Vector3 aroundWorld, int count, int minSteps, int maxSteps,
+            IReadOnlyList<Vector3> avoid, List<Vector3> into)
+        {
+            into.Clear();
+
+            if (!_flow.IsCreated || count <= 0) return 0;
+            if (_flow.Reach(LocalOf(aroundWorld), maxSteps, _reach) < 0) return 0;
+
+            var candidates = new List<Vector3>();
+
+            foreach (var pair in _reach)
+            {
+                if (pair.Value < minSteps) continue;
+
+                // Только пол: на стене пилон висел бы боком, а на своде до него
+                // не дотянуться — зарядка идёт стоянием рядом.
+                if (_flow.Normal[pair.Key].y < 0.75f) continue;
+
+                candidates.Add(WorldOf(_flow.CellSurfacePoint(pair.Key, 0f)));
+            }
+
+            if (candidates.Count == 0) return 0;
+
+            var occupied = new List<Vector3> { aroundWorld };
+            if (avoid != null) occupied.AddRange(avoid);
+
+            for (var k = 0; k < count; k++)
+            {
+                var best = -1;
+                var bestScore = float.MinValue;
+
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    var nearest = float.MaxValue;
+
+                    foreach (var point in occupied)
+                    {
+                        nearest = math.min(nearest, (candidates[i] - point).sqrMagnitude);
+                    }
+
+                    if (nearest <= bestScore) continue;
+
+                    best = i;
+                    bestScore = nearest;
+                }
+
+                if (best < 0) break;
+
+                into.Add(candidates[best]);
+                occupied.Add(candidates[best]);
+                candidates.RemoveAt(best);
+
+                if (candidates.Count == 0) break;
+            }
+
+            return into.Count;
         }
 
         /// <summary>
@@ -693,7 +1390,10 @@ namespace MineGenerator.Catacombs
                 States = _states,
                 Tuning = _tuning,
                 Neighbours = _neighbours,
-                Velocities = _velocities
+                Velocities = _velocities,
+                Heights = _heights,
+                Climbs = _climbs,
+                Tiers = _tiers
             }.Schedule(_states.Length, 64).Complete();
         }
 
@@ -725,11 +1425,13 @@ namespace MineGenerator.Catacombs
         /// </summary>
         private int WavePopulation()
         {
-            // Всплеск от генератора идёт поверх трапеции и перекрывает её целиком:
-            // пока разгорается свет, ритм затиший не нужен — нужен непрерывный накат.
-            var surge = _surgeTimer > 0f ? _surgeScale : 1f;
+            // Под директором базу задаёт он — по кривой сложности забега, — а трапеция
+            // остаётся коротким ритмом поверх неё: волна директора длится минуты,
+            // и без ряби внутри неё кадр опять становится стеной.
+            var basePopulation = _directed ? _directive.Population : population;
+            var scale = _directed ? _directive.MicroWave : waveScale;
 
-            if (waveScale <= 1.001f || wavePeriod <= 0f) return (int)math.round(population * surge);
+            if (scale <= 1.001f || wavePeriod <= 0f) return basePopulation;
 
             var t = math.frac(_waveTime / wavePeriod);
             var half = waveCrest * 0.5f;
@@ -741,7 +1443,7 @@ namespace MineGenerator.Catacombs
 
             var shape = math.min(rise, fall);
 
-            return (int)math.round(population * math.lerp(1f, waveScale, shape) * surge);
+            return (int)math.round(basePopulation * math.lerp(1f, scale, shape));
         }
 
         /// <summary>Сколько живых особей рядом с мировой точкой. Этим же ведётся звук толпы.</summary>
@@ -777,13 +1479,14 @@ namespace MineGenerator.Catacombs
             if (_spawnHold > 0f) return;
 
             var wanted = WavePopulation();
+            var rate = _directed ? _directive.SpawnRate : spawnRate;
 
-            if (Alive >= wanted || spawnRate <= 0f) return;
+            if (Alive >= wanted || rate <= 0f) return;
 
             // Кредит копится и когда спавнить некуда: игрок стоит в освещённом районе,
             // и все клетки полосы отвергнуты. Без потолка за минуту такого простоя
             // накопилось бы на залп в тысячу особей разом, стоило игроку выйти в темноту.
-            _spawnCredit = math.min(_spawnCredit + spawnRate * deltaTime, math.max(1f, spawnRate));
+            _spawnCredit = math.min(_spawnCredit + rate * deltaTime, math.max(1f, rate));
 
             while (_spawnCredit >= 1f && Alive < wanted)
             {
@@ -793,6 +1496,196 @@ namespace MineGenerator.Catacombs
 
                 Alive++;
             }
+        }
+
+        private float _ebbTimer;
+
+        /// <summary>Сколько особей сейчас уходит отливом. Ноль — проход по толпе не нужен.</summary>
+        private int _ebbing;
+
+        /// <summary>Сколько ушло отливом совсем и сколько вернулось в строй, не скрывшись. Для прогона.</summary>
+        public int EbbVanished { get; private set; }
+
+        public int EbbReturned { get; private set; }
+        private readonly List<float2> _ebbCandidates = new List<float2>();
+
+        /// <summary>
+        /// Отлив: когда живых заметно больше, чем велит директор, лишние уходят в темноту.
+        ///
+        /// Уходят дальние, а не ближние: у игрока в ближнем круге идёт бой, и особь,
+        /// развернувшаяся посреди атаки, читалась бы как сбой. Кто уже за дальностью
+        /// отрисовки, того просто убираем — его всё равно не видно. Остальные бегут
+        /// прочь по полю потока и исчезают, как только скроются; выдохшиеся рядом
+        /// возвращаются в строй. Элита не уходит никогда.
+        ///
+        /// Порог — по цели БЕЗ коротких волн (с их гребнем): иначе отлив срабатывал бы
+        /// на каждой ряби, и толпа ходила бы туда-сюда каждые полминуты.
+        /// </summary>
+        private void UpdateEbb(float3 targetLocal, bool targetValid, float deltaTime)
+        {
+            if (!targetValid) return;
+
+            var gone = drawDistance * 0.9f;
+            var goneSq = gone * gone;
+            var ebbing = 0;
+
+            // Скрылась ли особь, решает путь по ходам, а не прямая. Первая версия ждала,
+            // пока уходящий отойдёт на дальность отрисовки, — и за восемь секунд бега
+            // туда почти никто не добирался: особь возвращалась в строй и вставала
+            // обратно в кольцо. Замер: в передышке стало 816 живых при цели 249, хуже,
+            // чем без отлива вовсе. А по извилистым катакомбам дальше полосы спавна
+            // уже не видно — медиана линии обзора здесь 14-16 юнитов.
+            var vanishSteps = spawnSteps.y + 4;
+
+            var sink = nearRadius * 1.5f;
+            var sinkSq = sink * sink;
+
+            // Проход по всей толпе — только когда кто-то уходит. Вне отлива (а без
+            // директора всегда) он стоил бы копии каждой особи в каждом кадре.
+            for (var i = 0; _ebbing > 0 && i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Ebb == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+
+                var distanceSq = math.lengthsq(spider.Position - targetLocal);
+
+                var vanish = spider.Ebb == 2
+                    ? spider.Timer >= SpiderHash.SinkSeconds
+                    : distanceSq > goneSq || StepsFromTarget(spider.Position) > vanishSteps;
+
+                if (vanish)
+                {
+                    spider.Active = 0;
+                    _states[i] = spider;
+                    _neighbours[i] = new float4(spider.Position, 0f);
+                    Alive--;
+                    EbbVanished++;
+                    continue;
+                }
+
+                if (spider.Ebb == 1 && spider.Flee <= 0f)
+                {
+                    // Отбежала, но не скрылась — застряла в дальней точке петли. Далеко
+                    // от игрока — уходит в щель, в темноте на таком удалении это
+                    // читается как паук, забившийся в трещину. Рядом — возвращается:
+                    // гаснущая на глазах в пяти шагах тварь читалась бы как сбой.
+                    if (distanceSq > sinkSq)
+                    {
+                        spider.Ebb = 2;
+                        spider.Timer = 0f;
+                    }
+                    else
+                    {
+                        spider.Ebb = 0;
+                        EbbReturned++;
+                    }
+
+                    _states[i] = spider;
+                }
+
+                if (spider.Ebb != 0) ebbing++;
+            }
+
+            _ebbing = ebbing;
+
+            if (!_directed || ebbRate <= 0f) return;
+
+            _ebbTimer -= deltaTime;
+            if (_ebbTimer > 0f) return;
+
+            const float interval = 0.25f;
+            _ebbTimer = interval;
+
+            var ceiling = _directive.Population * math.max(1f, _directive.MicroWave) * ebbSlack;
+            var excess = Alive - ebbing - (int)math.ceil(ceiling);
+
+            if (excess <= 0) return;
+
+            var budget = math.min(excess, (int)math.ceil(ebbRate * interval));
+
+            // Победа: вести больше некого — уходят все, включая ближний круг.
+            var keepNear = _directive.Population > 0;
+            var nearSq = nearRadius * nearRadius;
+
+            _ebbCandidates.Clear();
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+
+                if (spider.Active == 0 || spider.Ebb != 0 || spider.Elite != 0) continue;
+                if (spider.Clip == (int)SpiderClip.Dead) continue;
+
+                var distanceSq = math.lengthsq(spider.Position - targetLocal);
+                if (keepNear && distanceSq <= nearSq) continue;
+
+                _ebbCandidates.Add(new float2(distanceSq, i));
+            }
+
+            _ebbCandidates.Sort((a, b) => b.x.CompareTo(a.x));
+
+            var drawSq = drawDistance * drawDistance;
+
+            for (var k = 0; k < budget && k < _ebbCandidates.Count; k++)
+            {
+                var index = (int)_ebbCandidates[k].y;
+                var spider = _states[index];
+
+                if (_ebbCandidates[k].x > drawSq || StepsFromTarget(spider.Position) > vanishSteps)
+                {
+                    spider.Active = 0;
+                    _neighbours[index] = new float4(spider.Position, 0f);
+                    Alive--;
+                    EbbVanished++;
+                }
+                else
+                {
+                    spider.Ebb = 1;
+                    spider.Flee = ebbSeconds;
+                    _ebbing++;
+
+                    // Засадник на своде уходит вместе со всеми, а не висит один.
+                    if (spider.Clip == (int)SpiderClip.Idle)
+                    {
+                        spider.Clip = (int)SpiderClip.Walk;
+                        spider.Phase = 0f;
+                    }
+                }
+
+                _states[index] = spider;
+            }
+        }
+
+        /// <summary>
+        /// Шагов по ходам от особи до игрока — меньшее по проходимым клеткам вокруг неё.
+        ///
+        /// По восьми клеткам, а не по одной под координатой: особь прижата к камню,
+        /// и её собственная клетка сплошь и рядом непроходима (грабли №11). За пределом
+        /// заливки — <see cref="SpiderFlowField.Unreachable"/>, то есть «очень далеко».
+        /// Без единой проходимой клетки рядом — -1: судить не по чему.
+        /// </summary>
+        private int StepsFromTarget(float3 position)
+        {
+            var baseCell = (int3)math.floor(position / _flow.CellSize - 0.5f);
+            var best = -1;
+
+            for (var dz = 0; dz <= 1; dz++)
+            for (var dy = 0; dy <= 1; dy++)
+            for (var dx = 0; dx <= 1; dx++)
+            {
+                var c = baseCell + new int3(dx, dy, dz);
+
+                if (!_flow.InRange(c)) continue;
+
+                var index = _flow.CellIndex(c);
+                if (_flow.Walkable[index] == 0) continue;
+
+                var steps = (int)_flow.Distance[index];
+                if (best < 0 || steps < best) best = steps;
+            }
+
+            return best;
         }
 
         private bool TrySpawn()
@@ -809,10 +1702,69 @@ namespace MineGenerator.Catacombs
             // в освещённом, и если сюда что-то доехало, значит отбор промахнулся.
             if (_litZones.Count > 0 && InLitZone(WorldOf(_flow.CellCentre(cell)))) SpawnedInLitZones++;
 
-            var kindIndex = _random.NextInt(_runtime.Length);
+            var swarm = _directed ? _directive.SwarmKind : -1;
+
+            var kindIndex = swarm >= 0 && swarm < _runtime.Length && _random.NextFloat() < _directive.SwarmShare
+                ? swarm
+                : PickKind(_directed ? _directive.MaxKindHealth : int.MaxValue, true);
+
+            var healthScale = _directed ? _directive.HealthScale : 1f;
+            var speedScale = _directed ? _directive.SpeedScale : 1f;
+            var hue = _directed ? (float3)_directive.Hue : new float3(1f);
+
+            // Остервенение финального роя: засадников нет, все бегут сразу. Висящий
+            // на своде паук в разгар роя читался бы как забытый, а не как затаившийся.
+            var mayLurk = !_directed || !_directive.Frenzy;
+
+            Place(slot, cell, kindIndex, 1f, RollHealth(_runtime[kindIndex].Kind.Health * healthScale),
+                speedScale, hue, mayLurk, _random.NextFloat(), false);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Вид новой особи.
+        ///
+        /// Под директором тяжёлые виды приходят по ходу забега: первые минуты это мелочь,
+        /// которую выбивает любое попадание, а тарантулы появляются, когда игрок уже
+        /// освоился. Выбор отбраковкой, а не взвешенной таблицей — видов десяток, и таблица
+        /// пересчитывалась бы при каждом сдвиге порога.
+        /// </summary>
+        private int PickKind(int maxHealth, bool anyWhenUndirected)
+        {
+            if (anyWhenUndirected && !_directed) return _random.NextInt(_runtime.Length);
+
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                var index = _random.NextInt(_runtime.Length);
+
+                if (_runtime[index].Kind.Health <= maxHealth) return index;
+            }
+
+            return _lightest;
+        }
+
+        /// <summary>
+        /// Дробная живучесть в целые попадания. Дробь бросается жребием, а не округляется:
+        /// округление держало бы мелочь на одном попадании до середины забега и переводило
+        /// на два разом, то есть сложность шла бы ступенькой, а не кривой.
+        /// </summary>
+        private int RollHealth(float value)
+        {
+            var whole = (int)math.floor(value);
+
+            if (_random.NextFloat() < value - whole) whole++;
+
+            return math.max(1, whole);
+        }
+
+        /// <summary>Кладёт особь в слот: на камень под клеткой, с разбросом вдоль поверхности.</summary>
+        private void Place(int slot, int cell, int kindIndex, float sizeScale, int health, float speedScale,
+            float3 hue, bool mayLurk, float rank, bool elite)
+        {
             var kind = _runtime[kindIndex].Kind;
 
-            var scale = kind.Scale * (1f + _random.NextFloat(-kind.ScaleJitter, kind.ScaleJitter));
+            var scale = kind.Scale * sizeScale * (1f + _random.NextFloat(-kind.ScaleJitter, kind.ScaleJitter));
 
             // Сажаем сразу на камень, а не в центр клетки: клетка крупнее точности,
             // с которой особь должна прилегать к поверхности, и рождённая в её центре
@@ -833,7 +1785,10 @@ namespace MineGenerator.Catacombs
             // Засада. Только на стенах и своде: паук, замерший посреди пола в пустом
             // коридоре, читается не как засада, а как сломавшийся паук. Сверху и сбоку
             // неподвижность объясняется сама собой.
-            var lurks = normal.y < 0.4f && _random.NextFloat() < kind.LurkShare;
+            var lurks = mayLurk && normal.y < 0.4f && _random.NextFloat() < kind.LurkShare;
+
+            // Белая окраска, если её не задали: нулевая означала бы чёрную особь.
+            if (math.csum(hue) < 0.01f) hue = new float3(1f);
 
             var state = new SpiderState
             {
@@ -842,22 +1797,30 @@ namespace MineGenerator.Catacombs
                 Up = normal,
                 Rotation = quaternion.LookRotationSafe(tangent * (kind.FacesMinusZ ? -1f : 1f), normal),
                 Phase = _random.NextFloat(),
-                Rank = _random.NextFloat(),
+                Rank = rank,
                 Scale = scale,
-                SpeedScale = 1f + _random.NextFloat(-kind.SpeedJitter, kind.SpeedJitter),
+                SpeedScale = (1f + _random.NextFloat(-kind.SpeedJitter, kind.SpeedJitter)) * speedScale,
                 Tint = _random.NextFloat(0.65f, 1.15f),
+                Hue = hue,
+                Serial = ++_serial,
+                Elite = elite ? 1 : 0,
+                Ebb = 0,
+                Flee = 0f,
                 Timer = 0f,
                 Kind = kindIndex,
                 Clip = (int)(lurks ? SpiderClip.Idle : SpiderClip.Walk),
-                Health = kind.Health,
+                Health = health,
                 Active = 1
             };
 
             _states[slot] = state;
             _neighbours[slot] = new float4(state.Position, _tuning[kindIndex].BodyRadius * state.Scale);
             _velocities[slot] = float3.zero;
+            _heights[slot] = _tuning[kindIndex].Height * state.Scale;
+            _climbs[slot] = 0f;
+            _tiers[slot] = 0;
 
-            return true;
+            SpawnedTotal++;
         }
 
         /// <summary>
@@ -1059,6 +2022,9 @@ namespace MineGenerator.Catacombs
                     StrideLength = kind.StrideLength,
                     CorpseLinger = kind.CorpseLinger,
                     Hover = kind.Hover,
+                    // По позе бега; у ассета, не перезапечённого после появления поля, —
+                    // по габаритам, как было (вдвое выше настоящей, см. SpiderKind.PoseHeight).
+                    Height = math.max(0.05f, kind.PoseHeight > 0f ? kind.PoseHeight : kind.RestBounds.size.y),
                     FacingSign = kind.FacesMinusZ ? -1f : 1f,
 
                     WalkLength = math.max(0.05f, walk.Length),
@@ -1083,8 +2049,21 @@ namespace MineGenerator.Catacombs
                 };
             }
 
+            // Самый лёгкий — запасной вид для отбора по живучести; самый тяжёлый — вид
+            // элиты. При равной живучести крупнее тот, кто страшнее выглядит.
+            _lightest = 0;
+            _heaviest = 0;
+
+            for (var i = 1; i < ready.Count; i++)
+            {
+                if (Weight(ready[i]) < Weight(ready[_lightest])) _lightest = i;
+                if (Weight(ready[i]) > Weight(ready[_heaviest])) _heaviest = i;
+            }
+
             return ready.Count;
         }
+
+        private static float Weight(SpiderKind kind) => kind.Health * 100f + kind.Scale;
 
         private void AllocateState()
         {
@@ -1093,6 +2072,9 @@ namespace MineGenerator.Catacombs
             _states = new NativeArray<SpiderState>(size, Allocator.Persistent);
             _neighbours = new NativeArray<float4>(size, Allocator.Persistent);
             _velocities = new NativeArray<float3>(size, Allocator.Persistent);
+            _heights = new NativeArray<float>(size, Allocator.Persistent);
+            _climbs = new NativeArray<float>(size, Allocator.Persistent);
+            _tiers = new NativeArray<int>(size, Allocator.Persistent);
             _killed = new NativeArray<int>(size, Allocator.Persistent);
             _frustum = new NativeArray<float4>(6, Allocator.Persistent);
 
@@ -1119,6 +2101,7 @@ namespace MineGenerator.Catacombs
             _scanCursor = 0;
             _spawnCredit = 0f;
             Alive = 0;
+            SpawnedTotal = 0;
         }
 
         private void Release()
@@ -1126,6 +2109,9 @@ namespace MineGenerator.Catacombs
             if (_states.IsCreated) _states.Dispose();
             if (_neighbours.IsCreated) _neighbours.Dispose();
             if (_velocities.IsCreated) _velocities.Dispose();
+            if (_heights.IsCreated) _heights.Dispose();
+            if (_climbs.IsCreated) _climbs.Dispose();
+            if (_tiers.IsCreated) _tiers.Dispose();
             if (_tuning.IsCreated) _tuning.Dispose();
             if (_killed.IsCreated) _killed.Dispose();
             if (_frustum.IsCreated) _frustum.Dispose();

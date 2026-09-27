@@ -41,6 +41,7 @@ MonoBehaviour:
   RestBounds:
     m_Center: {x: 0.0027907193, y: 0.16783106, z: -0.038035452}
     m_Extent: {x: 0.35800415, y: 0.23588738, z: 0.43715483}
+  PoseHeight: 0.21588758
   Scale: 2.8
   Hover: 0.12
   FacesMinusZ: 1

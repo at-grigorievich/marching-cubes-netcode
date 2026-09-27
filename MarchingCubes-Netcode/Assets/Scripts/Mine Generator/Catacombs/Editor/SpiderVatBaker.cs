@@ -439,6 +439,10 @@ namespace MineGenerator.Catacombs.EditorTools
             var kind = WriteKind($"{OutputFolder}/{safeName}.asset", prefab.name, mesh, material, positionMap, normalMap,
                 ranges, bounds, footTravel);
 
+            // Высота по позе бега, а не по габаритам всех кадров: см. SpiderKind.PoseHeight.
+            kind.PoseHeight = PoseHeightOf(firstFrame);
+            EditorUtility.SetDirty(kind);
+
             report.AppendLine($"  {prefab.name}: шаг {kind.StrideLength:0.00} при истинном ходе лапы " +
                               $"{footTravel:0.00}, каденция {WalkCadence:0.0} Гц");
 
@@ -730,6 +734,19 @@ namespace MineGenerator.Catacombs.EditorTools
             System.Array.Sort(spans);
 
             return spans[Mathf.Clamp(Mathf.RoundToInt(vertexCount * 0.9f), 0, vertexCount - 1)];
+        }
+
+        /// <summary>
+        /// Верх тела в позе бега над точкой касания. Меш вида и есть эта поза (первый кадр бега),
+        /// поэтому ту же функцию зовёт и дозаполнение ассетов, запечённых до поля.
+        /// </summary>
+        public static float PoseHeightOf(Vector3[] pose)
+        {
+            var top = 0f;
+
+            foreach (var p in pose) top = Mathf.Max(top, p.y);
+
+            return top;
         }
 
         private static SpiderKind WriteKind(string path, string prefabName, Mesh mesh, Material material, Texture2D positions,

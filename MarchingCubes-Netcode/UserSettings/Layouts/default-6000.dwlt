@@ -277,7 +277,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 43.2
+    y: 0
     width: 1536
     height: 36
   m_SerializedDataModeController:
@@ -581,7 +581,7 @@ MonoBehaviour:
   m_Pos:
     serializedVersion: 2
     x: 0
-    y: 79.200005
+    y: 24
     width: 792.6
     height: 690.8
   m_SerializedDataModeController:
@@ -1135,7 +1135,7 @@ MonoBehaviour:
   m_Rotation:
     m_Target: {x: -0.019114114, y: 0.7352773, z: -0.020741815, w: -0.6771943}
     speed: 2
-    m_Value: {x: -0.019113919, y: 0.7352698, z: -0.020741602, w: -0.6771874}
+    m_Value: {x: -0.019114114, y: 0.73527724, z: -0.020741815, w: -0.6771943}
   m_Size:
     m_Target: 4.814251
     speed: 2
@@ -1297,8 +1297,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Hierarchy\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 793.60004
-    y: 79.200005
+    x: 1
+    y: 24
     width: 337.20007
     height: 236.4
   m_SerializedDataModeController:
@@ -1374,8 +1374,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Project\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 793.60004
-    y: 341.6
+    x: 1
+    y: 286.4
     width: 337.20007
     height: 428.4
   m_SerializedDataModeController:
@@ -1426,14 +1426,13 @@ MonoBehaviour:
       m_Data: 50624
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 50286
-    - m_Data: 50288
-    - m_Data: 50290
-    - m_Data: 50292
-    - m_Data: 50294
-    - m_Data: 50296
-    - m_Data: 50298
-    - m_Data: 1000000000
+    - m_Data: 50436
+    - m_Data: 50438
+    - m_Data: 50440
+    - m_Data: 50442
+    - m_Data: 50444
+    - m_Data: 50446
+    - m_Data: 50448
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1467,13 +1466,13 @@ MonoBehaviour:
       m_Data: 0
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 50286
-    - m_Data: 50288
-    - m_Data: 50290
-    - m_Data: 50292
-    - m_Data: 50294
-    - m_Data: 50296
-    - m_Data: 50298
+    - m_Data: 50436
+    - m_Data: 50438
+    - m_Data: 50440
+    - m_Data: 50442
+    - m_Data: 50444
+    - m_Data: 50446
+    - m_Data: 50448
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -1557,8 +1556,8 @@ MonoBehaviour:
     m_TextWithWhitespace: "Inspector\u200B"
   m_Pos:
     serializedVersion: 2
-    x: 1132.8
-    y: 79.200005
+    x: 1133.8
+    y: 24
     width: 402.19995
     height: 690.8
   m_SerializedDataModeController:

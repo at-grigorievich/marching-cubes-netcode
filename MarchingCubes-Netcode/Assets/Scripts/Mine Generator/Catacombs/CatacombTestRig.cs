@@ -20,8 +20,11 @@ namespace MineGenerator.Catacombs
         [Tooltip("Толпа пауков. Пусто — найдётся на сцене сама.")]
         [SerializeField] private SpiderCrowd crowd;
 
-        [Tooltip("Генераторы света. Пусто — возьмётся со сцены.")]
-        [SerializeField] private CaveGenerators generators;
+        [Tooltip("Директор забега. Пусто — возьмётся со сцены.")]
+        [SerializeField] private CaveRunDirector director;
+
+        [Tooltip("Матка. Пусто — возьмётся со сцены.")]
+        [SerializeField] private CaveQueen queen;
 
         [Header("Движение")]
         [SerializeField] private MoveMode mode = MoveMode.Fly;
@@ -97,7 +100,93 @@ namespace MineGenerator.Catacombs
             if (_controller == null) _controller = GetComponent<CharacterController>();
             if (world == null) world = FindFirstObjectByType<CatacombWorld>();
             if (crowd == null) crowd = FindFirstObjectByType<SpiderCrowd>();
-            if (generators == null) generators = FindFirstObjectByType<CaveGenerators>();
+            if (director == null) director = FindFirstObjectByType<CaveRunDirector>();
+            if (queen == null) queen = FindFirstObjectByType<CaveQueen>();
+        }
+
+        // ------------------------------------------------------------------ удары по игроку
+
+        /// <summary>
+        /// Внешняя скорость — отброс ударной волной Матки. Гаснет сама, за доли секунды.
+        ///
+        /// Отдельно от ввода, а не прибавкой к нему: игрок, которого швырнуло, должен
+        /// лететь, даже если держит клавишу в обратную сторону, — иначе волна, которая
+        /// у Megabonk сгоняет с пилона, гасилась бы простым «жму назад».
+        /// </summary>
+        private Vector3 _push;
+        private float _lift;
+
+        private float _entangleLeft;
+        private float _entangleScale = 1f;
+
+        /// <summary>Сколько раз толкнуло и спутало — для прогона и интерфейса.</summary>
+        public int TimesPushed { get; private set; }
+
+        public int TimesEntangled { get; private set; }
+
+        public bool IsEntangled => _entangleLeft > 0f;
+
+        public Vector3 PushVelocity => _push;
+
+        /// <summary>Центр капсулы в мире. Трансформ стенда — это глаза, а не тело.</summary>
+        public Vector3 BodyCentre
+        {
+            get
+            {
+                EnsureRefs();
+                return transform.position + transform.rotation * _controller.center;
+            }
+        }
+
+        /// <summary>Ось капсулы (между центрами полусфер) и её радиус — для попаданий.</summary>
+        public void GetBodySegment(out Vector3 low, out Vector3 high, out float radius)
+        {
+            EnsureRefs();
+
+            var centre = BodyCentre;
+            var half = Mathf.Max(0f, _controller.height * 0.5f - _controller.radius);
+
+            low = centre - Vector3.up * half;
+            high = centre + Vector3.up * half;
+            radius = _controller.radius;
+        }
+
+        /// <summary>Толчок. Вертикальная часть становится прыжком, горизонтальная — сносом.</summary>
+        public void Push(Vector3 velocity)
+        {
+            _push += new Vector3(velocity.x, 0f, velocity.z);
+
+            // Подброс откладывается до хода: стоящему на полу ход сбрасывает вертикальную
+            // скорость, и выставленная прямо здесь она пропадала бы, стоило Матке
+            // обновиться раньше стенда.
+            if (velocity.y > 0f) _lift = Mathf.Max(_lift, velocity.y);
+
+            TimesPushed++;
+        }
+
+        /// <summary>
+        /// Спутать: ходьба медленнее на заданное время. Повторное попадание продлевает,
+        /// а не складывает замедление — иначе залп из трёх плевков обездвиживал бы насмерть.
+        /// </summary>
+        public void Entangle(float seconds, float speedScale)
+        {
+            _entangleLeft = Mathf.Max(_entangleLeft, seconds);
+            _entangleScale = Mathf.Clamp01(speedScale);
+
+            TimesEntangled++;
+        }
+
+        /// <summary>
+        /// Гасит отброс и путы. Отдельным шагом, чтобы прогон мог вести время сам,
+        /// без Update.
+        /// </summary>
+        public void TickStatus(float deltaTime)
+        {
+            _entangleLeft = Mathf.Max(0f, _entangleLeft - deltaTime);
+
+            // Экспоненциально: швырок заметен первые доли секунды и дальше не тянется.
+            _push = Vector3.Lerp(_push, Vector3.zero, Mathf.Clamp01(deltaTime * 5f));
+            if (_push.sqrMagnitude < 0.01f) _push = Vector3.zero;
         }
 
         private void OnEnable()
@@ -116,6 +205,8 @@ namespace MineGenerator.Catacombs
             UpdateLook();
             UpdateMove();
             UpdateActions();
+
+            TickStatus(Time.deltaTime);
         }
 
         private void UpdateCursor()
@@ -157,7 +248,7 @@ namespace MineGenerator.Catacombs
                 if (Input.GetKey(KeyCode.Space)) direction += Vector3.up;
                 if (Input.GetKey(KeyCode.LeftControl)) direction += Vector3.down;
 
-                var motion = direction.normalized * (flySpeed * boost * Time.deltaTime);
+                var motion = direction.normalized * (flySpeed * boost * Time.deltaTime) + _push * Time.deltaTime;
 
                 // Без этого полёт заносит камеру внутрь породы, и кадр чернеет:
                 // обратные грани отсекаются, и видно цвет очистки камеры.
@@ -187,8 +278,11 @@ namespace MineGenerator.Catacombs
             var forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
             var right = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
 
-            var speed = walkSpeed * boost * (web != null ? web.SpeedScale : 1f);
-            var move = (forward * input.z + right * input.x).normalized * speed;
+            var speed = walkSpeed * boost * (web != null ? web.SpeedScale : 1f) *
+                        (IsEntangled ? _entangleScale : 1f);
+
+            // Отброс поверх ввода: швырнуло — летишь, куда бы ни жал.
+            var move = (forward * input.z + right * input.x).normalized * speed + _push;
 
             if (_controller.isGrounded)
             {
@@ -198,6 +292,12 @@ namespace MineGenerator.Catacombs
             else
             {
                 _verticalSpeed += gravity * Time.deltaTime;
+            }
+
+            if (_lift > 0f)
+            {
+                _verticalSpeed = Mathf.Max(_verticalSpeed, _lift);
+                _lift = 0f;
             }
 
             move.y = _verticalSpeed;
@@ -314,7 +414,15 @@ namespace MineGenerator.Catacombs
             if (Input.GetKeyDown(KeyCode.T)) TeleportToSpawn();
             if (Input.GetKeyDown(KeyCode.Q)) ThrowFlare();
             if (Input.GetKeyDown(KeyCode.B)) TestBlast();
-            if (Input.GetKeyDown(KeyCode.E)) StartGenerator();
+            if (Input.GetKeyDown(KeyCode.E)) WakeQueen();
+
+            // Перемотка стадии — отладка: гребень кривой приходит на третьей минуте,
+            // и смотреть рой или финал, выжидая их вживую каждый раз, невозможно.
+            if (Input.GetKeyDown(KeyCode.N) && director != null)
+            {
+                director.SkipAhead(30f);
+                Debug.Log($"СТАДИЯ перемотана на 30 с: {director.Describe()}");
+            }
 
             if (Input.GetKeyDown(KeyCode.R) && world != null)
             {
@@ -373,41 +481,38 @@ namespace MineGenerator.Catacombs
 
             var torn = CaveWebs.TearAt(point, blastRadius);
             var killed = crowd != null ? crowd.DamageAt(point, blastRadius) : 0;
+            var hitQueen = queen != null && queen.DamageAt(point, blastRadius, 1f);
 
             Debug.Log($"ВЗРЫВ в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}) радиусом {blastRadius:0.0}: " +
-                      $"паутин порвано {torn}, пауков убито {killed}");
+                      $"паутин порвано {torn}, пауков убито {killed}" +
+                      (hitQueen ? $", Матка {queen.Health:0}/{queen.MaxHealth:0}" : ""));
         }
 
         /// <summary>
-        /// Запускает генератор, если игрок рядом. Это и есть цель забега: включённый
-        /// генератор освещает район навсегда и становится выходом.
+        /// Будит Матку, если игрок у логова. Это и есть цель стадии: найти логово
+        /// и решить, когда ты готов. Чем позже — тем она живучее.
         /// </summary>
-        private void StartGenerator()
+        private void WakeQueen()
         {
-            if (generators == null) return;
+            if (queen == null || director == null) return;
 
-            // Shift — дожечь мгновенно. Разгорание длится полторы минуты, и проверять
-            // вспышку, панику и запрет спавна, выжидая их вживую каждый раз, невозможно.
-            // Отладка, а не механика: игроку эти полторы минуты и есть вся кульминация.
+            // Shift — перенестись к логову. Отладка: логово в дальнем конце уровня,
+            // и проверять бой, каждый раз добираясь туда пешком, невозможно.
             if (Input.GetKey(KeyCode.LeftShift))
             {
-                Debug.Log(generators.ForceFinish()
-                    ? "ГЕНЕРАТОР ДОЖЖЁН принудительно (отладка)"
-                    : "дожигать нечего — сначала запустите генератор");
+                if (!queen.HasLair) return;
+
+                _controller.enabled = false;
+                transform.position = StandingOn(queen.LairPosition + Vector3.up * 0.2f) + Vector3.forward * 3f;
+                _controller.enabled = mode == MoveMode.Walk;
+
+                Debug.Log("ПЕРЕНОС к логову Матки (отладка)");
                 return;
             }
 
-            if (generators.TryActivate(transform.position))
-            {
-                Debug.Log("ГЕНЕРАТОР ЗАПУЩЕН — держитесь, пока разгорается");
-                return;
-            }
+            if (director.TrySummonQueen(transform.position)) return;
 
-            if (generators.TryGetNearestDark(transform.position, out var point, out var distance))
-            {
-                Debug.Log($"Ближайший генератор в {distance:0} юнитах " +
-                          $"({point.x:0}, {point.y:0}, {point.z:0}) — подойдите вплотную");
-            }
+            Debug.Log(queen.Describe(transform.position));
         }
 
         private void Modify(bool dig)
@@ -573,26 +678,31 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>
-        /// Состояние забега одной строкой: сколько районов отвоёвано, что с текущим
-        /// генератором и куда идти за следующим.
+        /// Объявление стадии крупно по центру: «РОЙ», «ЭЛИТА», «ЩИТ». Мелкой строкой
+        /// в углу его не заметить посреди боя, а от него зависит, что делать дальше.
         /// </summary>
-        private string GeneratorText()
+        private void DrawBanner()
         {
-            var progress = $"Районов засвечено: <b>{generators.LitCount} из {generators.Count}</b>";
+            if (director == null || director.BannerLeft <= 0f || string.IsNullOrEmpty(director.Banner)) return;
 
-            if (generators.Cleared) return progress + "   <color=lime>УРОВЕНЬ ПРОЙДЕН</color>";
-
-            if (generators.Charging > 0f)
+            var banner = new GUIStyle(GUI.skin.label)
             {
-                return progress + $"   <color=orange>РАЗГОРАЕТСЯ: {generators.Charging:P0}</color>";
-            }
+                fontSize = 26,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                richText = true
+            };
 
-            if (generators.TryGetNearestDark(transform.position, out _, out var distance))
-            {
-                return progress + $"   до ближайшего генератора <b>{distance:0}</b> юнитов";
-            }
+            var alpha = Mathf.Clamp01(director.BannerLeft);
+            var previous = GUI.color;
 
-            return progress;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f * alpha);
+            GUI.Label(new Rect(2, Screen.height * 0.18f + 2, Screen.width, 40), director.Banner, banner);
+
+            GUI.color = new Color(1f, 0.85f, 0.6f, alpha);
+            GUI.Label(new Rect(0, Screen.height * 0.18f, Screen.width, 40), director.Banner, banner);
+
+            GUI.color = previous;
         }
 
         private void OnGUI()
@@ -601,7 +711,9 @@ namespace MineGenerator.Catacombs
 
             var style = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
 
-            GUILayout.BeginArea(new Rect(10, 10, 580, 300), GUI.skin.box);
+            DrawBanner();
+
+            GUILayout.BeginArea(new Rect(10, 10, 640, 340), GUI.skin.box);
 
             if (world != null && world.IsGenerating)
             {
@@ -632,7 +744,10 @@ namespace MineGenerator.Catacombs
 
                 if (crowd != null) GUILayout.Label(crowd.Describe(), style);
 
-                if (generators != null && generators.Count > 0) GUILayout.Label(GeneratorText(), style);
+                if (director != null) GUILayout.Label(director.Describe(), style);
+                if (queen != null) GUILayout.Label(queen.Describe(transform.position), style);
+
+                if (IsEntangled) GUILayout.Label("<color=#b8e0a0>СПУТАН паутиной</color>", style);
 
                 if (!_spawned) GUILayout.Label("<color=yellow>Нажмите T — телепорт к точке входа</color>", style);
             }
@@ -648,7 +763,8 @@ namespace MineGenerator.Catacombs
                   "F — полёт/ходьба    G — сквозь стены    T — к точке входа\n" +
                   $"Q — пробный свет, отладка ({CaveFlare.Live.Count} из {CaveFlare.MaxLive})    " +
                   "R — новый уровень\n" +
-                  "E — запустить генератор    Shift+E — дожечь мгновенно (отладка)\n" +
+                  "E — разбудить Матку у логова    Shift+E — к логову (отладка)    " +
+                  "N — перемотать стадию на 30 с (отладка)\n" +
                   $"B — пробный взрыв, радиус {blastRadius:0.0}    " +
                   "P — записать ракурс    Esc — отпустить курсор"
                 : "<color=yellow>Кликните по окну игры, чтобы захватить курсор</color>", style);
