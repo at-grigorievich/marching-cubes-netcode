@@ -20,6 +20,7 @@ namespace MineGenerator.Catacombs.EditorTools
         {
             "Mine Generator/Cave Triplanar",
             "Mine Generator/Cave Unlit",
+            "Mine Generator/Cave Particles",
             "Mine Generator/Cave Crowd"
         };
 

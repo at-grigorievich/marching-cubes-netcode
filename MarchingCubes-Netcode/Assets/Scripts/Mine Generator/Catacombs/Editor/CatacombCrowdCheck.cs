@@ -386,15 +386,26 @@ namespace MineGenerator.Catacombs.EditorTools
             text.AppendLine("=== Поражение ===");
 
             var before = crowd.Alive;
-            var killed = crowd.DamageAt(player.transform.position, 12f, 99);
+            var gibbed = new List<Vector3>();
+            var killed = crowd.DamageAt(player.transform.position, 12f, 99, gibbed);
 
-            text.AppendLine($"  взрыв радиусом 12 у игрока: убито {killed} из {before}");
+            text.AppendLine($"  взрыв радиусом 12 у игрока: убито {killed} из {before}, из них разорвано на куски {gibbed.Count}");
 
             if (killed == 0 && Near(positions, player.transform.position, 12f) > 0)
             {
                 text.AppendLine("  ПЛОХО: в радиусе взрыва были особи, а убитых нет");
                 failed++;
             }
+
+            // Рвёт на куски только ближних к эпицентру (gibShare радиуса), край сферы
+            // убивает целиком: труп, отлетевший от взрыва, тоже должен остаться в кадре.
+            if (killed > 0 && (gibbed.Count == 0 || gibbed.Count == killed))
+            {
+                text.AppendLine("  ПЛОХО: разрыв на куски не отделяет эпицентр от края — рвёт всех или никого");
+                failed++;
+            }
+
+            text.AppendLine(Crater(world, crowd, player, ref failed));
 
             EditorSceneManager.SaveScene(scene);
 
@@ -407,6 +418,161 @@ namespace MineGenerator.Catacombs.EditorTools
 
             Debug.Log($"Проверка толпы пройдена:{Environment.NewLine}{text}");
             return 0;
+        }
+
+        /// <summary>
+        /// Воронка от взрыва — тем же путём, что в игре (<see cref="CaveBlastMarks.Blast"/>):
+        /// копает ли, видит ли яму коллайдер, не углубляет ли её повторный взрыв и, главное,
+        /// совпадает ли переразмеченный кусок сетки навигации с полной постройкой
+        /// клетка в клетку. Переразметка куска, которая разошлась бы с полной, — это толпа,
+        /// ходящая над ямой по старой поверхности, и глазами на застывшем кадре это
+        /// не видно.
+        ///
+        /// Мир после этого остаётся с ямой: плотность в сцену не пишется и восстановится
+        /// из сида при следующей генерации.
+        /// </summary>
+        private static string Crater(CatacombWorld world, SpiderCrowd crowd, CatacombTestRig player, ref int failed)
+        {
+            var text = new StringBuilder("=== Воронка ===");
+
+            // Пол под точкой входа — ровное место, где взрыв гарантированно лежит на камне.
+            var eye = player.transform.position + Vector3.up * 1.2f;
+
+            if (!FloorBelow(eye, player, out var floor))
+            {
+                text.AppendLine();
+                text.Append("  ПЛОХО: под точкой входа не нашлось пола");
+                failed++;
+                return text.ToString();
+            }
+
+            var go = new GameObject("Crater Probe") { hideFlags = HideFlags.HideAndDontSave };
+            var marks = go.AddComponent<CaveBlastMarks>();
+            marks.Bind(world, crowd, player.transform, 1.7f, 0.7f, 3f);
+
+            try
+            {
+                var point = floor.point + floor.normal * 0.12f;
+
+                // Снимок сетки до ямы: сверка ниже что-то доказывает, только если яма
+                // сетку действительно поменяла.
+                var depthBefore = crowd.Field.Depth.ToArray();
+                var walkableBefore = crowd.Field.Walkable.ToArray();
+
+                var timer = Stopwatch.StartNew();
+                var dug = marks.Blast(point);
+                timer.Stop();
+
+                // В редакторе меш и коллайдер чанка перестраиваются сразу, в игре — по бюджету кадра.
+                var sunk = FloorBelow(eye, player, out var after) ? after.distance - floor.distance : 0f;
+
+                text.AppendLine();
+                text.Append($"  взрыв на полу: воронка {(dug ? "выкопана" : "НЕТ")}, пол просел на {sunk:0.00} юнита " +
+                            $"(копание и переразметка сетки {timer.Elapsed.TotalMilliseconds:0.0} мс)");
+
+                if (!dug || sunk < 0.3f)
+                {
+                    text.AppendLine();
+                    text.Append("  ПЛОХО: взрыв вплотную к полу не оставил ямы, которую видит коллайдер");
+                    failed++;
+                }
+
+                // Второй взрыв в дно той же ямы не должен её углублять.
+                var again = marks.Blast(after.point + after.normal * 0.12f);
+
+                text.AppendLine();
+                text.Append($"  повторный взрыв в дно: {(again ? "КОПАЕТ ГЛУБЖЕ" : "пропущен")}, пропусков {marks.CratersSkipped}");
+
+                if (again)
+                {
+                    text.AppendLine();
+                    text.Append("  ПЛОХО: очередь гранат в одну точку прокопает колодец");
+                    failed++;
+                }
+
+                // Сверка куска сетки с полной постройкой по той же, уже изрытой, плотности.
+                var field = crowd.Field;
+                var fresh = new SpiderFlowField();
+
+                try
+                {
+                    var full = Stopwatch.StartNew();
+                    fresh.Build(world, field.CellSize, field.AttachRange);
+                    full.Stop();
+
+                    var mismatched = 0;
+                    var changed = 0;
+
+                    for (var i = 0; i < fresh.CellCount; i++)
+                    {
+                        var same = field.Open[i] == fresh.Open[i]
+                                   && field.Walkable[i] == fresh.Walkable[i]
+                                   && field.FaceOpen[i] == fresh.FaceOpen[i]
+                                   && math.lengthsq(field.Normal[i] - fresh.Normal[i]) < 1e-8f
+                                   && math.abs(field.Depth[i] - fresh.Depth[i]) < 1e-4f;
+
+                        if (!same) mismatched++;
+
+                        if (field.Walkable[i] != walkableBefore[i] || math.abs(field.Depth[i] - depthBefore[i]) > 0.05f)
+                            changed++;
+                    }
+
+                    text.AppendLine();
+                    text.Append($"  сетка навигации после ямы: расходится с полной постройкой в {mismatched} клетках из {fresh.CellCount}, " +
+                                $"проходимых {field.WalkableCount} против {fresh.WalkableCount} (полная постройка {full.ElapsedMilliseconds} мс)");
+
+                    if (mismatched > 0 || field.WalkableCount != fresh.WalkableCount)
+                    {
+                        text.AppendLine();
+                        text.Append("  ПЛОХО: переразметка куска разошлась с полной — толпа ходит над ямой по старой поверхности");
+                        failed++;
+                    }
+
+                    // Контроль самого контроля: яма обязана была поменять сетку, иначе сверка
+                    // выше ничего не доказывает.
+                    text.AppendLine();
+                    text.Append($"  клеток, которые яма поменяла (проходимость или глубина до камня больше 5 см): {changed}");
+
+                    if (changed == 0)
+                    {
+                        text.AppendLine();
+                        text.Append("  ПЛОХО: яма не поменяла ни одной клетки — сверка с полной постройкой ничего не доказывает");
+                        failed++;
+                    }
+                }
+                finally
+                {
+                    fresh.Dispose();
+                }
+            }
+            finally
+            {
+                marks.Release();
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+
+            return text.ToString();
+        }
+
+        /// <summary>
+        /// Пол под точкой — лучом, но мимо коллайдеров самого игрока. Луч из глаз вниз
+        /// первым встречает его капсулу, и первая версия раздела копала воронку от макушки
+        /// игрока и ею же меряла, просел ли пол.
+        /// </summary>
+        private static bool FloorBelow(Vector3 from, CatacombTestRig player, out RaycastHit floor)
+        {
+            floor = default;
+            var best = float.MaxValue;
+
+            foreach (var hit in Physics.RaycastAll(from, Vector3.down, 10f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.collider.transform.IsChildOf(player.transform) || hit.distance >= best) continue;
+
+                best = hit.distance;
+                floor = hit;
+            }
+
+            return best < float.MaxValue;
         }
 
         /// <summary>Собирает толпу заново. Общая с проверкой света: две копии этого разъехались бы.</summary>

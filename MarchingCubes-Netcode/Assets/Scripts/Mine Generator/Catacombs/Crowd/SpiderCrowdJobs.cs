@@ -103,6 +103,22 @@ namespace MineGenerator.Catacombs
         public float3 Spin;
 
         /// <summary>
+        /// Разорван взрывом на куски: 1 — да. Куски разлетаются в шейдере (CaveCrowd, Shatter)
+        /// от возраста трупа — <see cref="Timer"/>; кувырка целиком у разорванного нет, а лежит
+        /// он <see cref="SpiderHash.GibSeconds"/>, а не срок трупа своего вида.
+        /// </summary>
+        public int Gibbed;
+
+        /// <summary>
+        /// Сколько юнитов по мировой вертикали от разорванного до камня под ним. Снимается
+        /// при разрыве (<see cref="SpiderCrowd.DamageAt(UnityEngine.Vector3, float, int, System.Collections.Generic.List{UnityEngine.Vector3})"/>)
+        /// по полю плотности: куски падают вниз по миру и ложатся на пол, а не на ту
+        /// поверхность, на которой сидел паук, — иначе куски паука со свода «падали» бы
+        /// на свод и висели там.
+        /// </summary>
+        public float GibDrop;
+
+        /// <summary>
         /// Устойчивое случайное число особи, 0..1. Не меняется за её жизнь.
         ///
         /// Нужно, чтобы делить толпу на подмножества СТАБИЛЬНО. Например, сдерживание
@@ -193,6 +209,20 @@ namespace MineGenerator.Catacombs
         /// </summary>
         public const float SturdyShare = 0.85f;
 
+        /// <summary>
+        /// Кусок, в который уходит точка позы при разлёте на куски: 0 — головогрудь (голова
+        /// у пака в минус Z), 1 — брюшко, 2-9 — восемь секторов вокруг тела, по лапе на сектор.
+        /// Шейдер (CaveCrowd, Shatter) по этому номеру ставит центр куска.
+        /// </summary>
+        public static int GibChunk(float3 rest, float core)
+        {
+            if (math.length(rest.xz) < core) return rest.z < 0f ? 0 : 1;
+
+            var turn = math.frac(math.atan2(rest.x, rest.z) / (2f * math.PI) + 1f);
+
+            return 2 + math.clamp((int)math.floor(turn * 8f), 0, 7);
+        }
+
         /// <summary>Докуда от центра соседа тянется плато его горба — см. <see cref="Hump"/>.</summary>
         public static float HumpTop(float theirRadius, float ourRadius) => (theirRadius + ourRadius * 0.5f) * CoreShare;
 
@@ -246,6 +276,32 @@ namespace MineGenerator.Catacombs
     {
         /// <summary>За сколько секунд уходящая отливом особь гаснет в щели.</summary>
         public const float SinkSeconds = 1.2f;
+
+        /// <summary>
+        /// Сколько живут куски разорванного паука. Последние 30% съёживаются (см. CaveCrowd, Shatter):
+        /// этот срок шейдер получает свойством _GibLife.
+        /// </summary>
+        public const float GibSeconds = 3f;
+
+        /// <summary>Шаг, которым высота падения кусков упакована в целую часть, юнита.</summary>
+        public const float GibDropStep = 1f / 16f;
+
+        /// <summary>
+        /// Своё число разорванной особи для разброса кусков, 0..1.
+        /// </summary>
+        public static float GibSeed(int serial) => math.frac(serial * 0.6180339f) * 0.95f;
+
+        /// <summary>
+        /// Высота падения и своё число разорванной особи одним числом — для четвёртого канала
+        /// состояния анимации. Свободных каналов в инстансе нет, а новый стоил бы вектора
+        /// на особь в буфере, где их и так впритык.
+        ///
+        /// Число отрицательное: у клипа смерти в этом канале флаг «кольцевой» (больше 0.5),
+        /// и он обязан остаться выключенным. Модуль минус один — целая часть это высота
+        /// в шагах <see cref="GibDropStep"/>, дробная — своё число. Разбирает CaveCrowd, Shatter.
+        /// </summary>
+        public static float PackGib(float drop, int serial) =>
+            -(1f + math.floor(math.clamp(drop, 0f, 60f) / GibDropStep) + GibSeed(serial));
 
         public static int3 Cell(float3 position, float cellSize) => (int3)math.floor(position / cellSize);
 
@@ -1092,7 +1148,7 @@ namespace MineGenerator.Catacombs
 
             if (valid && depth < 0f) spider.Position -= normal * depth;
 
-            if (spider.Timer >= tuning.CorpseLinger) spider.Active = 0;
+            if (spider.Timer >= (spider.Gibbed != 0 ? SpiderHash.GibSeconds : tuning.CorpseLinger)) spider.Active = 0;
         }
 
         /// <summary>
@@ -1819,8 +1875,19 @@ namespace MineGenerator.Catacombs
 
                 var scale = spider.Scale;
                 var tint = spider.Tint;
+                var gibAge = 0f;
+                var seed = row.z;
 
-                if (spider.Clip == (int)SpiderClip.Dead)
+                if (spider.Clip == (int)SpiderClip.Dead && spider.Gibbed != 0)
+                {
+                    // Разорванный: куски разлетаются и съёживаются в шейдере, каждый к своему
+                    // центру. Усадка целиком здесь стянула бы разлетевшиеся куски обратно в точку.
+                    gibAge = math.max(spider.Timer, 1e-3f);
+                    seed = SpiderHash.PackGib(spider.GibDrop, spider.Serial);
+
+                    tint *= 1f - math.saturate(spider.Timer / SpiderHash.GibSeconds) * 0.5f;
+                }
+                else if (spider.Clip == (int)SpiderClip.Dead)
                 {
                     // Труп гаснет и усаживается к концу срока лежания.
                     //
@@ -1854,8 +1921,8 @@ namespace MineGenerator.Catacombs
                 Matrices[written] = math.mul(LocalToWorld,
                     float4x4.TRS(spider.Position, rotation, scale));
 
-                AnimState[written] = new float4(row.x, row.y, spider.Phase, row.z);
-                Tints[written] = new float4(spider.Hue * tint, 1f);
+                AnimState[written] = new float4(row.x, row.y, spider.Phase, seed);
+                Tints[written] = new float4(spider.Hue * tint, gibAge);
 
                 written++;
             }
@@ -1893,13 +1960,19 @@ namespace MineGenerator.Catacombs
         /// <summary>Сила отброса в эпицентре, юнитов в секунду. У края сферы спадает до нуля.</summary>
         public float Impulse;
 
+        /// <summary>
+        /// Ближе этой доли радиуса к эпицентру убитого рвёт на куски; дальше — отбрасывает
+        /// целым, кувырком. 0 — рвёт всех убитых, 1 — никого.
+        /// </summary>
+        public float GibShare;
+
         /// <summary>Сид для разброса кувырка. Одинаковый кувырок у всех читается как ошибка.</summary>
         public uint Seed;
 
         /// <summary>
-        /// Отметки убитых, по одной ячейке на особь. Массив, а не счётчик: джоб
-        /// параллельный, и общий счётчик потребовал бы атомарного сложения ради числа,
-        /// которое всё равно нужно раз в выстрел. Сложить отметки дешевле.
+        /// Отметки убитых, по одной ячейке на особь: 1 — убит, 2 — разорван на куски. Массив,
+        /// а не счётчик: джоб параллельный, и общий счётчик потребовал бы атомарного сложения
+        /// ради числа, которое всё равно нужно раз в выстрел. Сложить отметки дешевле.
         /// </summary>
         [WriteOnly] public NativeArray<int> Killed;
 
@@ -1944,7 +2017,19 @@ namespace MineGenerator.Catacombs
             // у центра её крутит.
             spider.Spin = random.NextFloat3Direction() * (12f * falloff);
 
-            Killed[index] = 1;
+            // У самого эпицентра — на куски. Кувырок целиком им не нужен: крутятся куски,
+            // а отброс слабее, иначе облако кусков уезжало бы от места взрыва.
+            var gibbed = falloff >= 1f - GibShare;
+
+            spider.Gibbed = gibbed ? 1 : 0;
+
+            if (gibbed)
+            {
+                spider.Spin = float3.zero;
+                spider.Velocity *= 0.35f;
+            }
+
+            Killed[index] = gibbed ? 2 : 1;
 
             States[index] = spider;
         }

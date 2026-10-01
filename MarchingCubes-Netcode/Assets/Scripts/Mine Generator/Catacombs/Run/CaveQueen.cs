@@ -235,6 +235,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Центр тела — сюда целятся и отсюда идут волна и плевок.</summary>
         public Vector3 Centre => LairPosition + Vector3.up * _bodyLift;
 
+        /// <summary>Радиус тела для попаданий — взрыватель гранаты срабатывает у него.</summary>
+        public float HitRadius => _hitRadius;
+
+        /// <summary>По Матке сейчас можно попасть: она проснулась (под щитом попадание есть, урона нет).</summary>
+        public bool IsVulnerable => State == QueenState.Awake || State == QueenState.Shielded;
+
         /// <summary>Сколько раз волна достала игрока и сколько раз плевок попал — для прогона.</summary>
         public int ShocksLanded { get; private set; }
 
@@ -1040,7 +1046,8 @@ namespace MineGenerator.Catacombs
             _hitRadius = math.max(1f, _kind.RestBounds.extents.magnitude * _scale * 0.7f);
 
             _block ??= new MaterialPropertyBlock();
-            _tint[0] = new Vector4(hue.r, hue.g, hue.b, 1f);
+            // Четвёртый канал — возраст разлёта на куски (CaveCrowd, Shatter): ноль — цела.
+            _tint[0] = new Vector4(hue.r, hue.g, hue.b, 0f);
 
             return true;
         }

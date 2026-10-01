@@ -98,6 +98,12 @@ Shader "Mine Generator/Cave Crowd"
             half4 _RimColor;
             half _RimPower;
             half _RimStrength;
+
+            // Разлёт на куски: ядро тела и высота позы в единицах меша, срок жизни кусков.
+            // Приезжают блоком свойств от толпы, по виду: в материале их не хранят.
+            float _GibCore;
+            float _GibHeight;
+            float _GibLife;
         CBUFFER_END
 
         // Состояние анимации особи.
@@ -152,6 +158,114 @@ Shader "Mine Generator/Cave Crowd"
             float3 packed = SAMPLE_TEXTURE2D_LOD(_VatNormals, sampler_VatNormals, uv0, 0).xyz;
             normalOS = normalize(packed * 2.0 - 1.0);
         }
+
+        float3 GibRandom(float n)
+        {
+            return frac(sin(float3(n, n + 1.371, n + 2.713) * float3(43.7585, 21.9241, 31.5623)) * 4375.8545);
+        }
+
+        float3 GibRotate(float3 v, float3 axis, float angle)
+        {
+            float s = sin(angle);
+            float c = cos(angle);
+
+            return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+        }
+
+        /// Разлёт на куски. Убитого у эпицентра взрыва паука рвёт на десять частей:
+        /// головогрудь, брюшко и восемь лап, — и они летят дугами от камня, кувыркаются,
+        /// ложатся обратно на поверхность и под конец съёживаются.
+        ///
+        /// Прямо в вершинном шейдере, а не отдельными мешами: толпа рисуется инстансингом,
+        /// и кусок — это просто сдвиг вершин того же меша, без единого нового вызова
+        /// отрисовки и без объекта на кусок.
+        ///
+        /// Номер куска приезжает атрибутом (UV2, см. SpiderCrowd.BuildGibMesh) и задан
+        /// на ТРЕУГОЛЬНИК: вершины на стыке кусков в меше раздвоены. Первая версия считала
+        /// кусок по вершине, и треугольник, у которого вершины попали в разные куски,
+        /// растягивался при разлёте лентой через весь экран.
+        ///
+        /// Разлетаются куски от своей поверхности (в объектном пространстве «вверх» —
+        /// нормаль камня под трупом), а падают вниз ПО МИРУ и ложатся на камень под пауком.
+        /// Первая версия и падала к своей поверхности: у паука на своде куски «падали»
+        /// на свод и висели там, у паука на стене — на стену.
+        ///
+        /// age — сколько секунд трупу (0 — не разорван). packed — высота падения и своё
+        /// число особи одним отрицательным числом (SpiderHash.PackGib): модуль минус один,
+        /// целая часть — высота в шестнадцатых юнита, дробная — своё число.
+        void Shatter(float chunk, float age, float packed, inout float3 positionOS, inout float3 normalOS)
+        {
+            if (age <= 0.0) return;
+
+            float unpacked = max(-packed - 1.0, 0.0);
+            float seed = frac(unpacked);
+            float dropWS = floor(unpacked) / 16.0;
+
+            // Мировой низ в единицах меша: длина вектора — во сколько раз меш мельче мира.
+            float3 downOS = mul((float3x3)GetWorldToObjectMatrix(), float3(0.0, -1.0, 0.0));
+            float toObject = max(length(downOS), 1e-4);
+            float3 down = downOS / toObject;
+
+            float core = max(_GibCore, 0.01);
+            float height = max(_GibHeight, 0.01);
+
+            float3 pivot;
+
+            if (chunk < 1.5)
+            {
+                // 0 — головогрудь (голова у пака в минус Z, SpiderKind.FacesMinusZ), 1 — брюшко.
+                pivot = float3(0.0, height * 0.55, chunk < 0.5 ? -core * 0.45 : core * 0.55);
+            }
+            else
+            {
+                float mid = (chunk - 2.0 + 0.5) * (6.2831853 / 8.0);
+
+                pivot = float3(sin(mid) * core * 1.9, height * 0.35, cos(mid) * core * 1.9);
+            }
+
+            float3 rnd = GibRandom(seed * 91.7 + chunk * 7.31);
+
+            float3 outward = float3(pivot.x, 0.0, pivot.z) + (rnd - 0.5) * (core * 1.5);
+            outward.y = 0.0;
+            outward = normalize(outward + float3(0.0001, 0.0, 0.0));
+
+            // Единицы меша: в мире всё это умножается на масштаб особи (2.2-3.6),
+            // то есть куски летят со скоростью 2-9 юнитов в секунду.
+            const float gravity = 5.5;
+            float3 velocity = outward * (0.5 + rnd.x * 1.3) + float3(0.0, 1.1 + rnd.y * 1.4, 0.0);
+
+            // Садится кусок, когда его центр опускается до камня под пауком с запасом
+            // в низ позы: так лапы не проваливаются в камень. Путь считается вдоль мирового
+            // низа от центра куска. После посадки кусок не летит и не крутится.
+            float fall = max(dropWS * toObject - height * 0.15 - dot(pivot, down), 0.0);
+            float fallSpeed = dot(velocity, down);
+            float land = (-fallSpeed + sqrt(fallSpeed * fallSpeed + 2.0 * gravity * fall)) / gravity;
+            float t = min(age, land);
+
+            float3 offset = velocity * t + down * (0.5 * gravity * t * t);
+
+            float3 axis = normalize(rnd * 2.0 - 1.0 + float3(0.0, 0.0, 0.001));
+            float angle = (5.0 + rnd.z * 9.0) * t;
+
+            // Под конец каждый кусок съёживается к своему центру — тем же приёмом, каким
+            // гаснет целый труп, без прозрачности.
+            float shrink = 1.0 - saturate((age - _GibLife * 0.7) / max(_GibLife * 0.3, 0.01));
+
+            positionOS = pivot + offset + GibRotate(positionOS - pivot, axis, angle) * shrink;
+            normalOS = GibRotate(normalOS, axis, angle);
+        }
+
+        /// Поза вершины на этом кадре — анимация плюс разлёт на куски. Возраст разлёта
+        /// едет в четвёртом канале оттенка инстанса, высота падения со своим числом особи —
+        /// в четвёртом канале состояния анимации (отрицательным, флаг «кольцевой» не задет).
+        void CrowdPose(float chunk, float2 vatUV, out float3 positionOS, out float3 normalOS)
+        {
+            float4 state = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _AnimState);
+            float4 tint = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _InstanceTint);
+
+            SampleVat(vatUV, state, positionOS, normalOS);
+            Shatter(chunk, tint.w, state.w, positionOS, normalOS);
+        }
         ENDHLSL
 
         Pass
@@ -191,6 +305,7 @@ Shader "Mine Generator/Cave Crowd"
                 float3 normalOS   : NORMAL;
                 float2 uv         : TEXCOORD0;
                 float2 vatUV      : TEXCOORD1;
+                float2 gibUV      : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -215,11 +330,9 @@ Shader "Mine Generator/Cave Crowd"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float4 state = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _AnimState);
-
                 float3 positionOS;
                 float3 normalOS;
-                SampleVat(input.vatUV, state, positionOS, normalOS);
+                CrowdPose(input.gibUV.x, input.vatUV, positionOS, normalOS);
 
                 VertexPositionInputs positionInputs = GetVertexPositionInputs(positionOS);
                 VertexNormalInputs normalInputs = GetVertexNormalInputs(normalOS);
@@ -333,6 +446,7 @@ Shader "Mine Generator/Cave Crowd"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 vatUV      : TEXCOORD1;
+                float2 gibUV      : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -349,11 +463,9 @@ Shader "Mine Generator/Cave Crowd"
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
 
-                float4 state = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _AnimState);
-
                 float3 positionOS;
                 float3 normalOS;
-                SampleVat(input.vatUV, state, positionOS, normalOS);
+                CrowdPose(input.gibUV.x, input.vatUV, positionOS, normalOS);
 
                 float3 positionWS = TransformObjectToWorld(positionOS);
                 float3 normalWS = TransformObjectToWorldNormal(normalOS);
@@ -401,6 +513,7 @@ Shader "Mine Generator/Cave Crowd"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 vatUV      : TEXCOORD1;
+                float2 gibUV      : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -419,11 +532,9 @@ Shader "Mine Generator/Cave Crowd"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float4 state = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _AnimState);
-
                 float3 positionOS;
                 float3 normalOS;
-                SampleVat(input.vatUV, state, positionOS, normalOS);
+                CrowdPose(input.gibUV.x, input.vatUV, positionOS, normalOS);
 
                 output.positionCS = TransformObjectToHClip(positionOS);
 
@@ -458,6 +569,7 @@ Shader "Mine Generator/Cave Crowd"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 vatUV      : TEXCOORD1;
+                float2 gibUV      : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -477,11 +589,9 @@ Shader "Mine Generator/Cave Crowd"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-                float4 state = UNITY_ACCESS_INSTANCED_PROP(CrowdProps, _AnimState);
-
                 float3 positionOS;
                 float3 normalOS;
-                SampleVat(input.vatUV, state, positionOS, normalOS);
+                CrowdPose(input.gibUV.x, input.vatUV, positionOS, normalOS);
 
                 output.positionCS = TransformObjectToHClip(positionOS);
                 output.normalWS = TransformObjectToWorldNormal(normalOS);

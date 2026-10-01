@@ -317,6 +317,7 @@ namespace MineGenerator.Catacombs.EditorTools
             ApplyCaveRenderSettings(Style);
             EnsureFixtures(world, Style);
             EnsureDust(player);
+            EnsureLauncher(player);
 
             Selection.activeObject = player;
             EditorSceneManager.MarkSceneDirty(scene);
@@ -369,6 +370,8 @@ namespace MineGenerator.Catacombs.EditorTools
                 changes.AppendLine(style == CaveLightStyle.Deep
                     ? EnsureDust(rig.gameObject)
                     : RemoveDust(rig.gameObject));
+
+                changes.AppendLine(EnsureLauncher(rig.gameObject));
             }
             else
             {
@@ -873,6 +876,37 @@ namespace MineGenerator.Catacombs.EditorTools
             var so = new SerializedObject(mood);
             so.FindProperty("world").objectReferenceValue = world;
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Гранатомёт игрока. Шейдеры проставляются ссылками, а не ищутся в рантайме:
+        /// <c>Shader.Find</c> в сборке находит только те шейдеры, на которые кто-то ссылается,
+        /// а свои материалы гранатомёт создаёт кодом.
+        /// </summary>
+        /// <summary>
+        /// Гранатомёт ПЕРЕСОЗДАЁТСЯ, а не донастраивается, — как и остальные компоненты
+        /// здесь (грабли №8 и №25): числа стрельбы, воронки и гари живут в сохранённой сцене,
+        /// и правка умолчаний в коде до неё иначе не доходит. Так уже было: проверка толпы
+        /// пересохранила сцену с пятном гари в 3 юнита, код перешёл на 2.4, а в игре
+        /// оставалось 3.
+        /// </summary>
+        private static string EnsureLauncher(GameObject player)
+        {
+            if (player == null) return "  гранатомёт: игрок не найден";
+
+            var old = player.GetComponent<CaveGrenadeLauncher>();
+            var existed = old != null;
+
+            if (existed) Object.DestroyImmediate(old);
+
+            var launcher = player.AddComponent<CaveGrenadeLauncher>();
+
+            var serialized = new SerializedObject(launcher);
+            serialized.FindProperty("litShader").objectReferenceValue = Shader.Find("Universal Render Pipeline/Lit");
+            serialized.FindProperty("particleShader").objectReferenceValue = Shader.Find("Mine Generator/Cave Particles");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            return existed ? "  гранатомёт: пересоздан с умолчаниями из кода" : "  гранатомёт: добавлен";
         }
 
         /// <summary>Пыль висит на камере, а не на мире: она нужна только рядом с игроком.</summary>

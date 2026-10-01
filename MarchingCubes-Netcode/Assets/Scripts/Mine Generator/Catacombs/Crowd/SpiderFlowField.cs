@@ -123,7 +123,80 @@ namespace MineGenerator.Catacombs
 
             AttachRange = attachRange;
 
-            var density = GatherDensity(world);
+            BuildCells(world, int3.zero, Dim - 1);
+
+            WalkableCount = 0;
+            for (var i = 0; i < count; i++) WalkableCount += Walkable[i];
+
+            for (var i = 0; i < count; i++) Distance[i] = Unreachable;
+        }
+
+        public float AttachRange { get; private set; } = 1.6f;
+
+        /// <summary>
+        /// Переразмечает клетки вокруг места, где поменялась порода, — воронка от взрыва.
+        ///
+        /// Не всю сетку: полная постройка стоит 20–40 мс, а взрывов за стадию сотни.
+        /// Клетка зависит от плотности в пределах своей половины, градиента и трассы
+        /// до поверхности длиной <see cref="AttachRange"/>, поэтому переразмечается шар
+        /// правки с таким запасом — дальше результат не изменится ни в одной клетке.
+        /// Прогон сверяет это с полной постройкой клетка в клетку (CatacombCrowdCheck).
+        ///
+        /// Поток к игроку здесь не пересчитывается: его досчитает <see cref="SpiderCrowd"/>
+        /// следующей заливкой.
+        /// </summary>
+        /// <returns>Сколько клеток переразмечено.</returns>
+        public int RebuildRegion(CatacombWorld world, float3 localCentre, float radius)
+        {
+            if (!IsCreated || world == null || world.Settings == null) return 0;
+
+            var reach = radius + AttachRange + CellSize * 1.5f;
+
+            var min = math.clamp((int3)math.floor((localCentre - reach) / CellSize), 0, Dim - 1);
+            var max = math.clamp((int3)math.floor((localCentre + reach) / CellSize), 0, Dim - 1);
+
+            var before = CountWalkable(min, max);
+
+            BuildCells(world, min, max);
+
+            WalkableCount += CountWalkable(min, max) - before;
+
+            var size = max - min + 1;
+            return size.x * size.y * size.z;
+        }
+
+        private int CountWalkable(int3 min, int3 max)
+        {
+            var total = 0;
+
+            for (var z = min.z; z <= max.z; z++)
+            for (var y = min.y; y <= max.y; y++)
+            for (var x = min.x; x <= max.x; x++)
+                total += Walkable[CellIndex(new int3(x, y, z))];
+
+            return total;
+        }
+
+        /// <summary>Размечает клетки от min до max включительно — всю сетку или её кусок.</summary>
+        private void BuildCells(CatacombWorld world, int3 min, int3 max)
+        {
+            var settings = world.Settings;
+            var voxel = settings.VoxelSize;
+            var pad = CatacombSettings.SamplePadding;
+
+            // Какие сэмплы плотности клеткам нужны: центр, половина клетки на грани,
+            // градиент и трасса до поверхности. С запасом в сэмпл на трилинейную выборку.
+            var margin = AttachRange + CellSize + voxel;
+            var lowWorld = (float3)min * CellSize - margin;
+            var highWorld = (float3)(max + 1) * CellSize + margin;
+
+            var full = FullSampleDim(settings);
+
+            var origin = math.clamp((int3)math.floor(lowWorld / voxel) + pad - 1, 0, full - 1);
+            var end = math.clamp((int3)math.ceil(highWorld / voxel) + pad + 1, 0, full - 1);
+
+            var density = GatherDensity(world, origin, end - origin + 1);
+            var region = max - min + 1;
 
             try
             {
@@ -131,8 +204,9 @@ namespace MineGenerator.Catacombs
                 {
                     Density = density.Samples,
                     DensityDim = density.Dim,
-                    DensityPad = CatacombSettings.SamplePadding,
-                    VoxelSize = settings.VoxelSize,
+                    DensityOrigin = origin,
+                    DensityPad = pad,
+                    VoxelSize = voxel,
                     IsoLevel = settings.IsoLevel,
 
                     Open = Open,
@@ -142,23 +216,18 @@ namespace MineGenerator.Catacombs
                     FaceOpen = FaceOpen,
 
                     Dim = Dim,
+                    CellMin = min,
+                    RegionDim = region,
                     CellSize = CellSize,
-                    AttachRange = attachRange,
-                    ProbeStep = math.min(0.25f, settings.VoxelSize * 0.5f)
-                }.Schedule(count, 64).Complete();
+                    AttachRange = AttachRange,
+                    ProbeStep = math.min(0.25f, voxel * 0.5f)
+                }.Schedule(region.x * region.y * region.z, 64).Complete();
             }
             finally
             {
                 density.Dispose();
             }
-
-            WalkableCount = 0;
-            for (var i = 0; i < count; i++) WalkableCount += Walkable[i];
-
-            for (var i = 0; i < count; i++) Distance[i] = Unreachable;
         }
-
-        public float AttachRange { get; private set; } = 1.6f;
 
         /// <summary>Пересчитывает поток от точки игрока.</summary>
         /// <returns>false, если игрок оказался вне проходимых клеток.</returns>
@@ -422,20 +491,24 @@ namespace MineGenerator.Catacombs
             }
         }
 
-        private static WorldDensity GatherDensity(CatacombWorld world)
+        /// <summary>Сколько сэмплов плотности во всём мире по каждой оси.</summary>
+        private static int3 FullSampleDim(CatacombSettings settings)
+        {
+            var chunks = settings.WorldSizeInChunks;
+
+            // Сэмплы соседних чанков перекрываются: каждый несёт кольцо запаса и общий
+            // угол. Значения на наложении совпадают (плотность — функция от позиции),
+            // поэтому разбирать наложение не нужно.
+            return new int3(chunks.x, chunks.y, chunks.z) * settings.ChunkResolution + 3;
+        }
+
+        /// <summary>Плотность мира одним массивом — вся или окно от origin размером dim.</summary>
+        private static WorldDensity GatherDensity(CatacombWorld world, int3 origin, int3 dim)
         {
             var settings = world.Settings;
 
             var chunkDim = settings.SampleDim;
             var cells = settings.ChunkResolution;
-
-            var chunks = settings.WorldSizeInChunks;
-            var size = new int3(chunks.x, chunks.y, chunks.z);
-
-            // Сэмплы соседних чанков перекрываются: каждый несёт кольцо запаса и общий
-            // угол. Значения на наложении совпадают (плотность — функция от позиции),
-            // поэтому разбирать наложение не нужно.
-            var dim = size * cells + 3;
 
             var result = new WorldDensity
             {
@@ -447,11 +520,18 @@ namespace MineGenerator.Catacombs
             {
                 if (!chunk.HasDensity) continue;
 
+                // Чанки, не задевающие окно, пропускаются целиком: при воронке окно —
+                // десяток сэмплов по оси, а чанков сотня.
+                var low = chunk.Coord * cells;
+                var high = low + chunkDim - 1;
+
+                if (math.any(high < origin) || math.any(low >= origin + dim)) continue;
+
                 new GatherChunkJob
                 {
                     Chunk = chunk.Density,
                     ChunkDim = chunkDim,
-                    Base = chunk.Coord * cells,
+                    Base = low - origin,
 
                     World = result.Samples,
                     WorldDim = dim
@@ -500,26 +580,39 @@ namespace MineGenerator.Catacombs
         {
             [ReadOnly] public NativeArray<float> Density;
             public int3 DensityDim;
+
+            /// <summary>С какого сэмпла мира начинается <see cref="Density"/>: плотность может быть окном.</summary>
+            public int3 DensityOrigin;
+
             public int DensityPad;
             public float VoxelSize;
             public float IsoLevel;
 
-            [WriteOnly] public NativeArray<byte> Open;
-            [WriteOnly] public NativeArray<byte> Walkable;
-            [WriteOnly] public NativeArray<float3> Normal;
-            [WriteOnly] public NativeArray<float> Depth;
-            [WriteOnly] public NativeArray<byte> FaceOpen;
+            // Пишутся по номеру клетки в сетке, а не по номеру итерации: при разметке
+            // куска это разные числа. Каждая итерация пишет свою клетку и только её.
+            [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<byte> Open;
+            [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<byte> Walkable;
+            [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float3> Normal;
+            [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float> Depth;
+            [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<byte> FaceOpen;
 
             public int3 Dim;
+
+            /// <summary>Первая клетка размечаемого куска и его размер. Вся сетка — ноль и Dim.</summary>
+            public int3 CellMin;
+            public int3 RegionDim;
+
             public float CellSize;
             public float AttachRange;
             public float ProbeStep;
 
-            public void Execute(int index)
+            public void Execute(int iteration)
             {
-                var x = index % Dim.x;
-                var y = index / Dim.x % Dim.y;
-                var z = index / (Dim.x * Dim.y);
+                var x = CellMin.x + iteration % RegionDim.x;
+                var y = CellMin.y + iteration / RegionDim.x % RegionDim.y;
+                var z = CellMin.z + iteration / (RegionDim.x * RegionDim.y);
+
+                var index = (z * Dim.y + y) * Dim.x + x;
 
                 var centre = (new float3(x, y, z) + 0.5f) * CellSize;
 
@@ -592,7 +685,7 @@ namespace MineGenerator.Catacombs
 
             private float Sample(float3 position)
             {
-                var g = position / VoxelSize + DensityPad;
+                var g = position / VoxelSize + DensityPad - DensityOrigin;
 
                 var i0 = (int3)math.floor(g);
                 var f = math.saturate(g - i0);

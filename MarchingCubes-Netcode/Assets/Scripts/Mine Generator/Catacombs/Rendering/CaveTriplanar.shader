@@ -97,6 +97,82 @@ Shader "Mine Generator/Cave Triplanar"
             half _SpecAA;
         CBUFFER_END
 
+        // Следы взрывов — ближайшие к игроку пятна гари (CaveBlastMarks). Глобальные,
+        // а не свойства материала: их пишет гранатомёт на весь кадр, а в UnityPerMaterial
+        // лежит только то, что объявлено в Properties.
+        // _CaveScorch — центр и радиус; _CaveScorchInfo — жар 0..1 и своё число пятна.
+        #define CAVE_SCORCH_SLOTS 16
+        float4 _CaveScorch[CAVE_SCORCH_SLOTS];
+        float4 _CaveScorchInfo[CAVE_SCORCH_SLOTS];
+        float _CaveScorchCount;
+
+        /// Гарь в точке породы: сколько копоти (0..1) и сколько тлеет углями.
+        ///
+        /// Край пятна рваный: его двигают обе октавы той же текстуры породы, что уже
+        /// выбраны для альбедо, — лишних выборок гарь не делает. grain — мелкое зерно,
+        /// blotch — крупные пятна, обе около 0.48 в медиане (см. BuildCaveSurface).
+        ///
+        /// Коптится только сторона, смотрящая на взрыв: иначе тонкая стенка хода
+        /// чернела бы и с обратной стороны, в соседнем коридоре.
+        half CaveScorch(float3 positionWS, float3 n, half grain, half blotch, out half3 glow)
+        {
+            glow = half3(0, 0, 0);
+            half soot = 0;
+
+            int count = (int)_CaveScorchCount;
+
+            [loop] for (int i = 0; i < count; i++)
+            {
+                float4 spot = _CaveScorch[i];
+                float3 toCentre = spot.xyz - positionWS;
+                float distance = length(toCentre);
+                float r = distance / spot.w;
+
+                if (r >= 1.0) continue;
+
+                float4 info = _CaveScorchInfo[i];
+
+                half facing = saturate(dot(n, toCentre / max(distance, 1e-3)) * 2.0 + 0.7);
+
+                // Своё число пятна сдвигает, какие пятна текстуры попадают на край:
+                // иначе все пятна гари были бы обведены одним и тем же узором.
+                half ragged = frac(blotch * 3.1 + info.y) - 0.5;
+
+                // Ядро: сплошная копоть в яме, дальше плавный спад к рваному краю.
+                // Сплошной заливкой до края пятно не читалось: чёрным становился весь пол
+                // в кадре, и границы гари с камнем видно не было.
+                half core = 1.0 - smoothstep(0.3, 0.85, r + ragged * 0.35 + (grain - 0.5) * 0.25);
+
+                // Лучи от центра — выброс взрыва по камню. Угол берётся в плоскости,
+                // поперёк которой смотрит поверхность, — пол, стена или свод.
+                float3 an = abs(n);
+                float2 plane = an.y > max(an.x, an.z) ? toCentre.xz : (an.x > an.z ? toCentre.zy : toCentre.xy);
+                float angle = atan2(plane.y, plane.x);
+
+                half rays = saturate(sin(angle * 7.0 + info.y * 40.0) * 0.6 + sin(angle * 13.0 + info.y * 17.0) * 0.5);
+                rays *= rays * saturate((1.0 - r) * 1.8) * saturate((grain - 0.2) * 2.0);
+
+                soot = max(soot, max(core, rays * 0.8) * facing);
+
+                half heat = info.x;
+
+                // Свежее пятно тлеет — пятнами по крупной октаве породы, а не ровным диском:
+                // ровный рыжий круг читался пятном света, а не раскалённым камнем.
+                // Угли по мелкому зерну мерцают.
+                half hot = saturate(1.0 - r * 2.2) * saturate((blotch - 0.4) * 3.0);
+                half flicker = 0.65 + 0.35 * sin(_Time.y * 7.0 + grain * 60.0 + info.y * 20.0);
+
+                // Угли — самые светлые крупинки зерна: у самых горячих жёлтое ядро,
+                // по краю тёмно-красное, а не ровные рыжие кляксы одного цвета.
+                half ember = saturate((grain - 0.6) * 3.0) * saturate(1.0 - r * 1.5);
+                half3 emberColor = lerp(half3(1.4, 0.28, 0.04), half3(2.6, 1.15, 0.3), ember);
+
+                glow += (hot * hot * half3(0.7, 0.14, 0.02) + ember * ember * emberColor * flicker) * (heat * facing);
+            }
+
+            return soot;
+        }
+
         /// Результат разбора поверхности в точке. Мировая нормаль после рельефа держится
         /// отдельно от геометрической: рельеф нужен только освещению, а оттенок по наклону
         /// и полусферическая заливка должны идти от нормали самой геометрии. Иначе рельеф
@@ -163,8 +239,25 @@ Shader "Mine Generator/Cave Triplanar"
                       + SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, pd.xz).rgb * blend.y
                       + SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, pd.xy).rgb * blend.z;
 
+            // Гарь от взрывов. Шум края — из тех же выборок: крупные пятна из базовой
+            // октавы, зерно из детальной. Яркость текстуры здесь линейная (текстура sRGB),
+            // и делённая на _DetailMid она даёт медиану около 0.48, от 0.22 до 0.92
+            // на 5–95% (замер по Cave Rock). Пороги углей в CaveScorch стоят под это
+            // распределение: первая версия делила ещё пополам, медиана выходила 0.24,
+            // и порог углей не проходил почти нигде.
+            half midLum = max(_DetailMid, 0.1h);
+            half blotch = saturate(dot(albedo, half3(0.333h, 0.333h, 0.333h)) / midLum);
+            half grain = saturate(dot(det, half3(0.333h, 0.333h, 0.333h)) / midLum);
+
+            half3 glow;
+            half soot = CaveScorch(positionWS, n, grain, blotch, glow);
+
             // Делим на среднюю яркость текстуры: так октава модулирует, а не темнит.
             albedo *= lerp(half3(1, 1, 1), det / max(_DetailMid, 0.1h), _DetailStrength);
+
+            // Копоть темнит само альбедо — до того, как от него посчитаны заливка и жёсткий
+            // пол яркости: иначе чёрное пятно светилось бы заливкой ровно как чистый камень.
+            albedo *= lerp(half3(1, 1, 1), half3(0.11h, 0.1h, 0.095h), soot * 0.95h);
 
             // 1 — пол, 0.5 — стена, 0 — потолок.
             float up = n.y * 0.5 + 0.5;
@@ -194,14 +287,16 @@ Shader "Mine Generator/Cave Triplanar"
             //    от источников, и на больших значениях она съедает всю светотень.
             half3 fill = lerp(_GroundFill.rgb, _SkyFill.rgb, up);
             surface.emission = baseAlbedo * max(fill, half3(_MinLight, _MinLight, _MinLight))
-                             + albedo * _FloorLevel;
+                             + albedo * _FloorLevel
+                             + glow;
 
             // Зеркальное отражение поворачивается вдвое быстрее нормали, поэтому на изломе
             // между гранями соседние пиксели выбирают совсем разные точки окружения — блик
             // рассыпается на чёрное и яркое, и тем сильнее, чем выше гладкость. fwidth даёт
             // скачок нормали на пиксель; там, где он велик, гладкость гасится.
             half nvar = saturate(length(fwidth(n)) * _SpecAA);
-            surface.smoothness = _Glossiness * (1.0 - nvar);
+            // Копоть матовая.
+            surface.smoothness = _Glossiness * (1.0 - nvar) * (1.0 - soot);
 
             surface.bumpedNormalWS = TriplanarBump(positionWS, n, blend);
 

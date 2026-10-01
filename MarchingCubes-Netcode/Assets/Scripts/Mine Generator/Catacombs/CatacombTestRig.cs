@@ -79,6 +79,22 @@ namespace MineGenerator.Catacombs
         private float _lastDigVolume;
         private float _totalDugVolume;
 
+        // Отдача и тряска камеры: поверх взгляда мышью, а не вместо него, и гаснут сами.
+        private float _kick;
+        private float _shake;
+
+        /// <summary>Курсор захвачен — игрок в игре, а не щёлкает по окну. Первый клик только захватывает.</summary>
+        public bool IsLooking => _looking;
+
+        /// <summary>Отдача: взгляд подбрасывает вверх на столько градусов и плавно возвращает.</summary>
+        public void AddKick(float degrees) => _kick += degrees;
+
+        /// <summary>
+        /// Тряска камеры от взрыва: сила 1 — около трёх градусов. Не складывается бесконечно:
+        /// шесть гранат подряд у самого лица трясут сильно, но не выворачивают взгляд.
+        /// </summary>
+        public void AddShake(float strength) => _shake = Mathf.Min(1.5f, _shake + strength);
+
         private void Awake()
         {
             EnsureRefs();
@@ -226,12 +242,29 @@ namespace MineGenerator.Catacombs
 
         private void UpdateLook()
         {
-            if (!_looking) return;
+            if (_looking)
+            {
+                _yaw += Input.GetAxisRaw("Mouse X") * mouseSensitivity;
+                _pitch = Mathf.Clamp(_pitch - Input.GetAxisRaw("Mouse Y") * mouseSensitivity, -89f, 89f);
+            }
 
-            _yaw += Input.GetAxisRaw("Mouse X") * mouseSensitivity;
-            _pitch = Mathf.Clamp(_pitch - Input.GetAxisRaw("Mouse Y") * mouseSensitivity, -89f, 89f);
+            var dt = Time.deltaTime;
 
-            transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+            _kick = Mathf.Lerp(_kick, 0f, Mathf.Clamp01(dt * 9f));
+            _shake = Mathf.Max(0f, _shake - dt * 2.2f);
+
+            // Тряска шумом, а не случайным числом каждый кадр: белый шум читается дрожанием
+            // картинки, а не толчком.
+            var t = Time.time * 28f;
+            var amplitude = _shake * _shake * 3f;
+
+            var shakePitch = (Mathf.PerlinNoise(t, 0.3f) - 0.5f) * 2f * amplitude;
+            var shakeYaw = (Mathf.PerlinNoise(0.7f, t) - 0.5f) * 2f * amplitude;
+            var shakeRoll = (Mathf.PerlinNoise(t, t * 0.5f) - 0.5f) * amplitude;
+
+            if (!_looking && _kick < 0.01f && amplitude < 0.01f) return;
+
+            transform.rotation = Quaternion.Euler(_pitch - _kick + shakePitch, _yaw + shakeYaw, shakeRoll);
         }
 
         private void UpdateMove()
@@ -465,11 +498,9 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>
-        /// Пробный взрыв под прицелом: рвёт паутину и бьёт пауков.
-        ///
-        /// Это заготовка гранаты, а не механика: VFX и снаряда пока нет, и проверить
-        /// иначе, что оба тракта поражения вообще зовутся, негде. Когда появится граната,
-        /// её попадание должно сделать ровно эти два вызова — и тогда клавиша уйдёт.
+        /// Взрыв под прицелом без полёта гранаты — отладка: проверить разлёт и эффекты,
+        /// не целясь. Граната есть (<see cref="CaveGrenadeLauncher"/>), и при нём клавиша
+        /// делает ровно то же, что её попадание.
         /// </summary>
         private void TestBlast()
         {
@@ -478,6 +509,17 @@ namespace MineGenerator.Catacombs
             var point = Physics.Raycast(origin, transform.forward, out var hit, reach)
                 ? hit.point
                 : origin + transform.forward * reach;
+
+            var launcher = GetComponent<CaveGrenadeLauncher>();
+
+            if (launcher != null && launcher.isActiveAndEnabled)
+            {
+                var normal = hit.collider != null ? hit.normal : -transform.forward;
+                var dead = launcher.Detonate(point + normal * 0.12f, normal);
+
+                Debug.Log($"ВЗРЫВ (отладка) в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}): убито {dead}");
+                return;
+            }
 
             var torn = CaveWebs.TearAt(point, blastRadius);
             var killed = crowd != null ? crowd.DamageAt(point, blastRadius) : 0;
@@ -757,15 +799,18 @@ namespace MineGenerator.Catacombs
             }
 
             GUILayout.Space(6);
+            var armed = GetComponent<CaveGrenadeLauncher>() != null;
+
             GUILayout.Label(_looking
                 ? (diggingEnabled ? "ЛКМ — копать    ПКМ — зарастить    колесо — радиус\n" : "") +
+                  (armed && !diggingEnabled ? "ЛКМ — граната    V — перезарядка\n" : "") +
                   "WASD — движение    Shift — ускорение    Space/Ctrl — вверх/вниз\n" +
                   "F — полёт/ходьба    G — сквозь стены    T — к точке входа\n" +
                   $"Q — пробный свет, отладка ({CaveFlare.Live.Count} из {CaveFlare.MaxLive})    " +
                   "R — новый уровень\n" +
                   "E — разбудить Матку у логова    Shift+E — к логову (отладка)    " +
                   "N — перемотать стадию на 30 с (отладка)\n" +
-                  $"B — пробный взрыв, радиус {blastRadius:0.0}    " +
+                  (armed ? "B — взрыв под прицелом (отладка)    " : $"B — пробный взрыв, радиус {blastRadius:0.0}    ") +
                   "P — записать ракурс    Esc — отпустить курсор"
                 : "<color=yellow>Кликните по окну игры, чтобы захватить курсор</color>", style);
 

@@ -201,6 +201,13 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(0.5f, 12f)] private float corpseDrag = 2.5f;
 
         /// <summary>
+        /// Какую долю радиуса взрыва от эпицентра убитых рвёт на куски. Дальше — отбрасывает
+        /// целыми, кувырком: два разных следа одного взрыва читаются лучше одного.
+        /// </summary>
+        [Tooltip("Какую долю радиуса взрыва от эпицентра убитых рвёт на куски; дальше — отброс целым.")]
+        [SerializeField, Range(0f, 1f)] private float gibShare = 0.65f;
+
+        /// <summary>
         /// Сколько секунд не досылать пополнение после крупного убийства.
         ///
         /// Без паузы досыл затягивает пролом мгновенно, и игрок не видит того, что сделал:
@@ -447,8 +454,21 @@ namespace MineGenerator.Catacombs
 
             public float CullRadius;
 
+            /// <summary>Ядро тела и высота позы в единицах меша — по ним шейдер режет паука на куски.</summary>
+            public float GibCore;
+            public float GibHeight;
+
+            /// <summary>Меш вида с номером куска в UV2 — см. <see cref="BuildGibMesh"/>.</summary>
+            public Mesh Mesh;
+
             public void Dispose()
             {
+                if (Mesh != null && Mesh != Kind.Mesh)
+                {
+                    if (Application.isPlaying) UnityEngine.Object.Destroy(Mesh);
+                    else UnityEngine.Object.DestroyImmediate(Mesh);
+                }
+
                 if (Matrices.IsCreated) Matrices.Dispose();
                 if (Anim.IsCreated) Anim.Dispose();
                 if (Tint.IsCreated) Tint.Dispose();
@@ -458,6 +478,9 @@ namespace MineGenerator.Catacombs
 
         private static readonly int AnimStateId = Shader.PropertyToID("_AnimState");
         private static readonly int InstanceTintId = Shader.PropertyToID("_InstanceTint");
+        private static readonly int GibCoreId = Shader.PropertyToID("_GibCore");
+        private static readonly int GibHeightId = Shader.PropertyToID("_GibHeight");
+        private static readonly int GibLifeId = Shader.PropertyToID("_GibLife");
 
         /// <summary>
         /// Достаёт ссылки на мир и цель, если их не проставили в инспекторе.
@@ -750,12 +773,72 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>
+        /// Есть ли живой паук ближе radius к точке — взрыватель гранаты: пауки без коллайдеров,
+        /// и лучом их не задеть. По пространственной сетке прошлого шага, а не перебором всей
+        /// толпы: граната спрашивает каждый кадр.
+        /// </summary>
+        public bool TouchesSpider(Vector3 worldPoint, float radius)
+        {
+            if (!_states.IsCreated || !_hash.IsCreated) return false;
+
+            var local = LocalOf(worldPoint);
+            var cell = SpiderHash.Cell(local, math.max(0.1f, neighbourRadius));
+
+            for (var x = -1; x <= 1; x++)
+            for (var y = -1; y <= 1; y++)
+            for (var z = -1; z <= 1; z++)
+            {
+                if (!_hash.TryGetFirstValue(SpiderHash.Key(cell + new int3(x, y, z)), out var other, out var iterator)) continue;
+
+                do
+                {
+                    var neighbour = _neighbours[other];
+
+                    // Ядро тела с частью лап: граната, чиркнувшая по кончику лапы, не рвётся.
+                    var reach = radius + neighbour.w * 0.6f;
+
+                    if (neighbour.w > 0f && math.lengthsq(neighbour.xyz - local) < reach * reach) return true;
+                }
+                while (_hash.TryGetNextValue(out other, ref iterator));
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Порода в сфере поменялась (воронка от взрыва): переразметить сетку навигации
+        /// вокруг и перезалить поток к игроку на ближайшем шаге, не дожидаясь, пока игрок
+        /// сменит клетку. Без этого толпа ходила бы над воронкой по прежней поверхности,
+        /// как по стеклу.
+        /// </summary>
+        /// <returns>Сколько клеток переразмечено.</returns>
+        public int RefreshNavigation(Vector3 worldCentre, float radius)
+        {
+            if (!_flow.IsCreated || world == null) return 0;
+
+            var scale = math.max(1e-4f, world.transform.lossyScale.x);
+            var cells = _flow.RebuildRegion(world, LocalOf(worldCentre), radius / scale);
+
+            _flowCell = -1;
+            _flowTimer = flowInterval;
+
+            return cells;
+        }
+
+        /// <summary>
         /// Бьёт всех в сфере. Зовётся взрывом гранаты — тем же вызовом, что и
         /// <see cref="CaveWebs.TearAt"/>, и с тем же смыслом: оружие здесь площадное.
         /// </summary>
         /// <returns>Сколько особей убито.</returns>
-        public int DamageAt(Vector3 worldPoint, float radius, int damage = 1)
+        public int DamageAt(Vector3 worldPoint, float radius, int damage = 1) =>
+            DamageAt(worldPoint, radius, damage, null);
+
+        /// <param name="gibbed">Куда сложить мировые точки разорванных на куски — под брызги.
+        /// Пусто — не собирать.</param>
+        public int DamageAt(Vector3 worldPoint, float radius, int damage, List<Vector3> gibbed)
         {
+            gibbed?.Clear();
+
             if (!_states.IsCreated || radius <= 0f) return 0;
 
             for (var i = 0; i < _killed.Length; i++) _killed[i] = 0;
@@ -770,12 +853,27 @@ namespace MineGenerator.Catacombs
                 RadiusSq = radius * radius,
                 Damage = math.max(1, damage),
                 Impulse = deathImpulse,
+                GibShare = gibShare,
                 Seed = (uint)math.max(1, Environment.TickCount),
                 Killed = _killed
             }.Schedule(_states.Length, 64).Complete();
 
             var killed = 0;
-            for (var i = 0; i < _killed.Length; i++) killed += _killed[i];
+
+            for (var i = 0; i < _killed.Length; i++)
+            {
+                if (_killed[i] == 0) continue;
+
+                killed++;
+
+                if (_killed[i] != 2) continue;
+
+                var spider = _states[i];
+                spider.GibDrop = MeasureDrop(spider);
+                _states[i] = spider;
+
+                gibbed?.Add(WorldOf(spider.Position));
+            }
 
             // Пролом в толпе должен постоять — но только если это ПРОЛОМ, то есть выбита
             // заметная доля тех, кто был вокруг, а не два десятка из кучи в несколько сотен.
@@ -1963,15 +2061,113 @@ namespace MineGenerator.Catacombs
 
                 block.SetVectorArray(AnimStateId, runtime.AnimBatch);
                 block.SetVectorArray(InstanceTintId, runtime.TintBatch);
+                block.SetFloat(GibCoreId, runtime.GibCore);
+                block.SetFloat(GibHeightId, runtime.GibHeight);
+                block.SetFloat(GibLifeId, SpiderHash.GibSeconds);
 
                 parameters.matProps = block;
 
-                Graphics.RenderMeshInstanced(parameters, runtime.Kind.Mesh, 0, runtime.MatrixBatch, size);
+                Graphics.RenderMeshInstanced(parameters, runtime.Mesh, 0, runtime.MatrixBatch, size);
 
                 Batches++;
             }
 
             Drawn += count;
+        }
+
+        /// <summary>
+        /// Копия меша вида под разлёт на куски: номер куска (<see cref="SpiderTuning.GibChunk"/>)
+        /// в UV2, и задан он на треугольник, а не на вершину — вершины на стыке кусков раздвоены.
+        ///
+        /// Кусок по вершине растягивал треугольник на стыке в ленту: две его вершины улетали
+        /// с одним куском, третья с другим, и через полсекунды через весь экран тянулась
+        /// плоская полоса. Номер вершины в карте анимации (UV1) у раздвоенных тот же, так что
+        /// анимация их не замечает; вершин прибавляется только на стыках.
+        ///
+        /// Кодом при сборке толпы, а не в запекателе: перезапечка переписала бы ассеты видов
+        /// и материалы, а меш вида читаемый и и так лежит в памяти.
+        /// </summary>
+        private static Mesh BuildGibMesh(Mesh source, float core)
+        {
+            if (source == null || !source.isReadable) return source;
+
+            var vertices = source.vertices;
+            var normals = source.normals;
+
+            var uv0 = new List<Vector2>();
+            var uv1 = new List<Vector2>();
+            source.GetUVs(0, uv0);
+            source.GetUVs(1, uv1);
+
+            var triangles = source.GetTriangles(0);
+
+            var outVertices = new List<Vector3>(vertices);
+            var outNormals = new List<Vector3>(normals);
+            var outUv0 = new List<Vector2>(uv0);
+            var outUv1 = new List<Vector2>(uv1);
+            var outUv2 = new List<Vector2>(vertices.Length);
+
+            var chunkOf = new int[vertices.Length];
+
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                chunkOf[i] = SpiderTuning.GibChunk(vertices[i], core);
+                outUv2.Add(new Vector2(chunkOf[i], 0f));
+            }
+
+            var copies = new Dictionary<long, int>();
+            var outTriangles = new int[triangles.Length];
+
+            for (var t = 0; t < triangles.Length; t += 3)
+            {
+                var centre = (vertices[triangles[t]] + vertices[triangles[t + 1]] + vertices[triangles[t + 2]]) / 3f;
+                var chunk = SpiderTuning.GibChunk(centre, core);
+
+                for (var k = 0; k < 3; k++)
+                {
+                    var index = triangles[t + k];
+
+                    if (chunkOf[index] != chunk)
+                    {
+                        var key = (long)index * 16 + chunk;
+
+                        if (!copies.TryGetValue(key, out var copy))
+                        {
+                            copy = outVertices.Count;
+                            copies[key] = copy;
+
+                            outVertices.Add(vertices[index]);
+                            outNormals.Add(index < normals.Length ? normals[index] : Vector3.up);
+                            outUv0.Add(index < uv0.Count ? uv0[index] : Vector2.zero);
+                            outUv1.Add(index < uv1.Count ? uv1[index] : Vector2.zero);
+                            outUv2.Add(new Vector2(chunk, 0f));
+                        }
+
+                        index = copy;
+                    }
+
+                    outTriangles[t + k] = index;
+                }
+            }
+
+            var mesh = new Mesh
+            {
+                name = source.name + " Gibs",
+                hideFlags = HideFlags.DontSave,
+                indexFormat = outVertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16
+            };
+
+            mesh.SetVertices(outVertices);
+            mesh.SetNormals(outNormals);
+            mesh.SetUVs(0, outUv0);
+            mesh.SetUVs(1, outUv1);
+            mesh.SetUVs(2, outUv2);
+            mesh.SetTriangles(outTriangles, 0);
+
+            // Границы — от исходного меша: у него они собраны по всем кадрам анимации.
+            mesh.bounds = source.bounds;
+
+            return mesh;
         }
 
         private int CollectKinds()
@@ -2045,7 +2241,10 @@ namespace MineGenerator.Catacombs
                 {
                     Kind = kind,
                     Index = i,
-                    CullRadius = math.max(0.25f, extents)
+                    CullRadius = math.max(0.25f, extents),
+                    GibCore = kind.BodyRadius * SpiderTuning.CoreShare,
+                    GibHeight = kind.PoseHeight > 0f ? kind.PoseHeight : kind.RestBounds.size.y * 0.5f,
+                    Mesh = BuildGibMesh(kind.Mesh, kind.BodyRadius * SpiderTuning.CoreShare)
                 };
             }
 
@@ -2129,6 +2328,35 @@ namespace MineGenerator.Catacombs
             Alive = 0;
             Drawn = 0;
             Batches = 0;
+        }
+
+        /// <summary>
+        /// Сколько юнитов по мировой вертикали от особи до камня под ней — куда упадут куски.
+        ///
+        /// По полю плотности, а не лучом физики (грабли №1): луч сверху попадал бы
+        /// и в капсулу игрока, над которым паук висел на своде. Шаг — четверть юнита:
+        /// столько же, сколько видно на куске размером с лапу. Начинает с отступа
+        /// от своей поверхности, чтобы паук на полу не нашёл камень прямо под собой.
+        /// </summary>
+        private float MeasureDrop(in SpiderState spider)
+        {
+            const float step = 0.25f;
+            const float reach = 30f;
+
+            if (world == null) return reach;
+
+            var origin = WorldOf(spider.Position);
+            var normal = world.transform.TransformDirection(math.mul(spider.Rotation, new float3(0f, 1f, 0f)));
+            var start = origin + normal * 0.3f;
+
+            for (var fall = 0f; fall < reach; fall += step)
+            {
+                var probe = start + Vector3.down * fall;
+
+                if (world.IsSolid(probe)) return math.max(0f, origin.y - probe.y);
+            }
+
+            return reach;
         }
 
         private float3 LocalOf(Vector3 worldPoint) =>
