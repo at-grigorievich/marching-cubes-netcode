@@ -318,6 +318,7 @@ namespace MineGenerator.Catacombs.EditorTools
             EnsureFixtures(world, Style);
             EnsureDust(player);
             EnsureLauncher(player);
+            EnsureDebugOverlay(player);
 
             Selection.activeObject = player;
             EditorSceneManager.MarkSceneDirty(scene);
@@ -372,6 +373,7 @@ namespace MineGenerator.Catacombs.EditorTools
                     : RemoveDust(rig.gameObject));
 
                 changes.AppendLine(EnsureLauncher(rig.gameObject));
+                changes.AppendLine(EnsureDebugOverlay(rig.gameObject));
             }
             else
             {
@@ -907,6 +909,25 @@ namespace MineGenerator.Catacombs.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             return existed ? "  гранатомёт: пересоздан с умолчаниями из кода" : "  гранатомёт: добавлен";
+        }
+
+        /// <summary>
+        /// Отладочное наложение и клавиши стенда. Пересоздаётся, а не донастраивается —
+        /// как гранатомёт (грабли №67): числа живут в сцене, и правка умолчаний в коде
+        /// до неё иначе не дойдёт.
+        /// </summary>
+        private static string EnsureDebugOverlay(GameObject player)
+        {
+            if (player == null) return "  отладка стенда: игрок не найден";
+
+            var old = player.GetComponent<CatacombDebugOverlay>();
+            var existed = old != null;
+
+            if (existed) Object.DestroyImmediate(old);
+
+            player.AddComponent<CatacombDebugOverlay>();
+
+            return existed ? "  отладка стенда: пересоздана с умолчаниями из кода" : "  отладка стенда: добавлена";
         }
 
         /// <summary>Пыль висит на камере, а не на мире: она нужна только рядом с игроком.</summary>

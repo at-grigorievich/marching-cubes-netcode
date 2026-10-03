@@ -41,6 +41,9 @@ namespace MineGenerator.Catacombs
         [Tooltip("За кем охотится. Пусто — отладочный стенд со сцены.")]
         [SerializeField] private CatacombTestRig target;
 
+        /// <summary>Тело игрока — через интерфейс: Матке не нужны ни камера, ни ввод стенда.</summary>
+        private IPlayerBody Body => target;
+
         [Header("Логово")]
         /// <summary>
         /// Из какой доли самых дальних залов выбирается логово.
@@ -510,7 +513,7 @@ namespace MineGenerator.Catacombs
             _shockTimer = 5f;
             _spitTimer = 3.5f;
 
-            if (target != null) _lastTargetPosition = target.BodyCentre;
+            if (target != null) _lastTargetPosition = Body.BodyCentre;
 
             Announce($"МАТКА ПРОБУДИЛАСЬ — {MaxHealth:0} HP");
             return true;
@@ -680,7 +683,7 @@ namespace MineGenerator.Catacombs
         {
             if (target == null) return;
 
-            var body = target.BodyCentre;
+            var body = Body.BodyCentre;
             var delta = body - Centre;
             var distance = delta.magnitude;
 
@@ -692,7 +695,7 @@ namespace MineGenerator.Catacombs
             // У края слабее: вплотную волна швыряет, на излёте толкает.
             var strength = 1f - 0.5f * distance / reach;
 
-            target.Push(direction * (shockPush * strength) + Vector3.up * shockLift);
+            Body.Push(direction * (shockPush * strength) + Vector3.up * shockLift);
             ShocksLanded++;
         }
 
@@ -717,7 +720,7 @@ namespace MineGenerator.Catacombs
 
             _spitTimer = spitInterval;
 
-            var body = target.BodyCentre;
+            var body = Body.BodyCentre;
             if ((body - Centre).magnitude > spitRange || Blocked(Head, body)) return;
 
             _spitLeft = spitVolley;
@@ -734,7 +737,7 @@ namespace MineGenerator.Catacombs
         private void FireSpit()
         {
             var from = Head;
-            var body = target.BodyCentre;
+            var body = Body.BodyCentre;
 
             var flight = (body - from).magnitude / math.max(0.1f, spitSpeed);
             var aim = body + _targetVelocity * flight;
@@ -774,11 +777,11 @@ namespace MineGenerator.Catacombs
 
                 if (target != null)
                 {
-                    target.GetBodySegment(out var low, out var high, out var radius);
+                    Body.GetBodySegment(out var low, out var high, out var radius);
 
                     if (DistanceToSegment(spit.Position, low, high) <= radius + 0.35f)
                     {
-                        target.Entangle(entangleSeconds, entangleScale);
+                        Body.Entangle(entangleSeconds, entangleScale);
                         SpitsLanded++;
                         hit = true;
                     }

@@ -218,8 +218,12 @@ namespace MineGenerator.Catacombs
 
             if (_rig.IsLooking && _reloadLeft <= 0f)
             {
-                if (Input.GetKeyDown(KeyCode.V) && _ammo < capacity) StartReload();
-                else if (Input.GetMouseButton(0) && Time.time >= _nextShot) Fire();
+                // Команды кадра, а не Input: тач (M5) подаёт их же. Стенд обновляется раньше
+                // (DefaultExecutionOrder), так что это команды этого кадра.
+                var commands = _rig.Commands;
+
+                if (commands.Reload && _ammo < capacity) StartReload();
+                else if (commands.FireHeld && Time.time >= _nextShot) Fire();
             }
 
             // Пустой барабан перезаряжается сам: считать выстрелы посреди роя игроку незачем.
@@ -412,7 +416,7 @@ namespace MineGenerator.Catacombs
 
             // Отставание от мыши: оружие чуть догоняет поворот, как в руках.
             var mouse = _rig.IsLooking
-                ? new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"))
+                ? _rig.Commands.Look
                 : Vector2.zero;
 
             _sway = Vector2.Lerp(_sway, Vector2.ClampMagnitude(mouse, 3f) * sway, dt * 9f);

@@ -3,11 +3,19 @@
 namespace MineGenerator.Catacombs
 {
     /// <summary>
-    /// Отладочный стенд: полетать по катакомбам, пройти их ногами и покопать.
-    /// Не часть игры — нужен, чтобы глазами проверить генерацию и разрушаемость.
+    /// Тело и глаза игрока: ходьба, полёт, взгляд, удары по игроку, копание.
+    ///
+    /// Начинался как отладочный стенд, а стал игроком — имя оставлено, потому что оно
+    /// разбросано по CLAUDE.md и прогонам. Отладка (наложение, клавиши F, G, T, R, Q, B, N, P)
+    /// вынесена в <see cref="CatacombDebugOverlay"/>; ввод читается командами
+    /// (<see cref="PlayerCommands"/>), а не <c>Input</c> напрямую, чтобы встал тач.
+    ///
+    /// Обновляется раньше остальных (<c>DefaultExecutionOrder</c>): команды кадра читает и
+    /// оружие, и без порядка оно получало бы то команды этого кадра, то прошлого.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class CatacombTestRig : MonoBehaviour
+    [DefaultExecutionOrder(-50)]
+    public sealed class CatacombTestRig : MonoBehaviour, IPlayerBody
     {
         public enum MoveMode
         {
@@ -54,18 +62,6 @@ namespace MineGenerator.Catacombs
         [Tooltip("Пролетать сквозь породу. Выключено — полёт упирается в стены, как ходьба.")]
         [SerializeField] private bool noclip;
 
-        [Header("Пробный взрыв")]
-        /// <summary>
-        /// Радиус пробного взрыва. Пять юнитов — это верхняя оценка радиуса гранаты
-        /// из открытых вопросов: медиана простреливаемой линии в уровне 14-16 юнитов,
-        /// и взрыв шире пяти-шести начал бы доставать до самого игрока в коридоре.
-        /// </summary>
-        [Tooltip("Радиус пробного взрыва на клавишу B.")]
-        [SerializeField, Range(1f, 12f)] private float blastRadius = 5f;
-
-        [Header("Интерфейс")]
-        [SerializeField] private bool showOverlay = true;
-
         private CharacterController _controller;
         private float _pitch;
         private float _yaw;
@@ -82,6 +78,36 @@ namespace MineGenerator.Catacombs
         // Отдача и тряска камеры: поверх взгляда мышью, а не вместо него, и гаснут сами.
         private float _kick;
         private float _shake;
+
+        private IPlayerInputSource _input = new DesktopInputSource();
+        private PlayerCommands _commands;
+
+        /// <summary>Команды этого кадра — их же читает оружие.</summary>
+        public PlayerCommands Commands => _commands;
+
+        /// <summary>Сменить источник ввода: тач (M5), бот прогона.</summary>
+        public void SetInputSource(IPlayerInputSource source) => _input = source;
+
+        public CatacombWorld World => world;
+        public SpiderCrowd Crowd => crowd;
+        public CaveRunDirector Director => director;
+        public CaveQueen Queen => queen;
+
+        public MoveMode Mode => mode;
+        public bool Noclip => noclip;
+        public float Reach => reach;
+
+        public bool DiggingEnabled => diggingEnabled;
+        public float DigRadius => digRadius;
+        public float TotalDugVolume => _totalDugVolume;
+        public float LastDigVolume => _lastDigVolume;
+
+        /// <summary>Игрок уже поставлен в точку входа этого уровня.</summary>
+        public bool HasSpawned => _spawned;
+
+        public void ToggleMode() => mode = mode == MoveMode.Fly ? MoveMode.Walk : MoveMode.Fly;
+
+        public void ToggleNoclip() => noclip = !noclip;
 
         /// <summary>Курсор захвачен — игрок в игре, а не щёлкает по окну. Первый клик только захватывает.</summary>
         public bool IsLooking => _looking;
@@ -102,6 +128,15 @@ namespace MineGenerator.Catacombs
             var angles = transform.eulerAngles;
             _yaw = angles.y;
             _pitch = angles.x;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Отладку заводим сами, если сцена её не знает: иначе сцены, собранные до выноса
+            // оверлея из стенда, потеряли бы клавиши. В play-режиме — в сцену не пишется.
+            if (Application.isPlaying && GetComponent<CatacombDebugOverlay>() == null)
+            {
+                gameObject.AddComponent<CatacombDebugOverlay>();
+            }
+#endif
         }
 
         /// <summary>
@@ -217,6 +252,9 @@ namespace MineGenerator.Catacombs
 
         private void Update()
         {
+            _commands = default;
+            _input?.Read(ref _commands);
+
             UpdateCursor();
             UpdateLook();
             UpdateMove();
@@ -227,10 +265,10 @@ namespace MineGenerator.Catacombs
 
         private void UpdateCursor()
         {
-            if (Input.GetKeyDown(KeyCode.Escape)) SetLooking(false);
+            if (_commands.Cancel) SetLooking(false);
 
             // Клик по окну игры захватывает курсор; копание при этом уже работает.
-            if (!_looking && Input.GetMouseButtonDown(0)) SetLooking(true);
+            if (!_looking && _commands.FirePressed) SetLooking(true);
         }
 
         private void SetLooking(bool value)
@@ -244,8 +282,8 @@ namespace MineGenerator.Catacombs
         {
             if (_looking)
             {
-                _yaw += Input.GetAxisRaw("Mouse X") * mouseSensitivity;
-                _pitch = Mathf.Clamp(_pitch - Input.GetAxisRaw("Mouse Y") * mouseSensitivity, -89f, 89f);
+                _yaw += _commands.Look.x * mouseSensitivity;
+                _pitch = Mathf.Clamp(_pitch - _commands.Look.y * mouseSensitivity, -89f, 89f);
             }
 
             var dt = Time.deltaTime;
@@ -269,8 +307,8 @@ namespace MineGenerator.Catacombs
 
         private void UpdateMove()
         {
-            var input = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
-            var boost = Input.GetKey(KeyCode.LeftShift) ? boostMultiplier : 1f;
+            var input = new Vector3(_commands.Move.x, 0f, _commands.Move.y);
+            var boost = _commands.Sprint ? boostMultiplier : 1f;
 
             if (mode == MoveMode.Fly)
             {
@@ -278,8 +316,8 @@ namespace MineGenerator.Catacombs
 
                 var direction = transform.rotation * input;
 
-                if (Input.GetKey(KeyCode.Space)) direction += Vector3.up;
-                if (Input.GetKey(KeyCode.LeftControl)) direction += Vector3.down;
+                if (_commands.JumpHeld) direction += Vector3.up;
+                if (_commands.Descend) direction += Vector3.down;
 
                 var motion = direction.normalized * (flySpeed * boost * Time.deltaTime) + _push * Time.deltaTime;
 
@@ -320,7 +358,7 @@ namespace MineGenerator.Catacombs
             if (_controller.isGrounded)
             {
                 _verticalSpeed = -1f;
-                if (Input.GetKeyDown(KeyCode.Space)) _verticalSpeed = jumpSpeed;
+                if (_commands.JumpPressed) _verticalSpeed = jumpSpeed;
             }
             else
             {
@@ -438,98 +476,35 @@ namespace MineGenerator.Catacombs
             {
                 // Кисть мельче вокселя не задевает ни одного сэмпла сетки и не делает ничего.
                 var minRadius = world != null ? Mathf.Max(1f, world.Settings.VoxelSize * 1.2f) : 1f;
-                digRadius = Mathf.Clamp(digRadius + Input.mouseScrollDelta.y * 0.5f, minRadius, 20f);
+                digRadius = Mathf.Clamp(digRadius + _commands.Scroll * 0.5f, minRadius, 20f);
             }
 
-            if (Input.GetKeyDown(KeyCode.F)) mode = mode == MoveMode.Fly ? MoveMode.Walk : MoveMode.Fly;
-            if (Input.GetKeyDown(KeyCode.G)) noclip = !noclip;
-            if (Input.GetKeyDown(KeyCode.P)) DumpViewpoint();
-            if (Input.GetKeyDown(KeyCode.T)) TeleportToSpawn();
-            if (Input.GetKeyDown(KeyCode.Q)) ThrowFlare();
-            if (Input.GetKeyDown(KeyCode.B)) TestBlast();
-            if (Input.GetKeyDown(KeyCode.E)) WakeQueen();
-
-            // Перемотка стадии — отладка: гребень кривой приходит на третьей минуте,
-            // и смотреть рой или финал, выжидая их вживую каждый раз, невозможно.
-            if (Input.GetKeyDown(KeyCode.N) && director != null)
-            {
-                director.SkipAhead(30f);
-                Debug.Log($"СТАДИЯ перемотана на 30 с: {director.Describe()}");
-            }
-
-            if (Input.GetKeyDown(KeyCode.R) && world != null)
-            {
-                _spawned = false;
-                _totalDugVolume = 0f;
-
-                // Старые шашки остались бы висеть в воздухе там, где породы больше нет,
-                // или оказались бы замурованы в новой.
-                CaveFlare.ClearAll();
-
-                world.Generate(Random.Range(int.MinValue, int.MaxValue));
-            }
+            if (_commands.Interact) WakeQueen();
 
             if (world == null || !_looking) return;
 
             if (!diggingEnabled) return;
 
-            if (Input.GetMouseButton(0)) Modify(true);
-            else if (Input.GetMouseButton(1)) Modify(false);
+            if (_commands.FireHeld) Modify(true);
+            else if (_commands.AltHeld) Modify(false);
         }
 
         /// <summary>
-        /// Ставит пробный источник света под ноги — инструмент стенда, а не механика игры.
-        ///
-        /// Свет в уровне расставляет генератор (см. CaveFixtures), и управлять освещением
-        /// игроку не нужно: это аркада на одного, а не кооператив, где команда договаривается,
-        /// где будет светло. Клавиша оставлена, чтобы можно было пройти по уровню и глазами
-        /// проверить, как встанет лампа в конкретном месте, до того как менять правило
-        /// расстановки.
+        /// Новый уровень со случайным сидом — отладка стенда (клавиша R в
+        /// <see cref="CatacombDebugOverlay"/>), а в M4 — переход между ярусами.
         /// </summary>
-        private void ThrowFlare()
+        public void RegenerateLevel()
         {
-            var origin = transform.position + transform.forward * 0.7f - Vector3.up * 0.3f;
+            if (world == null) return;
 
-            // Подброс вверх поверх броска вперёд: шашка летит по дуге и гасит скорость об пол,
-            // а не скользит по нему до ближайшей стены.
-            var velocity = transform.forward * 8f + Vector3.up * 2.2f;
+            _spawned = false;
+            _totalDugVolume = 0f;
 
-            CaveFlare.Throw(origin, velocity);
-        }
+            // Старые шашки остались бы висеть в воздухе там, где породы больше нет,
+            // или оказались бы замурованы в новой.
+            CaveFlare.ClearAll();
 
-        /// <summary>
-        /// Взрыв под прицелом без полёта гранаты — отладка: проверить разлёт и эффекты,
-        /// не целясь. Граната есть (<see cref="CaveGrenadeLauncher"/>), и при нём клавиша
-        /// делает ровно то же, что её попадание.
-        /// </summary>
-        private void TestBlast()
-        {
-            var origin = transform.position;
-
-            var point = Physics.Raycast(origin, transform.forward, out var hit, reach)
-                ? hit.point
-                : origin + transform.forward * reach;
-
-            var launcher = GetComponent<CaveGrenadeLauncher>();
-
-            if (launcher != null && launcher.isActiveAndEnabled)
-            {
-                var normal = hit.collider != null ? hit.normal : -transform.forward;
-                var dead = launcher.Detonate(point + normal * 0.12f, normal);
-
-                Debug.Log($"ВЗРЫВ (отладка) в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}): убито {dead}");
-                return;
-            }
-
-            var torn = CaveWebs.TearAt(point, blastRadius);
-            var killed = crowd != null
-                ? crowd.DamageSphere(point, blastRadius, CombatUnits.HitPoints, DamageSource.Debug)
-                : 0;
-            var hitQueen = queen != null && queen.DamageSphere(point, blastRadius, CombatUnits.HitPoints);
-
-            Debug.Log($"ВЗРЫВ в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}) радиусом {blastRadius:0.0}: " +
-                      $"паутин порвано {torn}, пауков убито {killed}" +
-                      (hitQueen ? $", Матка {queen.Health:0}/{queen.MaxHealth:0}" : ""));
+            world.Generate(Random.Range(int.MinValue, int.MaxValue));
         }
 
         /// <summary>
@@ -540,6 +515,7 @@ namespace MineGenerator.Catacombs
         {
             if (queen == null || director == null) return;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             // Shift — перенестись к логову. Отладка: логово в дальнем конце уровня,
             // и проверять бой, каждый раз добираясь туда пешком, невозможно.
             if (Input.GetKey(KeyCode.LeftShift))
@@ -553,6 +529,7 @@ namespace MineGenerator.Catacombs
                 Debug.Log("ПЕРЕНОС к логову Матки (отладка)");
                 return;
             }
+#endif
 
             if (director.TrySummonQueen(transform.position)) return;
 
@@ -577,69 +554,6 @@ namespace MineGenerator.Catacombs
             // ничего не меняют, поэтому оценка завышает — на это и есть пометка в интерфейсе.
             _lastDigVolume = 4f / 3f * Mathf.PI * digRadius * digRadius * digRadius * digStrength;
             if (dig) _totalDugVolume += _lastDigVolume;
-        }
-
-        /// <summary>
-        /// Печатает в консоль всё, что нужно для воспроизведения текущего ракурса.
-        /// Отдельно отвечает на главный вопрос про тёмные пятна: камера в воздухе или
-        /// внутри породы. Внутри обратные грани отсекаются и виден цвет очистки камеры —
-        /// выглядит как чернота, но затенением не является.
-        /// </summary>
-        /// <summary>
-        /// Смещение фонаря хранится в сцене, а не в коде: пересборка скриптов его не двигает.
-        /// Старая сцена сохраняет старое значение, поэтому показываем его на экране.
-        /// </summary>
-        private string LampOffsetText()
-        {
-            var lamp = GetComponentInChildren<Light>();
-            if (lamp == null) return "не найден";
-
-            var offset = lamp.transform.localPosition;
-
-            // Фонарь намеренно вынесен в сторону от глаза. Источник, стоящий ровно в камере,
-            // теней не даёт вовсе: всё, что он освещает, по определению видно, а тени прячутся
-            // за тем, что их отбрасывает. Замер на развилке: при выносе 0.12 тени съедают 0.0%
-            // света, при 1.2 — 3.6%, при 2.5 — 9.3%. Порог проверки держим около рабочего
-            // значения, иначе она ругается на правильную сцену.
-            var ok = offset.sqrMagnitude > 0.5f && offset.sqrMagnitude < 9f;
-
-            var text = $"({offset.x:0.00}, {offset.y:0.00}, {offset.z:0.00})";
-            return ok ? text : $"<color=yellow>{text} — пересоберите сцену</color>";
-        }
-
-        private void DumpViewpoint()
-        {
-            var position = transform.position;
-
-            var inside = Physics.CheckSphere(position, 0.2f, ~0, QueryTriggerInteraction.Ignore);
-
-            var ahead = Physics.Raycast(position, transform.forward, out var hit, 200f)
-                ? hit.distance.ToString("0.00") + " юнита"
-                : "ничего в пределах 200 юнитов";
-
-            var nearest = float.MaxValue;
-            var directions = new[]
-            {
-                Vector3.up, Vector3.down, Vector3.left,
-                Vector3.right, Vector3.forward, Vector3.back
-            };
-
-            foreach (var dir in directions)
-            {
-                if (Physics.Raycast(position, dir, out var probe, 50f)) nearest = Mathf.Min(nearest, probe.distance);
-            }
-
-            var seed = world != null ? world.CurrentSeed : 0;
-            var angles = transform.eulerAngles;
-
-            Debug.Log(
-                $"РАКУРС сид={seed} позиция=({position.x:0.00}, {position.y:0.00}, {position.z:0.00}) " +
-                $"поворот=({angles.x:0.0}, {angles.y:0.0}, {angles.z:0.0}) | " +
-                $"камера внутри породы: {(inside ? "ДА" : "нет")}, " +
-                $"noclip: {(noclip ? "включён" : "выключен")}, " +
-                $"режим: {(mode == MoveMode.Fly ? "полёт" : "ходьба")} | " +
-                $"до поверхности по взгляду: {ahead}, ближайшая поверхность вокруг: " +
-                $"{(nearest < float.MaxValue ? nearest.ToString("0.00") + " юнита" : "дальше 50 юнитов")}");
         }
 
         /// <summary>
@@ -719,104 +633,6 @@ namespace MineGenerator.Catacombs
             // Зазор в толщину скина: сесть ровно на поверхность значит начать кадр
             // в пересечении с ней, а это ровно то, от чего здесь и уходим.
             return ground + Vector3.up * (_controller.skinWidth - feet);
-        }
-
-        /// <summary>
-        /// Объявление стадии крупно по центру: «РОЙ», «ЭЛИТА», «ЩИТ». Мелкой строкой
-        /// в углу его не заметить посреди боя, а от него зависит, что делать дальше.
-        /// </summary>
-        private void DrawBanner()
-        {
-            if (director == null || director.BannerLeft <= 0f || string.IsNullOrEmpty(director.Banner)) return;
-
-            var banner = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 26,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                richText = true
-            };
-
-            var alpha = Mathf.Clamp01(director.BannerLeft);
-            var previous = GUI.color;
-
-            GUI.color = new Color(0f, 0f, 0f, 0.6f * alpha);
-            GUI.Label(new Rect(2, Screen.height * 0.18f + 2, Screen.width, 40), director.Banner, banner);
-
-            GUI.color = new Color(1f, 0.85f, 0.6f, alpha);
-            GUI.Label(new Rect(0, Screen.height * 0.18f, Screen.width, 40), director.Banner, banner);
-
-            GUI.color = previous;
-        }
-
-        private void OnGUI()
-        {
-            if (!showOverlay) return;
-
-            var style = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
-
-            DrawBanner();
-
-            GUILayout.BeginArea(new Rect(10, 10, 640, 340), GUI.skin.box);
-
-            if (world != null && world.IsGenerating)
-            {
-                GUILayout.Label($"<b>Генерация: {world.Progress:P0}</b>", style);
-            }
-            else if (world != null)
-            {
-                var tris = 0;
-                foreach (var chunk in world.Chunks) tris += (int)(chunk.Mesh.GetIndexCount(0) / 3);
-
-                GUILayout.Label($"<b>Сид {world.CurrentSeed}</b>   чанков {world.Chunks.Count}   треугольников {tris:N0}", style);
-                GUILayout.Label($"Режим: <b>{(mode == MoveMode.Fly ? "полёт" : "ходьба")}</b>{(noclip ? " (сквозь стены)" : "")}" +
-                                (diggingEnabled ? $"   радиус кисти: <b>{digRadius:0.0}</b>" : ""), style);
-                // Координаты прямо в интерфейсе: тогда любой присланный скриншот
-                // самодостаточен, и не нужно ловить момент нажатия P.
-                var pos = transform.position;
-                var rot = transform.eulerAngles;
-
-                GUILayout.Label($"<b>({pos.x:0.0}, {pos.y:0.0}, {pos.z:0.0})</b>  " +
-                                $"поворот ({rot.x:0.0}, {rot.y:0.0})  " +
-                                $"фонарь {LampOffsetText()}", style);
-
-                if (diggingEnabled)
-                {
-                    GUILayout.Label($"Добыто породы, оценка сверху: {_totalDugVolume:N0} " +
-                                    $"(последний удар {_lastDigVolume:N0})", style);
-                }
-
-                if (crowd != null) GUILayout.Label(crowd.Describe(), style);
-
-                if (director != null) GUILayout.Label(director.Describe(), style);
-                if (queen != null) GUILayout.Label(queen.Describe(transform.position), style);
-
-                if (IsEntangled) GUILayout.Label("<color=#b8e0a0>СПУТАН паутиной</color>", style);
-
-                if (!_spawned) GUILayout.Label("<color=yellow>Нажмите T — телепорт к точке входа</color>", style);
-            }
-            else
-            {
-                GUILayout.Label("<color=red>CatacombWorld не найден на сцене</color>", style);
-            }
-
-            GUILayout.Space(6);
-            var armed = GetComponent<CaveGrenadeLauncher>() != null;
-
-            GUILayout.Label(_looking
-                ? (diggingEnabled ? "ЛКМ — копать    ПКМ — зарастить    колесо — радиус\n" : "") +
-                  (armed && !diggingEnabled ? "ЛКМ — граната    V — перезарядка\n" : "") +
-                  "WASD — движение    Shift — ускорение    Space/Ctrl — вверх/вниз\n" +
-                  "F — полёт/ходьба    G — сквозь стены    T — к точке входа\n" +
-                  $"Q — пробный свет, отладка ({CaveFlare.Live.Count} из {CaveFlare.MaxLive})    " +
-                  "R — новый уровень\n" +
-                  "E — разбудить Матку у логова    Shift+E — к логову (отладка)    " +
-                  "N — перемотать стадию на 30 с (отладка)\n" +
-                  (armed ? "B — взрыв под прицелом (отладка)    " : $"B — пробный взрыв, радиус {blastRadius:0.0}    ") +
-                  "P — записать ракурс    Esc — отпустить курсор"
-                : "<color=yellow>Кликните по окну игры, чтобы захватить курсор</color>", style);
-
-            GUILayout.EndArea();
         }
     }
 }
