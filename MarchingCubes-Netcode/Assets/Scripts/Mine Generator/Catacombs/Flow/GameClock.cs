@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace MineGenerator.Catacombs
@@ -162,13 +163,22 @@ namespace MineGenerator.Catacombs
             Scale = scale;
             AudioPaused = audio;
 
-            if (ApplyToEngine)
-            {
-                Time.timeScale = scale;
-                AudioListener.pause = audio;
-            }
+            if (ApplyToEngine) ApplyEngine(scale, audio);
 
             if (changed) Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Запись в движок — отдельным методом, и это не стиль. Вне Unity (раннер тестов
+        /// логики, Tools/CloudUnity/run_logic_tests.py) .NET отказывается компилировать
+        /// ЦЕЛИКОМ метод, в котором есть вызов в движок, даже если ветка не выполняется.
+        /// Вынесенный вызов компилируется только когда его зовут.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ApplyEngine(float scale, bool audio)
+        {
+            Time.timeScale = scale;
+            AudioListener.pause = audio;
         }
     }
 }
