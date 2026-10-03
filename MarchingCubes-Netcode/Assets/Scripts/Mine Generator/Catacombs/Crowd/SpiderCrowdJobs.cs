@@ -144,7 +144,11 @@ namespace MineGenerator.Catacombs
         /// <summary>Значение <see cref="SpiderClip"/>.</summary>
         public int Clip;
 
-        public int Health;
+        /// <summary>
+        /// Сколько здоровья осталось, в HP (<see cref="CombatUnits"/>). Дробное: урон пушек
+        /// с множителями и урон со временем в целые попадания не укладываются.
+        /// </summary>
+        public float Health;
 
         /// <summary>0 — слот свободен и может быть занят новой особью.</summary>
         public int Active;
@@ -1955,7 +1959,9 @@ namespace MineGenerator.Catacombs
         public float3 Center;
 
         public float RadiusSq;
-        public int Damage;
+
+        /// <summary>Урон в HP.</summary>
+        public float Damage;
 
         /// <summary>Сила отброса в эпицентре, юнитов в секунду. У края сферы спадает до нуля.</summary>
         public float Impulse;
@@ -1989,7 +1995,9 @@ namespace MineGenerator.Catacombs
 
             spider.Health -= Damage;
 
-            if (spider.Health > 0)
+            // Запас в сотую долю HP: здоровье дробное (60 × 1.5 − 30 − 30 даёт не ноль,
+            // а остаток в последнем знаке), и без запаса особь выживала бы с крохой здоровья.
+            if (spider.Health > 0.01f)
             {
                 States[index] = spider;
                 return;

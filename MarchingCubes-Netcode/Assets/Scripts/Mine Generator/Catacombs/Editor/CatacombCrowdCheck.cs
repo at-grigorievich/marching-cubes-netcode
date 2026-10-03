@@ -387,9 +387,35 @@ namespace MineGenerator.Catacombs.EditorTools
 
             var before = crowd.Alive;
             var gibbed = new List<Vector3>();
+
+            // Журнал убийств: по нему в игре считаются опыт, валюта и задания, поэтому он обязан
+            // совпасть с тем, что вернул удар, — поштучно, с разорванными и с источником.
+            crowd.FlushKills();
+
+            var journal = new List<KillRecord>();
+            void Collect(IReadOnlyList<KillRecord> batch) => journal.AddRange(batch);
+            crowd.Killed += Collect;
+
+            var debugBefore = crowd.KillsBy(DamageSource.Debug);
             var killed = crowd.DamageAt(player.transform.position, 12f, 99, gibbed);
 
+            crowd.FlushKills();
+            crowd.Killed -= Collect;
+
             text.AppendLine($"  взрыв радиусом 12 у игрока: убито {killed} из {before}, из них разорвано на куски {gibbed.Count}");
+
+            var journalTorn = journal.Count(k => k.Gibbed);
+            var journalDebug = journal.Count(k => k.Source == DamageSource.Debug);
+
+            text.AppendLine($"  журнал убийств: записей {journal.Count}, разорванных {journalTorn}, " +
+                            $"от отладки {journalDebug}, счётчик источника +{crowd.KillsBy(DamageSource.Debug) - debugBefore}");
+
+            if (journal.Count != killed || journalTorn != gibbed.Count || journalDebug != killed ||
+                crowd.KillsBy(DamageSource.Debug) - debugBefore != killed || crowd.PendingKills != 0)
+            {
+                text.AppendLine("  ПЛОХО: журнал убийств разошёлся с ударом — опыт и задания посчитаются неверно");
+                failed++;
+            }
 
             if (killed == 0 && Near(positions, player.transform.position, 12f) > 0)
             {

@@ -500,7 +500,8 @@ namespace MineGenerator.Catacombs
                 Debug.LogWarning($"{nameof(CaveQueen)}: у толпы нет ни одного вида — Матку рисовать нечем.", this);
             }
 
-            MaxHealth = math.max(1f, baseHealth * healthScale);
+            // baseHealth в сцене — в попаданиях прежней модели; здоровье — в HP (CombatUnits).
+            MaxHealth = math.max(1f, CombatUnits.Hits(baseHealth) * healthScale);
             Health = MaxHealth;
             State = QueenState.Awake;
 
@@ -511,15 +512,18 @@ namespace MineGenerator.Catacombs
 
             if (target != null) _lastTargetPosition = target.BodyCentre;
 
-            Announce($"МАТКА ПРОБУДИЛАСЬ — {MaxHealth:0} попаданий");
+            Announce($"МАТКА ПРОБУДИЛАСЬ — {MaxHealth:0} HP");
             return true;
         }
 
         /// <summary>
         /// Удар по Матке. Сфера, как у толпы: оружие площадное.
         /// </summary>
+        /// <param name="damage">Урон в HP (<see cref="CombatUnits"/>). Прежний вызов
+        /// <c>DamageAt</c> брал попадания; имя сменено, чтобы старый урон не прошёл молча
+        /// вдесятеро слабее.</param>
         /// <returns>Попало ли. Под щитом попадает, но урона не наносит.</returns>
-        public bool DamageAt(Vector3 point, float radius, float damage)
+        public bool DamageSphere(Vector3 point, float radius, float damage)
         {
             if (State != QueenState.Awake && State != QueenState.Shielded) return false;
             if ((point - Centre).magnitude > radius + _hitRadius) return false;

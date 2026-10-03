@@ -522,8 +522,10 @@ namespace MineGenerator.Catacombs
             }
 
             var torn = CaveWebs.TearAt(point, blastRadius);
-            var killed = crowd != null ? crowd.DamageAt(point, blastRadius) : 0;
-            var hitQueen = queen != null && queen.DamageAt(point, blastRadius, 1f);
+            var killed = crowd != null
+                ? crowd.DamageSphere(point, blastRadius, CombatUnits.HitPoints, DamageSource.Debug)
+                : 0;
+            var hitQueen = queen != null && queen.DamageSphere(point, blastRadius, CombatUnits.HitPoints);
 
             Debug.Log($"ВЗРЫВ в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}) радиусом {blastRadius:0.0}: " +
                       $"паутин порвано {torn}, пауков убито {killed}" +

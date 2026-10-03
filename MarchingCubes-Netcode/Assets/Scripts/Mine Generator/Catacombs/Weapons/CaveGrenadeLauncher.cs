@@ -65,10 +65,10 @@ namespace MineGenerator.Catacombs
         [Tooltip("Радиус поражения, юниты.")]
         [SerializeField, Range(1f, 12f)] private float blastRadius = 5f;
 
-        [Tooltip("Урон паукам в радиусе. Мелочь держит одно попадание, тарантул — четыре.")]
+        [Tooltip("Урон паукам в радиусе, в попаданиях (×10 HP). Мелочь держит одно попадание, тарантул — четыре.")]
         [SerializeField, Range(1, 10)] private int blastDamage = 3;
 
-        [Tooltip("Урон Матке за попадание.")]
+        [Tooltip("Урон Матке за попадание, в попаданиях (×10 HP).")]
         [SerializeField, Range(0f, 10f)] private float queenDamage = 1.5f;
 
         [Header("Следы взрыва")]
@@ -365,9 +365,12 @@ namespace MineGenerator.Catacombs
 
             CaveWebs.TearAt(point, blastRadius);
 
-            var killed = crowd != null ? crowd.DamageAt(point, blastRadius, blastDamage, _gibs) : 0;
+            // Урон в полях — в попаданиях прежней модели (так он хранится в сцене), бьём в HP.
+            var killed = crowd != null
+                ? crowd.DamageSphere(point, blastRadius, CombatUnits.Hits(blastDamage), DamageSource.GrenadeLauncher, _gibs)
+                : 0;
 
-            if (queen != null) queen.DamageAt(point, blastRadius, queenDamage);
+            if (queen != null) queen.DamageSphere(point, blastRadius, CombatUnits.Hits(queenDamage));
 
             Kills += killed;
 

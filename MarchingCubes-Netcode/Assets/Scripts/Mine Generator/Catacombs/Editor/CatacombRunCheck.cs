@@ -260,8 +260,10 @@ namespace MineGenerator.Catacombs.EditorTools
                     var handle = director.Elites.Count > 0 ? director.Elites[director.Elites.Count - 1] : SpiderHandle.None;
                     crowd.TryGetSpider(handle, out var at, out var health);
 
+                    // Живучесть и в HP, и в прежних попаданиях — так число сравнимо с замерами в CLAUDE.md.
                     eliteReport.AppendLine($"    элита #{elitesSeen} на {Clock(director.Elapsed)}: " +
-                                           $"живучесть {health}, в {(at - entry).magnitude:0} юнитах от игрока");
+                                           $"живучесть {health:0} HP ({health / CombatUnits.HitPoints:0.#} попаданий), " +
+                                           $"в {(at - entry).magnitude:0} юнитах от игрока");
                 }
 
                 crowd.Simulate(Step);
@@ -493,12 +495,13 @@ namespace MineGenerator.Catacombs.EditorTools
                 return failed + 1;
             }
 
-            var expected = 36f * (1f + 3f * director.Progress);
+            var expected = CombatUnits.Hits(36f) * (1f + 3f * director.Progress);
 
-            text.AppendLine($"  разбужена на {Clock(director.Elapsed)}: живучесть {queen.MaxHealth:0} " +
-                            $"(ждали около {expected:0} при умолчаниях)");
+            text.AppendLine($"  разбужена на {Clock(director.Elapsed)}: живучесть {queen.MaxHealth:0} HP " +
+                            $"({queen.MaxHealth / CombatUnits.HitPoints:0.#} попаданий; " +
+                            $"ждали около {expected:0} HP при умолчаниях)");
 
-            Expect(queen.MaxHealth > 36f * 1.5f, "разбуженная позже — живучее базовой", text, ref failed);
+            Expect(queen.MaxHealth > CombatUnits.Hits(36f) * 1.5f, "разбуженная позже — живучее базовой", text, ref failed);
 
             // --- атаки: стоим рядом двенадцать секунд ---
             var spawnedBefore = crowd.SpawnedTotal;
@@ -530,7 +533,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
             for (var guard = 0; guard < 10000 && queen.State == CaveQueen.QueenState.Awake; guard++)
             {
-                queen.DamageAt(queen.Centre, 1f, 1f);
+                queen.DamageSphere(queen.Centre, 1f, CombatUnits.HitPoints);
             }
 
             Expect(queen.State == CaveQueen.QueenState.Dead, "Матка умирает, когда здоровье кончилось", text, ref failed);
@@ -565,7 +568,7 @@ namespace MineGenerator.Catacombs.EditorTools
             // Бьём по одному, пока не встанет щит: порог обязан поймать здоровье ровно на себе.
             for (var guard = 0; guard < 10000 && queen.State == CaveQueen.QueenState.Awake; guard++)
             {
-                queen.DamageAt(queen.Centre, 1f, 1f);
+                queen.DamageSphere(queen.Centre, 1f, CombatUnits.HitPoints);
             }
 
             text.AppendLine($"  щит #{phase + 1}: на {queen.HealthFraction:P1} здоровья " +
@@ -579,7 +582,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
             // Неуязвимость: удар попадает, урона нет.
             var before = queen.Health;
-            queen.DamageAt(queen.Centre, 1f, 50f);
+            queen.DamageSphere(queen.Centre, 1f, CombatUnits.Hits(50f));
             Expect(Mathf.Approximately(queen.Health, before), "под щитом урона нет", text, ref failed);
 
             // Лечение: пять секунд у неё.

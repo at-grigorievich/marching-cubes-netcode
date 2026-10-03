@@ -324,6 +324,14 @@ namespace MineGenerator.Catacombs
         private NativeArray<int> _killed;
         private NativeParallelMultiHashMap<int, int> _hash;
 
+        /// <summary>
+        /// Журнал убийств за кадр. Пишется сразу после джоба урона, раздаётся пачкой
+        /// событием <see cref="Killed"/> — один вызов на кадр, сколько бы ни убило.
+        /// </summary>
+        private readonly List<KillRecord> _kills = new List<KillRecord>(256);
+
+        private readonly int[] _killsBySource = new int[(int)DamageSource.Count];
+
         private KindRuntime[] _runtime;
 
         /// <summary>Капсула цели, если она есть: по ней толпа целится в тело, а не в глаза.</summary>
@@ -402,6 +410,19 @@ namespace MineGenerator.Catacombs
 
         /// <summary>Сколько особей появилось за всё время. Прямой ответ на «идёт ли досыл».</summary>
         public int SpawnedTotal { get; private set; }
+
+        /// <summary>
+        /// Убитые за кадр, пачкой. Зовётся из <c>Update</c> толпы (или <see cref="FlushKills"/>
+        /// у прогона), даже когда время стоит: убийство под хитстопом тоже убийство.
+        /// Список действителен только на время вызова — копировать, если нужен дольше.
+        /// </summary>
+        public event Action<IReadOnlyList<KillRecord>> Killed;
+
+        /// <summary>Сколько убито каждым источником с последней перестройки толпы.</summary>
+        public int KillsBy(DamageSource source) => _killsBySource[(int)source];
+
+        /// <summary>Сколько убийств ждёт раздачи — для прогонов.</summary>
+        public int PendingKills => _kills.Count;
 
         /// <summary>Сколько раз крупное убийство ставило досыл на паузу, и сколько секунд он стоял.</summary>
         public int HoldsTriggered { get; private set; }
@@ -532,6 +553,7 @@ namespace MineGenerator.Catacombs
         {
             if (!Application.isPlaying) return;
 
+            FlushKills();
             Simulate(Time.deltaTime);
             Submit(ResolveCamera());
         }
@@ -826,20 +848,36 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>
-        /// Бьёт всех в сфере. Зовётся взрывом гранаты — тем же вызовом, что и
-        /// <see cref="CaveWebs.TearAt"/>, и с тем же смыслом: оружие здесь площадное.
+        /// Бьёт всех в сфере уроном в ПОПАДАНИЯХ прежней модели — обёртка для прогонов
+        /// и отладки. Пушки зовут <see cref="DamageSphere"/> с уроном в HP и своим источником.
         /// </summary>
         /// <returns>Сколько особей убито.</returns>
         public int DamageAt(Vector3 worldPoint, float radius, int damage = 1) =>
-            DamageAt(worldPoint, radius, damage, null);
+            DamageSphere(worldPoint, radius, CombatUnits.Hits(damage), DamageSource.Debug, null);
 
+        /// <inheritdoc cref="DamageAt(Vector3, float, int)"/>
+        public int DamageAt(Vector3 worldPoint, float radius, int damage, List<Vector3> gibbed) =>
+            DamageSphere(worldPoint, radius, CombatUnits.Hits(damage), DamageSource.Debug, gibbed);
+
+        /// <summary>
+        /// Бьёт всех в сфере. Зовётся взрывом гранаты — тем же вызовом, что и
+        /// <see cref="CaveWebs.TearAt"/>, и с тем же смыслом: оружие здесь площадное.
+        ///
+        /// Имя другое, чем у обёртки в попаданиях, намеренно: перегрузки по int и float
+        /// с разными единицами — это «3» и «3f», которые значат разное, и ошибка, которую
+        /// компилятор не поймает.
+        /// </summary>
+        /// <param name="damage">Урон в HP (<see cref="CombatUnits"/>).</param>
+        /// <param name="source">Кто бьёт — уходит в журнал убийств.</param>
         /// <param name="gibbed">Куда сложить мировые точки разорванных на куски — под брызги.
         /// Пусто — не собирать.</param>
-        public int DamageAt(Vector3 worldPoint, float radius, int damage, List<Vector3> gibbed)
+        /// <returns>Сколько особей убито.</returns>
+        public int DamageSphere(Vector3 worldPoint, float radius, float damage, DamageSource source,
+            List<Vector3> gibbed = null)
         {
             gibbed?.Clear();
 
-            if (!_states.IsCreated || radius <= 0f) return 0;
+            if (!_states.IsCreated || radius <= 0f || damage <= 0f) return 0;
 
             for (var i = 0; i < _killed.Length; i++) _killed[i] = 0;
 
@@ -851,7 +889,7 @@ namespace MineGenerator.Catacombs
                 States = _states,
                 Center = centre,
                 RadiusSq = radius * radius,
-                Damage = math.max(1, damage),
+                Damage = damage,
                 Impulse = deathImpulse,
                 GibShare = gibShare,
                 Seed = (uint)math.max(1, Environment.TickCount),
@@ -866,13 +904,20 @@ namespace MineGenerator.Catacombs
 
                 killed++;
 
-                if (_killed[i] != 2) continue;
-
                 var spider = _states[i];
-                spider.GibDrop = MeasureDrop(spider);
-                _states[i] = spider;
+                var torn = _killed[i] == 2;
 
-                gibbed?.Add(WorldOf(spider.Position));
+                if (torn)
+                {
+                    spider.GibDrop = MeasureDrop(spider);
+                    _states[i] = spider;
+                }
+
+                var at = WorldOf(spider.Position);
+
+                if (torn) gibbed?.Add(at);
+
+                RecordKill(spider, at, torn, source);
             }
 
             // Пролом в толпе должен постоять — но только если это ПРОЛОМ, то есть выбита
@@ -890,6 +935,43 @@ namespace MineGenerator.Catacombs
             }
 
             return killed;
+        }
+
+        private void RecordKill(in SpiderState spider, Vector3 at, bool torn, DamageSource source)
+        {
+            var kind = spider.Kind >= 0 && _runtime != null && spider.Kind < _runtime.Length
+                ? _runtime[spider.Kind].Kind
+                : null;
+
+            _kills.Add(new KillRecord
+            {
+                Position = at,
+                Kind = spider.Kind,
+                KindHealth = kind != null ? kind.Health : 1,
+                Elite = spider.Elite != 0,
+                Gibbed = torn,
+                Source = source
+            });
+
+            _killsBySource[(int)source]++;
+        }
+
+        /// <summary>
+        /// Раздаёт накопленные убийства событием <see cref="Killed"/> и очищает журнал.
+        /// Толпа зовёт сама раз в кадр; прогон, шагающий без <c>Update</c>, зовёт руками.
+        /// </summary>
+        public void FlushKills()
+        {
+            if (_kills.Count == 0) return;
+
+            try
+            {
+                Killed?.Invoke(_kills);
+            }
+            finally
+            {
+                _kills.Clear();
+            }
         }
 
         /// <summary>
@@ -954,7 +1036,7 @@ namespace MineGenerator.Catacombs
             if (cell < 0) return SpiderHandle.None;
 
             var kind = _runtime[_heaviest].Kind;
-            var health = math.max(1, (int)math.round(kind.Health * healthScale));
+            var health = SpawnHealth(kind.Health * healthScale);
 
             Place(slot, cell, _heaviest, sizeScale, health, speedScale, hue, false, 0f, true);
             Alive++;
@@ -995,7 +1077,7 @@ namespace MineGenerator.Catacombs
                 var cell = _cellBuffer[_random.NextInt(_cellBuffer.Count)];
                 var kindIndex = PickKind(maxKindHealth, false);
 
-                Place(slot, cell, kindIndex, 1f, RollHealth(_runtime[kindIndex].Kind.Health * healthScale),
+                Place(slot, cell, kindIndex, 1f, SpawnHealth(_runtime[kindIndex].Kind.Health * healthScale),
                     speedScale, hue, false, _random.NextFloat(), false);
 
                 spawned++;
@@ -1005,8 +1087,8 @@ namespace MineGenerator.Catacombs
             return spawned;
         }
 
-        /// <summary>Жива ли особь по ссылке, и где она. Здоровье — сколько попаданий ей осталось.</summary>
-        public bool TryGetSpider(SpiderHandle handle, out Vector3 worldPosition, out int health)
+        /// <summary>Жива ли особь по ссылке, и где она. Здоровье — сколько HP ей осталось.</summary>
+        public bool TryGetSpider(SpiderHandle handle, out Vector3 worldPosition, out float health)
         {
             worldPosition = Vector3.zero;
             health = 0;
@@ -1814,7 +1896,7 @@ namespace MineGenerator.Catacombs
             // на своде паук в разгар роя читался бы как забытый, а не как затаившийся.
             var mayLurk = !_directed || !_directive.Frenzy;
 
-            Place(slot, cell, kindIndex, 1f, RollHealth(_runtime[kindIndex].Kind.Health * healthScale),
+            Place(slot, cell, kindIndex, 1f, SpawnHealth(_runtime[kindIndex].Kind.Health * healthScale),
                 speedScale, hue, mayLurk, _random.NextFloat(), false);
 
             return true;
@@ -1847,17 +1929,16 @@ namespace MineGenerator.Catacombs
         /// округление держало бы мелочь на одном попадании до середины забега и переводило
         /// на два разом, то есть сложность шла бы ступенькой, а не кривой.
         /// </summary>
-        private int RollHealth(float value)
-        {
-            var whole = (int)math.floor(value);
-
-            if (_random.NextFloat() < value - whole) whole++;
-
-            return math.max(1, whole);
-        }
+        /// <summary>
+        /// Живучесть новой особи в HP из живучести в попаданиях с множителем директора.
+        ///
+        /// Раньше дробная часть бросалась жребием, потому что здоровье было целым: 1.5
+        /// попадания давали то одно, то два. В HP дробь хранится как есть, и жребий не нужен.
+        /// </summary>
+        private static float SpawnHealth(float hits) => math.max(1f, CombatUnits.Hits(hits));
 
         /// <summary>Кладёт особь в слот: на камень под клеткой, с разбросом вдоль поверхности.</summary>
-        private void Place(int slot, int cell, int kindIndex, float sizeScale, int health, float speedScale,
+        private void Place(int slot, int cell, int kindIndex, float sizeScale, float health, float speedScale,
             float3 hue, bool mayLurk, float rank, bool elite)
         {
             var kind = _runtime[kindIndex].Kind;
@@ -2301,6 +2382,10 @@ namespace MineGenerator.Catacombs
             _spawnCredit = 0f;
             Alive = 0;
             SpawnedTotal = 0;
+
+            // Убийства прошлого уровня не раздаются в новом: опыт с них уже не подобрать.
+            _kills.Clear();
+            Array.Clear(_killsBySource, 0, _killsBySource.Length);
         }
 
         private void Release()
