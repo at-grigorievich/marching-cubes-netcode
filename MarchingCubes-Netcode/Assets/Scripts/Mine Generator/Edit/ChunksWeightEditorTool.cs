@@ -1,3 +1,6 @@
+#if UNITY_EDITOR
+// Файл лежит в папке Edit, а не Editor, и попадает в рантайм-сборку: using на UnityEditor
+// обязаны быть внутри #if, иначе сборка плеера (WebGL) падает на них — грабли №6.
 using Mine_Generator.Data;
 using MineGenerator.Data;
 using MineGenerator.Interfaces;
@@ -7,7 +10,6 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-#if UNITY_EDITOR
 namespace MineGenerator
 {
     [EditorTool("Chunks Weight Editor Tool")]
