@@ -160,6 +160,37 @@ namespace MineGenerator.Catacombs
             return true;
         }
 
+        /// <summary>
+        /// Гарь без воронки: конец луча рельсы, пятно огня на полу. Радиус — доля обычного пятна.
+        /// </summary>
+        public void Scorch(Vector3 point, float radiusShare = 1f)
+        {
+            var count = _marks.Count;
+
+            AddScorch(point);
+
+            if (_marks.Count > count)
+            {
+                var mark = _marks[_marks.Count - 1];
+                mark.Radius *= Mathf.Max(0.1f, radiusShare);
+                _marks[_marks.Count - 1] = mark;
+            }
+        }
+
+        /// <summary>
+        /// Копать с той же переразметкой сетки пауков, что у воронки, — пробой кирки (M2).
+        /// Пилоны и логово копанию не подлежат: звонящий проверяет запрет сам.
+        /// </summary>
+        public bool Dig(Vector3 centre, float radius)
+        {
+            if (_world == null || _world.Settings == null) return false;
+            if (!_world.Dig(centre, radius)) return false;
+
+            if (_crowd != null) _crowd.RefreshNavigation(centre, radius + _world.Settings.SurfaceSoftness);
+
+            return true;
+        }
+
         private void AddScorch(Vector3 point)
         {
             var now = Time.time;

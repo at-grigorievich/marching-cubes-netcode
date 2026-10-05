@@ -896,21 +896,68 @@ namespace MineGenerator.Catacombs.EditorTools
         /// </summary>
         private static string EnsureLauncher(GameObject player)
         {
-            if (player == null) return "  гранатомёт: игрок не найден";
+            if (player == null) return "  арсенал: игрок не найден";
 
-            var old = player.GetComponent<CaveGrenadeLauncher>();
+            // Старые сцены несут удалённый CaveGrenadeLauncher битой ссылкой: гранатомёт
+            // переехал в арсенал (M2.1), и битый компонент сыпал бы предупреждениями.
+            var stale = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(player);
+
+            var old = player.GetComponent<PlayerArsenal>();
             var existed = old != null;
 
             if (existed) Object.DestroyImmediate(old);
 
-            var launcher = player.AddComponent<CaveGrenadeLauncher>();
+            var arsenal = player.AddComponent<PlayerArsenal>();
 
-            var serialized = new SerializedObject(launcher);
+            var serialized = new SerializedObject(arsenal);
             serialized.FindProperty("litShader").objectReferenceValue = Shader.Find("Universal Render Pipeline/Lit");
             serialized.FindProperty("particleShader").objectReferenceValue = Shader.Find("Mine Generator/Cave Particles");
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
-            return existed ? "  гранатомёт: пересоздан с умолчаниями из кода" : "  гранатомёт: добавлен";
+            var assets = EnsureWeaponAssets();
+
+            return (existed ? "  арсенал: пересоздан с умолчаниями из кода" : "  арсенал: добавлен") +
+                   (stale > 0 ? $", убрано битых компонентов {stale}" : "") + $"; пушек в ассетах: {assets}";
+        }
+
+        /// <summary>
+        /// Описания восьми пушек в Resources/Data/Weapons — значения из каталога в коде,
+        /// проставленные явно (грабли №8): ассет существует ради того, чтобы баланс правился
+        /// числами без пересборки логики, но правда — в <see cref="WeaponCatalog"/>.
+        /// </summary>
+        internal static int EnsureWeaponAssets()
+        {
+            const string folder = "Assets/Resources/" + WeaponCatalog.ResourceFolder;
+            EnsureFolder(folder);
+
+            var count = 0;
+
+            for (var i = 0; i < (int)WeaponId.Count; i++)
+            {
+                var id = (WeaponId)i;
+                var path = $"{folder}/{WeaponIds.Key(id)}.asset";
+
+                var def = AssetDatabase.LoadAssetAtPath<WeaponDef>(path);
+
+                if (def == null)
+                {
+                    def = ScriptableObject.CreateInstance<WeaponDef>();
+                    WeaponCatalog.Fill(def, id);
+                    AssetDatabase.CreateAsset(def, path);
+                }
+                else
+                {
+                    WeaponCatalog.Fill(def, id);
+                    EditorUtility.SetDirty(def);
+                }
+
+                count++;
+            }
+
+            AssetDatabase.SaveAssets();
+            WeaponCatalog.ClearCache();
+
+            return count;
         }
 
         /// <summary>

@@ -38,7 +38,12 @@ namespace MineGenerator.Catacombs.Tests
         public void SourceCountCoversAllSources()
         {
             // Счётчики убийств — массив по DamageSource.Count: новый источник в конце перечисления.
-            Assert.AreEqual((int)DamageSource.Environment + 1, (int)DamageSource.Count);
+            Assert.AreEqual((int)DamageSource.Special + 1, (int)DamageSource.Count);
+
+            // Пушки идут подряд в порядке WeaponId: источник пушки — сдвиг от гранатомёта.
+            Assert.AreEqual(DamageSource.GrenadeLauncher, WeaponIds.SourceOf(WeaponId.Launcher));
+            Assert.AreEqual(DamageSource.PickHammer, WeaponIds.SourceOf(WeaponId.PickHammer));
+            Assert.AreEqual(DamageSource.Revolver, WeaponIds.SourceOf(WeaponId.Revolver));
         }
     }
 }

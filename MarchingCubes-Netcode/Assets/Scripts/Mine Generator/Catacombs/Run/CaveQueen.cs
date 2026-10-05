@@ -549,7 +549,22 @@ namespace MineGenerator.Catacombs
             if (State != QueenState.Awake && State != QueenState.Shielded) return false;
             if ((point - Centre).magnitude > radius + _hitRadius) return false;
 
-            if (State == QueenState.Shielded) return true;
+            TakeHit(damage);
+            return true;
+        }
+
+        /// <summary>Сколько урона Матка получила за всё время — для прогонов и статистики пушек.</summary>
+        public float DamageTaken { get; private set; }
+
+        /// <summary>
+        /// Урон в HP без проверки формы — её уже сделал звонящий (пушки, M2). Под щитом не проходит.
+        /// </summary>
+        /// <returns>Сколько урона прошло.</returns>
+        public float TakeHit(float damage)
+        {
+            if (State != QueenState.Awake || damage <= 0f) return 0f;
+
+            var before = Health;
 
             Health -= damage;
 
@@ -561,13 +576,16 @@ namespace MineGenerator.Catacombs
                 Health = MaxHealth * shieldAt[_nextShield];
                 _nextShield++;
 
+                DamageTaken += before - Health;
                 EnterShield();
-                return true;
+                return before - Health;
             }
+
+            DamageTaken += before - Mathf.Max(0f, Health);
 
             if (Health <= 0f) Die();
 
-            return true;
+            return before - Mathf.Max(0f, Health);
         }
 
         /// <summary>

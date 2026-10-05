@@ -161,7 +161,7 @@ namespace MineGenerator.Catacombs
                 }
             }
 
-            if (UseMask != 0 && !Reached(p)) return;
+            if (UseMask != 0 && !Reached(p, spider.Up)) return;
 
             Scale[index] = math.max(1e-4f, share);
             Order[index] = order;
@@ -178,9 +178,25 @@ namespace MineGenerator.Catacombs
         /// Связана ли особь с точкой удара ходами. По восьми клеткам вокруг, а не по одной:
         /// особь прижата к камню, и её собственная клетка сплошь и рядом в породе (грабли №11).
         /// </summary>
-        private bool Reached(float3 position)
+        private bool Reached(float3 position, float3 up) =>
+            SpiderReach.Reached(ReachStamp, Stamp, Dim, CellSize, position, up);
+    }
+
+    /// <summary>
+    /// Связана ли особь с отмеченными клетками. Общее у сбора попаданий и поиска целей.
+    /// </summary>
+    public static class SpiderReach
+    {
+        /// <summary>
+        /// Смотрим восемь клеток вокруг точки, сдвинутой от камня по нормали особи, и только
+        /// те, чей центр по её сторону камня. Иначе перегородка тоньше клетки протекала:
+        /// восемь клеток вокруг особи захватывали клетки по ту сторону стенки, а они в заливке
+        /// от взрыва. Прогон пушек поймал это: паук за стенкой в полъюнита терял 30 HP.
+        /// </summary>
+        public static bool Reached(NativeArray<int> stamp, int mark, int3 dim, float cellSize, float3 position, float3 up)
         {
-            var baseCell = (int3)math.floor(position / CellSize - 0.5f);
+            var probe = position + up * (cellSize * 0.35f);
+            var baseCell = (int3)math.floor(probe / cellSize - 0.5f);
 
             for (var dz = 0; dz <= 1; dz++)
             for (var dy = 0; dy <= 1; dy++)
@@ -188,9 +204,12 @@ namespace MineGenerator.Catacombs
             {
                 var c = baseCell + new int3(dx, dy, dz);
 
-                if (math.any(c < 0) || math.any(c >= Dim)) continue;
+                if (math.any(c < 0) || math.any(c >= dim)) continue;
+                if (stamp[(c.z * dim.y + c.y) * dim.x + c.x] != mark) continue;
 
-                if (ReachStamp[(c.z * Dim.y + c.y) * Dim.x + c.x] == Stamp) return true;
+                var centre = (new float3(c.x, c.y, c.z) + 0.5f) * cellSize;
+
+                if (math.dot(centre - position, up) > -0.25f * cellSize) return true;
             }
 
             return false;
@@ -414,6 +433,9 @@ namespace MineGenerator.Catacombs
         /// <summary>Горящие для распространения огня — до ёмкости списка.</summary>
         public NativeList<int> Burning;
 
+        /// <summary>Урон горения по источникам, HP — для статистики пушек и таблицы DPS.</summary>
+        public NativeArray<float> BurnDamage;
+
         public int BurningCap;
         public float DeltaTime;
 
@@ -450,7 +472,12 @@ namespace MineGenerator.Catacombs
                 if (status.Burn > 0f)
                 {
                     status.Burn = math.max(0f, status.Burn - DeltaTime);
+
+                    var burn = math.min(math.max(0f, spider.Health), status.BurnDps * DeltaTime);
                     spider.Health -= status.BurnDps * DeltaTime;
+
+                    var source = math.clamp(status.BurnSource, 0, BurnDamage.Length - 1);
+                    BurnDamage[source] += burn;
                     burning++;
 
                     if (Burning.Length < BurningCap) Burning.Add(i);

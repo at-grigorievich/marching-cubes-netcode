@@ -93,8 +93,8 @@ namespace MineGenerator.Catacombs
 
         /// <summary>
         /// Взрыв под прицелом без полёта гранаты — отладка: проверить разлёт и эффекты,
-        /// не целясь. Граната есть (<see cref="CaveGrenadeLauncher"/>), и при нём клавиша
-        /// делает ровно то же, что её попадание.
+        /// не целясь. При арсенале (<see cref="PlayerArsenal.Detonate"/>) клавиша делает ровно
+        /// то же, что попадание гранаты: воронка, гарь, разлёт на куски.
         /// </summary>
         private void TestBlast()
         {
@@ -105,12 +105,12 @@ namespace MineGenerator.Catacombs
                 ? hit.point
                 : origin + transform.forward * reach;
 
-            var launcher = GetComponent<CaveGrenadeLauncher>();
+            var arsenal = GetComponent<PlayerArsenal>();
 
-            if (launcher != null && launcher.isActiveAndEnabled)
+            if (arsenal != null && arsenal.isActiveAndEnabled)
             {
                 var normal = hit.collider != null ? hit.normal : -transform.forward;
-                var dead = launcher.Detonate(point + normal * 0.12f, normal);
+                var dead = arsenal.Detonate(point + normal * 0.12f, normal);
 
                 Debug.Log($"ВЗРЫВ (отладка) в ({point.x:0.0}, {point.y:0.0}, {point.z:0.0}): убито {dead}");
                 return;
@@ -278,7 +278,7 @@ namespace MineGenerator.Catacombs
             }
 
             GUILayout.Space(6);
-            var armed = GetComponent<CaveGrenadeLauncher>() != null;
+            var armed = GetComponent<PlayerArsenal>() != null;
             var digging = _rig.DiggingEnabled;
 
             GUILayout.Label(_rig.IsLooking

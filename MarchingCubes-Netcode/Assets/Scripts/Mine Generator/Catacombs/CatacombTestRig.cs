@@ -93,6 +93,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Ввод заблокирован: экран карточки, смерть, реклама. Взгляд и ходьба стоят.</summary>
         public bool InputBlocked { get; set; }
 
+        /// <summary>
+        /// Помощь прицеливания (тач, M5): мишени шире, монета ловит выстрел сама, автоогонь.
+        /// Для мыши выключена.
+        /// </summary>
+        public bool AimAssist { get; set; }
+
         public PlayerVitals Vitals
         {
             get
@@ -151,6 +157,30 @@ namespace MineGenerator.Catacombs
         /// шесть гранат подряд у самого лица трясут сильно, но не выворачивают взгляд.
         /// </summary>
         public void AddShake(float strength) => _shake = Mathf.Min(1.5f, _shake + strength);
+
+        private float _fovPunch;
+        private float _baseFov = -1f;
+        private Camera _camera;
+
+        /// <summary>Удар FOV: поле зрения расширяется на столько градусов и плавно возвращается (рельса).</summary>
+        public void AddFovPunch(float degrees) => _fovPunch = Mathf.Min(20f, _fovPunch + degrees);
+
+        private Vector3 _lungeDirection;
+        private float _lungeLeft;
+        private float _lungeSpeed;
+
+        /// <summary>
+        /// Выпад: сдвиг по направлению за время, мимо толпы — пробой кирки. Контроллером
+        /// кусками, как рывок: сквозь породу не проходит (сначала её прокапывает сама кирка).
+        /// </summary>
+        public void Lunge(Vector3 direction, float distance, float duration)
+        {
+            _lungeDirection = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
+            _lungeLeft = Mathf.Max(0.01f, duration);
+            _lungeSpeed = distance / _lungeLeft;
+        }
+
+        public bool IsLunging => _lungeLeft > 0f;
 
         private void Awake()
         {
@@ -354,6 +384,16 @@ namespace MineGenerator.Catacombs
             _kick = Mathf.Lerp(_kick, 0f, Mathf.Clamp01(dt * 9f));
             _shake = Mathf.Max(0f, _shake - dt * 2.2f);
 
+            if (_camera == null) _camera = GetComponent<Camera>();
+
+            if (_camera != null)
+            {
+                if (_baseFov < 0f) _baseFov = _camera.fieldOfView;
+
+                _fovPunch = Mathf.Lerp(_fovPunch, 0f, Mathf.Clamp01(dt * 6f));
+                _camera.fieldOfView = _baseFov + _fovPunch;
+            }
+
             // Тряска шумом, а не случайным числом каждый кадр: белый шум читается дрожанием
             // картинки, а не толчком.
             var t = Time.time * 28f;
@@ -421,7 +461,7 @@ namespace MineGenerator.Catacombs
             var slow = (web != null ? web.SpeedScale : 1f) * (IsEntangled ? _entangleScale : 1f);
             var wish = (forward * input.z + right * input.x).normalized;
 
-            var dash = UpdateDash(wish, forward, slow);
+            var dash = UpdateDash(wish, forward, slow) || UpdateLunge();
 
             // Толпа держит — только не в рывке: рывок и есть выход из окружения.
             var hold = !dash && _mobility != null ? _mobility.MeasureHold(crowd, this) : 1f;
@@ -459,6 +499,32 @@ namespace MineGenerator.Catacombs
         }
 
         private Vector3 _dashDirection;
+
+        private bool UpdateLunge()
+        {
+            if (_lungeLeft <= 0f) return false;
+
+            var step = Mathf.Min(_lungeLeft, Time.deltaTime);
+            _lungeLeft -= step;
+
+            var distance = _lungeSpeed * step;
+            var pieces = Mathf.Max(1, Mathf.CeilToInt(distance / 0.5f));
+            var piece = _lungeDirection * (distance / pieces);
+
+            for (var i = 0; i < pieces; i++)
+            {
+                var before = transform.position;
+                _controller.Move(piece);
+
+                if ((transform.position - before).sqrMagnitude < piece.sqrMagnitude * 0.1f)
+                {
+                    _lungeLeft = 0f;
+                    break;
+                }
+            }
+
+            return true;
+        }
 
         /// <summary>
         /// Рывок: по направлению ввода, без ввода — вперёд по взгляду. Двигает контроллер

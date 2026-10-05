@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 89aab07685b48b04cbc8726d94faac18, type: 3}
+  m_Name: launcher
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.WeaponDef
+  Id: 0
+  Key: launcher
+  Base:
+  - 30
+  - 3.125
+  - 6
+  - 2.1
+  - 0
+  - 3.5
+  - 5
+  - 0
+  - 0
+  - 0
+  - 0
+  - 30
+  - 0.4
+  - 3
+  - 0
+  - 0
+  - 0
+  - 1
+  - 0
+  - 0
+  - 0
+  - 9
+  - 0.9
+  Levels:
+  - TextKey: weapon.launcher.l2
+    Mods:
+    - Stat: 2
+      Add: 1
+      Scale: 0
+  - TextKey: weapon.launcher.l3
+    Mods:
+    - Stat: 6
+      Add: 0
+      Scale: 0.15
+  - TextKey: weapon.launcher.l4
+    Mods:
+    - Stat: 0
+      Add: 0
+      Scale: 0.2
+  - TextKey: weapon.launcher.l5
+    Mods:
+    - Stat: 3
+      Add: 0
+      Scale: -0.2
+    - Stat: 13
+      Add: 1
+      Scale: 0
+  PairTome: 2
+  PairLevel: 3
+  Evolution:
+    TextKey: weapon.launcher.evo
+    Mods:
+    - Stat: 8
+      Add: 5
+      Scale: 0
+  StartsUnlocked: 1
+  Price: 0
+  Tint: {r: 1, g: 0.72, b: 0.3, a: 1}

@@ -157,6 +157,7 @@ namespace MineGenerator.Catacombs
         private NativeArray<byte> _hitCrit;
         private NativeArray<int> _statusCounters;
         private NativeList<int> _burningList;
+        private NativeArray<float> _burnDamage;
 
         private NativeArray<int> _reachStamp;
         private NativeArray<int> _reachQueue;
@@ -193,6 +194,7 @@ namespace MineGenerator.Catacombs
             _hitCrit = new NativeArray<byte>(size, Allocator.Persistent);
             _statusCounters = new NativeArray<int>(3, Allocator.Persistent);
             _burningList = new NativeList<int>(FireSpreadCap, Allocator.Persistent);
+            _burnDamage = new NativeArray<float>((int)DamageSource.Count, Allocator.Persistent);
 
             var cells = math.max(1, _flow.CellCount);
 
@@ -216,6 +218,7 @@ namespace MineGenerator.Catacombs
             if (_hitCrit.IsCreated) _hitCrit.Dispose();
             if (_statusCounters.IsCreated) _statusCounters.Dispose();
             if (_burningList.IsCreated) _burningList.Dispose();
+            if (_burnDamage.IsCreated) _burnDamage.Dispose();
             if (_reachStamp.IsCreated) _reachStamp.Dispose();
             if (_reachQueue.IsCreated) _reachQueue.Dispose();
             if (_reachSteps.IsCreated) _reachSteps.Dispose();
@@ -266,7 +269,12 @@ namespace MineGenerator.Catacombs
                 CellSize = _flow.CellSize
             }.Schedule(_states.Length, 64).Complete();
 
-            if (spec.Shape == HitShape.Capsule && spec.MaxTargets > 0) SelectPierced(spec.MaxTargets, spec.PierceFalloff);
+            // Конус — дробь и пламя, летящие по прямой: за углом его нет, сколько бы шагов
+            // по ходам ни было до цели. Заливка тут годится лишь как первый отсев.
+            if (spec.Shape == HitShape.Cone && !spec.ThroughWalls) CullHidden(spec.Origin);
+
+            // Луч пробивает первых N по дальности; конус кирки рассекает первых N — тех же правил.
+            if (spec.MaxTargets > 0) SelectPierced(spec.MaxTargets, spec.PierceFalloff);
 
             return Apply(spec, origin, direction, radius, gibbed);
         }
@@ -298,6 +306,49 @@ namespace MineGenerator.Catacombs
                 new float3(0f, 0f, 1f));
 
             return Apply(spec, origin, direction, spec.Radius / math.max(1e-4f, world.transform.lossyScale.x), gibbed);
+        }
+
+        private readonly RaycastHit[] _losHits = new RaycastHit[8];
+
+        /// <summary>Сколько целей конуса отсеяно прямой видимостью — для прогона цены.</summary>
+        public int HiddenCulled { get; private set; }
+
+        /// <summary>
+        /// Отсев целей конуса, до которых от вершины нет прямой: луч физики из вершины (она в пустоте
+        /// хода — грабли №1 не про него) к телу особи. Камень в последнем юните пути не считается:
+        /// особь сидит на поверхности, и луч к её центру задевает камень под ней.
+        ///
+        /// Прогон пушек поймал без этого: дробовик в стенку в упор бил паука за перегородкой
+        /// в юнит толщиной на все 80 HP — до него по ходам было меньше тринадцати шагов.
+        /// </summary>
+        private void CullHidden(Vector3 origin)
+        {
+            var ignore = _targetBody;
+
+            for (var i = 0; i < _hitScale.Length; i++)
+            {
+                if (_hitScale[i] <= 0f) continue;
+
+                var spider = _states[i];
+                var target = WorldOf(spider.Position + spider.Up * 0.3f);
+                var delta = target - origin;
+                var length = delta.magnitude;
+
+                if (length < 1e-3f) continue;
+
+                var count = Physics.RaycastNonAlloc(origin, delta / length, _losHits, length, ~0,
+                    QueryTriggerInteraction.Ignore);
+
+                for (var k = 0; k < count; k++)
+                {
+                    if (ignore != null && _losHits[k].collider == ignore) continue;
+                    if (_losHits[k].distance >= length - 1f) continue;
+
+                    _hitScale[i] = 0f;
+                    HiddenCulled++;
+                    break;
+                }
+            }
         }
 
         /// <summary>Луч пробивает первых N по дальности, каждый следующий слабее.</summary>
@@ -428,7 +479,7 @@ namespace MineGenerator.Catacombs
         {
             if (!_flow.IsCreated || !_reachStamp.IsCreated) return false;
 
-            var start = _flow.FindNearestWalkable(localOrigin, 3);
+            var start = FindOpenStart(localOrigin);
             if (start < 0) return false;
 
             _reachMark++;
@@ -448,13 +499,73 @@ namespace MineGenerator.Catacombs
             return true;
         }
 
+        private readonly List<float2> _startCandidates = new List<float2>(64);
+
+        /// <summary>
+        /// Клетка, с которой начинать заливку: ближайшая проходимая, до центра которой от точки
+        /// удара прямая не проходит через камень. Просто ближайшая не годится: у стенки тоньше
+        /// клетки ближайшей бывает клетка соседнего хода, и заливка оттуда «связывала» с ударом
+        /// всех за перегородкой — прогон пушек поймал это на взрыве у стены.
+        /// </summary>
+        private int FindOpenStart(float3 origin)
+        {
+            var centre = _flow.CellOf(origin);
+
+            for (var ring = 0; ring <= 3; ring++)
+            {
+                _startCandidates.Clear();
+
+                for (var dz = -ring; dz <= ring; dz++)
+                for (var dy = -ring; dy <= ring; dy++)
+                for (var dx = -ring; dx <= ring; dx++)
+                {
+                    if (ring > 0 && math.abs(dx) != ring && math.abs(dy) != ring && math.abs(dz) != ring) continue;
+
+                    var c = centre + new int3(dx, dy, dz);
+                    if (!_flow.InRange(c)) continue;
+
+                    var index = _flow.CellIndex(c);
+                    if (_flow.Walkable[index] == 0) continue;
+
+                    _startCandidates.Add(new float2(math.lengthsq(_flow.CellCentre(index) - origin), index));
+                }
+
+                _startCandidates.Sort((a, b) => a.x.CompareTo(b.x));
+
+                foreach (var candidate in _startCandidates)
+                {
+                    var index = (int)candidate.y;
+                    if (ClearLine(origin, _flow.CellCentre(index))) return index;
+                }
+            }
+
+            return -1;
+        }
+
+        /// <summary>Прямая между точками без камня — по полю плотности, шагом в четверть юнита.</summary>
+        private bool ClearLine(float3 from, float3 to)
+        {
+            if (world == null) return true;
+
+            var delta = to - from;
+            var length = math.length(delta);
+            var steps = math.max(1, (int)math.ceil(length / 0.25f));
+
+            for (var k = 1; k < steps; k++)
+            {
+                if (world.IsSolid(WorldOf(from + delta * (k / (float)steps)))) return false;
+            }
+
+            return true;
+        }
+
         /// <summary>
         /// До <paramref name="count"/> ближайших живых в сфере (и, если задано, в конусе) —
         /// захват молнии, рикошет монеты, помощь прицеливания. Сквозь стенку не видит: та же
         /// заливка, что режет взрыв.
         /// </summary>
         public int FindNearest(Vector3 centre, float radius, int count, List<int> into, Vector3 coneAxis = default,
-            float coneHalfAngle = 0f, bool elitesFirst = false, IReadOnlyList<int> exclude = null)
+            float coneHalfAngle = 0f, bool elitesFirst = false, IReadOnlyList<int> exclude = null, bool wallCheck = true)
         {
             into.Clear();
 
@@ -465,7 +576,7 @@ namespace MineGenerator.Catacombs
             var reach = radius / scale;
             var reachSq = reach * reach;
 
-            var useMask = radius > WallCheckRadius && MarkReach(local, reach);
+            var useMask = wallCheck && radius > WallCheckRadius && MarkReach(local, reach);
 
             var axis = coneHalfAngle > 0f
                 ? math.normalizesafe((float3)world.transform.InverseTransformDirection(coneAxis))
@@ -485,7 +596,8 @@ namespace MineGenerator.Catacombs
 
                 if (coneHalfAngle > 0f && math.dot(math.normalizesafe(delta), axis) < cos) continue;
                 if (exclude != null && Contains(exclude, i)) continue;
-                if (useMask && !Reached(spider.Position)) continue;
+                if (useMask && !SpiderReach.Reached(_reachStamp, _reachMark, _flow.Dim, _flow.CellSize,
+                        spider.Position, spider.Up)) continue;
 
                 // Элита вперёд — монета и рельса ищут самую опасную цель.
                 var key = elitesFirst && spider.Elite != 0 ? distanceSq - 1e6f : distanceSq;
@@ -510,25 +622,6 @@ namespace MineGenerator.Catacombs
             return false;
         }
 
-        private bool Reached(float3 position)
-        {
-            var dim = _flow.Dim;
-            var baseCell = (int3)math.floor(position / _flow.CellSize - 0.5f);
-
-            for (var dz = 0; dz <= 1; dz++)
-            for (var dy = 0; dy <= 1; dy++)
-            for (var dx = 0; dx <= 1; dx++)
-            {
-                var c = baseCell + new int3(dx, dy, dz);
-
-                if (math.any(c < 0) || math.any(c >= dim)) continue;
-
-                if (_reachStamp[(c.z * dim.y + c.y) * dim.x + c.x] == _reachMark) return true;
-            }
-
-            return false;
-        }
-
         /// <summary>Особь по номеру: жива ли, где, элита ли, радиус тела в мире.</summary>
         public bool TryGetTarget(int index, out Vector3 worldPosition, out bool elite, out float bodyRadius)
         {
@@ -548,6 +641,10 @@ namespace MineGenerator.Catacombs
             return true;
         }
 
+        /// <summary>Сколько HP сожгло горение от источника за жизнь толпы — статистика пушек.</summary>
+        public float BurnDamageBy(DamageSource source) =>
+            _burnDamage.IsCreated && (int)source < _burnDamage.Length ? _burnDamage[(int)source] : 0f;
+
         /// <summary>Статусы за шаг: горение жжёт, сгоревшие идут в журнал, огонь перекидывается.</summary>
         private void TickStatuses(float deltaTime)
         {
@@ -560,6 +657,7 @@ namespace MineGenerator.Catacombs
                 Killed = _killed,
                 Counters = _statusCounters,
                 Burning = _burningList,
+                BurnDamage = _burnDamage,
                 BurningCap = FireSpreadCap,
                 DeltaTime = deltaTime
             }.Schedule().Complete();
@@ -638,6 +736,100 @@ namespace MineGenerator.Catacombs
                 }
             }
         }
+
+        // ------------------------------------------------------------------ прогоны
+
+        /// <summary>
+        /// Посадить особь на камень у точки — раскладка прогона пушек (WeaponCheck): цели
+        /// в прямом ходе, за перегородкой, в конусе и вне его. Живучесть — в попаданиях.
+        /// </summary>
+        /// <returns>Номер слота или −1, если рядом нет проходимой клетки.</returns>
+        public int SpawnAt(Vector3 worldPoint, int kindIndex, float healthHits)
+        {
+            if (!_states.IsCreated || _runtime == null || !_flow.IsCreated) return -1;
+
+            var cell = _flow.FindNearestWalkable(LocalOf(worldPoint), 3);
+            if (cell < 0) return -1;
+
+            var slot = FindFreeSlot();
+            if (slot < 0) return -1;
+
+            kindIndex = math.clamp(kindIndex, 0, _runtime.Length - 1);
+
+            Place(slot, cell, kindIndex, 1f, CombatUnits.Hits(healthHits), 1f, new float3(1f), false, 0.5f, false);
+            Alive++;
+
+            return slot;
+        }
+
+        /// <summary>Убрать всех без журнала и трупов — чистая раскладка прогона.</summary>
+        public void ClearAll()
+        {
+            if (!_states.IsCreated) return;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+                spider.Active = 0;
+                _states[i] = spider;
+
+                _neighbours[i] = new float4(spider.Position, 0f);
+                _status[i] = default;
+            }
+
+            _kills.Clear();
+            Alive = 0;
+
+            if (_hash.IsCreated) _hash.Clear();
+        }
+
+        /// <summary>
+        /// Шаг без движения: статусы (горение жжёт), снимок соседей и пространственная сетка —
+        /// взрыватель снаряда по близости ищет пауков по ней. Прогон пушек держит раскладку
+        /// на месте, иначе толпа побежала бы к игроку и сбила замер формы.
+        /// </summary>
+        public void StepStatic(float deltaTime)
+        {
+            if (!_states.IsCreated) return;
+
+            if (deltaTime > 0f) TickStatuses(deltaTime);
+
+            new SpiderPublishJob
+            {
+                States = _states,
+                Tuning = _tuning,
+                Neighbours = _neighbours,
+                Velocities = _velocities,
+                Heights = _heights,
+                Climbs = _climbs,
+                Tiers = _tiers
+            }.Schedule(_states.Length, 64).Complete();
+
+            _hash.Clear();
+
+            new SpiderHashJob
+            {
+                Neighbours = _neighbours,
+                Hash = _hash.AsParallelWriter(),
+                CellSize = math.max(0.1f, neighbourRadius)
+            }.Schedule(_states.Length, 64).Complete();
+
+            CountAlive();
+        }
+
+        /// <summary>Сколько HP у особи в слоте; −1 — мертва или слот пуст.</summary>
+        public float HealthAt(int slot)
+        {
+            if (!_states.IsCreated || slot < 0 || slot >= _states.Length) return -1f;
+
+            var spider = _states[slot];
+            return spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead ? -1f : spider.Health;
+        }
+
+        /// <summary>Где особь в слоте, мир.</summary>
+        public Vector3 PositionAt(int slot) => _states.IsCreated && slot >= 0 && slot < _states.Length
+            ? WorldOf(_states[slot].Position)
+            : Vector3.zero;
 
         /// <summary>Статусы особи — для прогона: горит ли, замедлена ли, оглушена ли.</summary>
         public bool TryGetStatus(int index, out SpiderStatus status)

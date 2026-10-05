@@ -44,6 +44,18 @@ namespace MineGenerator.Catacombs
         /// <summary>Мир: паника, отлив и прочее, что убивает не оружием.</summary>
         Environment = 4,
 
+        // Пушки M2 — по порядку WeaponId после гранатомёта.
+        Revolver = 5,
+        Shotgun = 6,
+        Nailgun = 7,
+        Rail = 8,
+        Flamer = 9,
+        Tesla = 10,
+        PickHammer = 11,
+
+        /// <summary>Особые пауки (M3): облако бомбардира бьёт и по толпе.</summary>
+        Special = 12,
+
         Count
     }
 

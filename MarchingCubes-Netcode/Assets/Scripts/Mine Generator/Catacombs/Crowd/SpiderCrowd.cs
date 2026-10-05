@@ -469,6 +469,9 @@ namespace MineGenerator.Catacombs
         /// <summary>Индекс вида элиты — самого живучего.</summary>
         public int HeaviestKind => _heaviest;
 
+        /// <summary>Ближе этой доли радиуса взрыва убитых рвёт на куски — для пушек со взрывом.</summary>
+        public float GibShare => gibShare;
+
         private int EffectiveNearCap => _directed ? _directive.NearCap : nearCap;
 
         /// <summary>Готовые к отрисовке буферы одного вида.</summary>
@@ -1068,15 +1071,17 @@ namespace MineGenerator.Catacombs
         {
             if (_kills.Count == 0) return;
 
-            try
-            {
-                Killed?.Invoke(_kills);
-            }
-            finally
-            {
-                _kills.Clear();
-            }
+            // Раздаётся копия, а журнал сразу чистится: подписчик может убивать сам
+            // (огнемёт «Пекло» лопает сгоревших, M2), и его убийства уйдут в следующую раздачу,
+            // а не допишутся в список, по которому идут остальные подписчики.
+            _dispatch.Clear();
+            _dispatch.AddRange(_kills);
+            _kills.Clear();
+
+            Killed?.Invoke(_dispatch);
         }
+
+        private readonly List<KillRecord> _dispatch = new List<KillRecord>(256);
 
         /// <summary>
         /// Разгоняет толпу прочь от точки на несколько секунд.

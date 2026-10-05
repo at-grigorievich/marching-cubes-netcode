@@ -253,6 +253,73 @@ namespace MineGenerator.Catacombs
         /// <summary>Вспышка у дула: короткий свет без частиц — частицы вспышки рисует сам гранатомёт.</summary>
         public void MuzzleLight(Vector3 point) => Flash(point, 18f, 7f);
 
+        /// <summary>
+        /// Множитель числа частиц — уровень качества (M5): на телефоне вдвое меньше.
+        /// </summary>
+        public static float Density = 1f;
+
+        /// <summary>Попадание пули в камень: искры и пара осколков.</summary>
+        public void Impact(Vector3 point, Vector3 normal, int sparks = 8)
+        {
+            if (_sparks == null) return;
+
+            normal = normal.sqrMagnitude > 1e-4f ? normal.normalized : Vector3.up;
+            sparks = Mathf.Max(1, Mathf.RoundToInt(sparks * Density));
+
+            for (var i = 0; i < sparks; i++)
+            {
+                var direction = Hemisphere(normal, 0.2f);
+                Emit(_sparks, point + normal * 0.05f, direction * Random.Range(4f, 12f),
+                    Random.Range(0.03f, 0.07f), Random.Range(0.15f, 0.4f), Color.white, 0f);
+            }
+
+            Emit(_smoke, point + normal * 0.2f, normal * 0.5f, Random.Range(0.4f, 0.7f), Random.Range(0.6f, 1f),
+                new Color(1f, 1f, 1f, 0.5f), Random.Range(0f, 360f));
+        }
+
+        /// <summary>Язык огня: клуб пламени с заданной скоростью — огнемёт, пятна огня на полу.</summary>
+        public void Flame(Vector3 position, Vector3 velocity, float size, float life)
+        {
+            if (_fire == null) return;
+
+            Emit(_fire, position, velocity, size, life, Color.white, Random.Range(0f, 360f));
+        }
+
+        /// <summary>Уголёк — тлеющая точка (огонь на полу, горящий паук).</summary>
+        public void Ember(Vector3 position, Vector3 velocity)
+        {
+            if (_embers == null) return;
+
+            Emit(_embers, position, velocity, Random.Range(0.05f, 0.1f), Random.Range(0.6f, 1.2f), Color.white, 0f);
+        }
+
+        /// <summary>Пыль и каменная крошка — удар оземь, пробой стены.</summary>
+        public void Dust(Vector3 point, Vector3 normal, float radius)
+        {
+            if (_smoke == null) return;
+
+            normal = normal.sqrMagnitude > 1e-4f ? normal.normalized : Vector3.up;
+            var count = Mathf.Max(3, Mathf.RoundToInt(10 * Density));
+
+            for (var i = 0; i < count; i++)
+            {
+                var direction = Hemisphere(normal, 0.05f);
+                Emit(_smoke, point + direction * Random.Range(0.2f, radius * 0.5f),
+                    (direction + Random.insideUnitSphere * 0.3f) * Random.Range(1.5f, 4f),
+                    Random.Range(1f, 2f) * Mathf.Max(0.5f, radius / 4f), Random.Range(1f, 1.8f), Color.white,
+                    Random.Range(0f, 360f));
+            }
+
+            for (var i = 0; i < Mathf.Max(2, Mathf.RoundToInt(8 * Density)); i++)
+            {
+                EmitRock(point + normal * 0.2f, Hemisphere(normal, 0.1f) * Random.Range(3f, 7f),
+                    Random.Range(0.05f, 0.14f), Random.Range(1f, 1.8f));
+            }
+        }
+
+        /// <summary>Свет вспышки из пула — выстрел, молния, огонь. Цвет — на пике.</summary>
+        public void Light(Vector3 point, float peak, float range) => Flash(point, peak, range);
+
         private void Update()
         {
             var dt = Time.deltaTime;
