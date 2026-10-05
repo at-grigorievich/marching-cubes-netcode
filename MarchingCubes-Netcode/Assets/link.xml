@@ -1,0 +1,19 @@
+<!--
+  Строгий стриппинг кода (Managed Stripping High, M5.7) вырезает то, к чему код не обращается
+  явно. Профиль и снимок забега пишет и читает JsonUtility: поле, которое код только сохраняет,
+  линкер счёл бы лишним — и сохранение молча потеряло бы его в сборке, а в редакторе всё работало бы.
+-->
+<linker>
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="MineGenerator.Catacombs.PlayerProfile" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.RunSnapshot" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.ProfileStats" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.ProfileSettings" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.QuestProgress" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.DailyState" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.AdCounters" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.IntPair" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.SnapshotWeapon" preserve="all" />
+    <type fullname="MineGenerator.Catacombs.PlatformBridge" preserve="all" />
+  </assembly>
+</linker>

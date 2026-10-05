@@ -170,6 +170,14 @@ namespace MineGenerator.Catacombs
                 SetOpen(false);
                 _meta.StartSortie((PlayerClass)profile.SelectedClass, profile.SelectedDepth);
             }, new Color(0.38f, 0.16f, 0.05f, 0.97f));
+
+            // Ящик дня за рекламу (M5.3): кнопка только если реклама есть и ящик сегодня не брали —
+            // кнопка «за награду» не врёт.
+            if (_meta.DailyBoxAvailable)
+            {
+                BigButton(Loc.F("hub.daily_box", AdPolicy.DailyBoxChitin), () => _meta.ClaimDailyBox(Refresh),
+                    new Color(0.12f, 0.18f, 0.1f, 0.95f));
+            }
         }
 
         private void CycleClass(int step)

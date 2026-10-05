@@ -25,6 +25,15 @@ namespace MineGenerator.Catacombs
         /// <summary>Стоп-кадр попадания (Ultrakill): десятки миллисекунд, ведётся самими часами.</summary>
         HitStop,
 
+        /// <summary>
+        /// Вкладка скрыта (<c>visibilitychange</c>, M5). Своя причина, а не потеря фокуса: свёрнутая
+        /// вкладка и окно без фокуса приходят разными событиями, и одно не должно снимать другое.
+        /// </summary>
+        Hidden,
+
+        /// <summary>Площадка попросила паузу (Яндекс <c>game_api_pause</c>, M5).</summary>
+        Platform,
+
         Count
     }
 
@@ -130,6 +139,22 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>
+        /// Снять игровые причины — паузу, карточку, смерть, стоп-кадр — и оставить причины
+        /// окружения: рекламу, фокус, скрытую вкладку, паузу площадки (M5). Новый ярус начинается
+        /// и посреди межстраничной рекламы: снятие всего запустило бы время под рекламой.
+        /// </summary>
+        public static void ResetGame()
+        {
+            Active[(int)ClockReason.Pause] = false;
+            Active[(int)ClockReason.LevelUp] = false;
+            Active[(int)ClockReason.Death] = false;
+            Active[(int)ClockReason.HitStop] = false;
+            _hitStopLeft = 0f;
+            _hitStopCooldown = 0f;
+            Recompute();
+        }
+
+        /// <summary>
         /// Статика переживает выход из play-режима, если перезагрузка домена выключена
         /// (Enter Play Mode Options): без сброса игра стартовала бы с паузой прошлого запуска.
         /// </summary>
@@ -152,7 +177,8 @@ namespace MineGenerator.Catacombs
                 scale = Mathf.Min(scale, Scales[i]);
 
                 var reason = (ClockReason)i;
-                if (reason == ClockReason.Pause || reason == ClockReason.Ad || reason == ClockReason.FocusLost)
+                if (reason == ClockReason.Pause || reason == ClockReason.Ad || reason == ClockReason.FocusLost ||
+                    reason == ClockReason.Hidden || reason == ClockReason.Platform)
                 {
                     audio = true;
                 }

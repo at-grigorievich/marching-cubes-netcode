@@ -311,9 +311,6 @@ namespace MineGenerator.Catacombs
             }
 
             HubScreen?.SetOpen(next == GameState.Hub);
-
-            if (next == GameState.Playing) Platform.Current.GameplayStart();
-            else Platform.Current.GameplayStop();
         }
 
         private void OnLevelUpOffered() => Cards.Show(Controller);

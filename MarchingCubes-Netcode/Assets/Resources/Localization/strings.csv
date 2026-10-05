@@ -206,6 +206,7 @@ hub.invert;Инверсия по вертикали: {0};Invert vertical look: {
 hub.autofire;Автоогонь (касания): {0};Auto-fire (touch): {0};Otomatik ateş (dokunmatik): {0}
 hub.on;вкл;on;açık
 hub.off;выкл;off;kapalı
+hub.daily_box;Ящик дня за рекламу: +{0} хитина;Daily crate for an ad: +{0} chitin;Reklam karşılığı günlük sandık: +{0} kitin
 # ---------------------------------------------------------------- мета-улучшения
 meta.might.name;Сила;Might;Güç
 meta.might.desc;+5% урона за уровень;+5% damage per level;Seviye başına +%5 hasar

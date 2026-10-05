@@ -121,7 +121,8 @@ namespace MineGenerator.Catacombs
             StreakReward = Quests.DailyLogin(Profile, Today);
             Saves.MarkDirty();
 
-            if (!string.IsNullOrEmpty(Profile.Settings.Language)) Loc.SetLanguage(Profile.Settings.Language);
+            ApplyLanguage();
+            Platform.Readied += ApplyLanguage;
             ApplySettings();
 
             if (_controller != null)
@@ -139,6 +140,8 @@ namespace MineGenerator.Catacombs
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+
+            Platform.Readied -= ApplyLanguage;
 
             if (_controller != null)
             {
@@ -190,7 +193,9 @@ namespace MineGenerator.Catacombs
                 Saves.MarkDirty();
             };
 
-            ui.Results.OnAgain = () => StartSortie(Class, Depth);
+            // «Ещё раз» — переход, который игрок и так ждёт: здесь межстраничная (M5.3). «В лагерь» — навигация, без неё.
+            ui.Results.OnAgain = () => AfterInterstitial("run_again", true, () => StartSortie(Class, Depth));
+            ui.Results.OnDoubleChitin = DoubleChitinForAd;
             ui.Results.OnCamp = EnterHub;
             ui.Results.ExtraText = ResultsText;
             ui.Pause.OnCamp = () =>
@@ -200,6 +205,21 @@ namespace MineGenerator.Catacombs
             };
 
             ui.EnsureHub(this);
+        }
+
+        /// <summary>
+        /// Язык (M5.4): выбранный в настройках → язык площадки → английский. SDK отвечает
+        /// асинхронно, поэтому язык применяется и при загрузке профиля, и когда площадка поднялась.
+        /// В редакторе без выбора — язык системы, как и было: разработка идёт на родном языке.
+        /// </summary>
+        private void ApplyLanguage()
+        {
+            var chosen = Profile.Settings.Language;
+            var platform = Platform.Ready ? Platform.Current.Language : "";
+
+            if (Application.isEditor && string.IsNullOrEmpty(chosen) && string.IsNullOrEmpty(platform)) return;
+
+            Loc.SetLanguage(Loc.Resolve(chosen, platform));
         }
 
         // ------------------------------------------------------------------ статы и пул
@@ -404,7 +424,10 @@ namespace MineGenerator.Catacombs
             });
         }
 
-        private void DescendFurther()
+        /// <summary>Спуск на следующий ярус: межстраничная, если пора (M5.3), — до генерации, пока стоит привал.</summary>
+        private void DescendFurther() => AfterInterstitial("tier", false, DescendNow);
+
+        private void DescendNow()
         {
             if (_controller == null) return;
 
@@ -418,6 +441,62 @@ namespace MineGenerator.Catacombs
 
             _controller.ContinueOnNextLevel();
             GenerateTier(session.Tier, seed);
+        }
+
+        // ------------------------------------------------------------------ реклама (M5.3)
+
+        private float _lastRunChitin;
+
+        /// <summary>
+        /// Межстраничная перед переходом, если политика разрешает (<see cref="AdPolicy"/>); иначе сразу.
+        /// Время и звук на показ стоят (<see cref="Platform.Interstitial"/>), ошибка показа — переход идёт.
+        /// </summary>
+        private void AfterInterstitial(string placement, bool betweenRuns, Action next)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            if (!AdPolicy.CanInterstitial(Profile, now, betweenRuns))
+            {
+                next();
+                return;
+            }
+
+            AdPolicy.MarkInterstitial(Profile, now);
+            Saves.MarkDirty();
+            Platform.Interstitial(placement, next);
+        }
+
+        /// <summary>«Хитин ×2» в итогах: ещё столько же, сколько принёс забег, — только при досмотре.</summary>
+        private void DoubleChitinForAd()
+        {
+            if (_lastRunChitin < 1f) return;
+
+            Platform.Rewarded("double_chitin", rewarded =>
+            {
+                if (!rewarded) return;
+
+                Profile.AddChitin(_lastRunChitin);
+                _lastRunChitin = 0f;
+                Saves.Flush();
+                GameUi.Instance?.Results.HideDouble();
+            });
+        }
+
+        /// <summary>Ящик дня в лагере: раз в день, только за досмотренную рекламу.</summary>
+        public bool DailyBoxAvailable => AdPolicy.CanClaimDailyBox(Profile, Today) && Platform.Current.RewardedAvailable;
+
+        public void ClaimDailyBox(Action done)
+        {
+            Platform.Rewarded("daily_box", rewarded =>
+            {
+                if (rewarded)
+                {
+                    AdPolicy.ClaimDailyBox(Profile, Today);
+                    Saves.Flush();
+                }
+
+                done?.Invoke();
+            });
         }
 
         // ------------------------------------------------------------------ покупки и настройки
@@ -496,6 +575,7 @@ namespace MineGenerator.Catacombs
             if (results.Victory) Profile.UnlockedDepth = Mathf.Max(Profile.UnlockedDepth, Depth + 1);
 
             Profile.AddChitin(results.Chitin);
+            _lastRunChitin = results.Chitin;
 
             LastCompleted = Quests.Apply(Profile, summary, Today);
 

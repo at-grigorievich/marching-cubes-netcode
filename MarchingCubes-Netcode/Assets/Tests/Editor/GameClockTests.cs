@@ -49,6 +49,24 @@ namespace MineGenerator.Catacombs.Tests
         }
 
         [Test]
+        public void NewRunKeepsEnvironmentReasons()
+        {
+            // Новый ярус начался посреди межстраничной рекламы на скрытой вкладке (M5):
+            // игровые причины снимаются, реклама и вкладка — нет.
+            GameClock.Hold(ClockReason.Death, 0f);
+            GameClock.Hold(ClockReason.Ad);
+            GameClock.Hold(ClockReason.Hidden);
+
+            GameClock.ResetGame();
+
+            Assert.IsFalse(GameClock.IsHeld(ClockReason.Death));
+            Assert.IsTrue(GameClock.IsHeld(ClockReason.Ad));
+            Assert.IsTrue(GameClock.IsHeld(ClockReason.Hidden));
+            Assert.AreEqual(0f, GameClock.Scale);
+            Assert.IsTrue(GameClock.AudioPaused, "скрытая вкладка глушит звук");
+        }
+
+        [Test]
         public void ScaleIsMinimumOfReasons()
         {
             GameClock.Hold(ClockReason.Death, 0.3f);

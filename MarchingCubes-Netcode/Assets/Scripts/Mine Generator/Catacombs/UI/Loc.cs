@@ -71,6 +71,44 @@ namespace MineGenerator.Catacombs
             Changed?.Invoke();
         }
 
+        /// <summary>
+        /// Какой язык показывать (M5.4): выбранный игроком в настройках → язык площадки → английский.
+        /// Языки, которых в таблице нет, сводятся к ближайшему: на Яндексе из СНГ приходят
+        /// uk, be, kk, uz — им русский, азербайджанскому — турецкий. Чистая логика — тест вне Unity.
+        /// </summary>
+        public static string Resolve(string chosen, string platform)
+        {
+            var picked = Supported(chosen);
+            if (picked != null) return picked;
+
+            picked = Supported(platform);
+            return picked ?? "en";
+        }
+
+        private static string Supported(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return null;
+
+            code = code.Length > 2 ? code.Substring(0, 2).ToLowerInvariant() : code.ToLowerInvariant();
+
+            switch (code)
+            {
+                case "ru":
+                case "uk":
+                case "be":
+                case "kk":
+                case "uz":
+                    return "ru";
+                case "tr":
+                case "az":
+                    return "tr";
+                case "en":
+                    return "en";
+                default:
+                    return null;
+            }
+        }
+
         /// <summary>Язык по системе — до того, как площадка или профиль скажут своё.</summary>
         public static string SystemCode() => Application.systemLanguage switch
         {

@@ -517,7 +517,6 @@ namespace MineGenerator.Catacombs
                 _rig.SetLooking(false);
             }
 
-            Platform.Current.GameplayStop();
             LevelUpOffered?.Invoke();
         }
 
@@ -612,7 +611,6 @@ namespace MineGenerator.Catacombs
                 _rig.SetLooking(true);
             }
 
-            Platform.Current.GameplayStart();
             LevelUpClosed?.Invoke();
         }
 
@@ -764,7 +762,6 @@ namespace MineGenerator.Catacombs
                 _rig.SetLooking(false);
             }
 
-            Platform.Current.GameplayStop();
             Flow?.EnterDying();
 
             // Без GameFlow (прогон) — экран смерти сразу.
@@ -811,7 +808,6 @@ namespace MineGenerator.Catacombs
             }
 
             Flow?.Revive();
-            Platform.Current.GameplayStart();
         }
 
         /// <summary>Кончить забег: итоги (смерть или победа над Праматерью).</summary>
@@ -843,7 +839,6 @@ namespace MineGenerator.Catacombs
                 _rig.SetLooking(false);
             }
 
-            Platform.Current.GameplayStop();
             Flow?.EnterResults();
 
             Finished?.Invoke(LastResults);

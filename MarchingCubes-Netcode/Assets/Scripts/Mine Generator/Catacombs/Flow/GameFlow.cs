@@ -72,6 +72,14 @@ namespace MineGenerator.Catacombs
             if (Instance != null) return;
             if (FindFirstObjectByType<CatacombWorld>() == null) return;
 
+#if !UNITY_EDITOR
+            // Числа и время — без культуры системы (M5.4): в турецкой локали «1,5» вместо «1.5»
+            // и «İ» из «i» ломают разбор и подписи. Только в сборке: в редакторе это сменило бы
+            // культуру потока самого редактора.
+            System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+#endif
+
             new GameObject("Game Flow").AddComponent<GameFlow>();
         }
 
@@ -89,6 +97,11 @@ namespace MineGenerator.Catacombs
 
             Instance = this;
             _world = FindFirstObjectByType<CatacombWorld>();
+
+            // Площадка (M5): SDK поднимается с первым кадром — язык и облако нужны профилю,
+            // а пауза от площадки (Яндекс game_api_pause) — часам.
+            Platform.Initialize();
+            Platform.PauseRequested += OnPlatformPause;
         }
 
         private void OnEnable()
@@ -110,6 +123,8 @@ namespace MineGenerator.Catacombs
 
         private void OnDestroy()
         {
+            Platform.PauseRequested -= OnPlatformPause;
+
             if (Instance != this) return;
 
             Instance = null;
@@ -237,7 +252,7 @@ namespace MineGenerator.Catacombs
         public void EnterHub()
         {
             _dying = -1f;
-            GameClock.ResetAll();
+            GameClock.ResetGame();
             SetState(GameState.Hub);
         }
 
@@ -248,7 +263,7 @@ namespace MineGenerator.Catacombs
         public void BeginRun()
         {
             _dying = -1f;
-            GameClock.ResetAll();
+            GameClock.ResetGame();
             SetState(_world != null && _world.IsGenerating ? GameState.Loading : GameState.Playing);
         }
 
@@ -259,7 +274,19 @@ namespace MineGenerator.Catacombs
             var previous = State;
             State = next;
 
+            // Разметка площадки — отсюда и только отсюда (M5.2): геймплей — это Playing, всё
+            // остальное (пауза, карточки, привал, итоги, лагерь, загрузка) — стоп. Готовность —
+            // при первом показе того, во что можно играть.
+            Platform.SetGameplay(next == GameState.Playing);
+            if (next == GameState.Playing || next == GameState.Hub) Platform.MarkReady();
+
             StateChanged?.Invoke(previous, next);
+        }
+
+        private static void OnPlatformPause(bool paused)
+        {
+            if (paused) GameClock.Hold(ClockReason.Platform);
+            else GameClock.Release(ClockReason.Platform);
         }
 
 #if !UNITY_EDITOR

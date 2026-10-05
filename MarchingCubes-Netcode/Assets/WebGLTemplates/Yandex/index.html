@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+  <title>Катакомбы</title>
+  <!-- Yandex Games SDK v2: путь /sdk.js отдаёт сама площадка. -->
+  <script src="/sdk.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0907;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+      touch-action: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    #unity-canvas { width: 100%; height: 100%; display: block; background: #0b0907; outline: none; }
+    #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, #1c1510 0%, #0b0907 70%); font-family: sans-serif; }
+    #loader-title { color: #e8a33a; font-size: 34px; font-weight: bold; letter-spacing: 3px; margin-bottom: 26px; }
+    #loader-bar { width: min(420px, 70vw); height: 10px; border-radius: 5px; background: #2a2018; overflow: hidden; }
+    #loader-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #7a3c12, #e8a33a); transition: width 0.15s; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="loader">
+    <div id="loader-title">КАТАКОМБЫ</div>
+    <div id="loader-bar"><div id="loader-fill"></div></div>
+  </div>
+  <script>
+    // Ответы SDK в игру: до старта движка — в очередь, потом SendMessage объекту PlatformBridge.
+    window.catacombsQueue = [];
+    window.catacombsSend = function (method, payload) {
+      if (window.unityInstance) window.unityInstance.SendMessage('PlatformBridge', method, payload);
+      else window.catacombsQueue.push([method, payload]);
+    };
+
+    document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    document.addEventListener('visibilitychange', function () {
+      window.catacombsSend('OnVisibility', document.hidden ? '0' : '1');
+    });
+
+    var buildUrl = 'Build';
+    var config = {
+      dataUrl: buildUrl + '/{{{ DATA_FILENAME }}}',
+      frameworkUrl: buildUrl + '/{{{ FRAMEWORK_FILENAME }}}',
+#if USE_THREADS
+      workerUrl: buildUrl + '/{{{ WORKER_FILENAME }}}',
+#endif
+#if USE_WASM
+      codeUrl: buildUrl + '/{{{ CODE_FILENAME }}}',
+#endif
+#if MEMORY_FILENAME
+      memoryUrl: buildUrl + '/{{{ MEMORY_FILENAME }}}',
+#endif
+#if SYMBOLS_FILENAME
+      symbolsUrl: buildUrl + '/{{{ SYMBOLS_FILENAME }}}',
+#endif
+      streamingAssetsUrl: 'StreamingAssets',
+      companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+      productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}}
+    };
+
+    var fill = document.getElementById('loader-fill');
+    var loader = document.getElementById('loader');
+    var script = document.createElement('script');
+    script.src = buildUrl + '/{{{ LOADER_FILENAME }}}';
+    script.onload = function () {
+      createUnityInstance(document.getElementById('unity-canvas'), config, function (progress) {
+        fill.style.width = (100 * progress) + '%';
+      }).then(function (instance) {
+        window.unityInstance = instance;
+        loader.style.display = 'none';
+        var queue = window.catacombsQueue;
+        window.catacombsQueue = [];
+        for (var i = 0; i < queue.length; i++) instance.SendMessage('PlatformBridge', queue[i][0], queue[i][1]);
+      }).catch(function (message) { console.error(message); });
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

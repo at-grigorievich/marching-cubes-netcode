@@ -215,6 +215,9 @@ namespace MineGenerator.Catacombs
         public long LastInterstitialAt;
         public int RewardedToday;
         public int RewardedDay = -1;
+
+        /// <summary>День последнего «ящика дня» за рекламу (M5.3).</summary>
+        public int DailyBoxDay = -1;
     }
 
     /// <summary>
