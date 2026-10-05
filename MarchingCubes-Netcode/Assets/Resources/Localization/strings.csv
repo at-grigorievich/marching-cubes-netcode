@@ -75,6 +75,12 @@ hint.fire;ЛКМ — огонь;Left mouse — fire;Sol fare — ateş
 hint.dash;Shift — рывок сквозь толпу;Shift — dash through the swarm;Shift — sürünün içinden atıl
 hint.cards;Выбери улучшение;Choose an upgrade;Bir geliştirme seç
 hint.lair;Найди логово Матки — иди по стрелке;Find the Queen's lair — follow the arrow;Kraliçenin inini bul — oku takip et
+hint.move.touch;Левый палец — идти;Left thumb — move;Sol başparmak — yürü
+hint.fire.touch;Большая красная кнопка — огонь;Big red button — fire;Büyük kırmızı düğme — ateş
+hint.dash.touch;» — рывок сквозь толпу;» — dash through the swarm;» — sürünün içinden atıl
+touch.alt;АЛЬТ;ALT;ALT
+touch.swap;СМЕНА;SWAP;DEĞİŞ
+touch.use;ДА;USE;AL
 # ---------------------------------------------------------------- пушки
 weapon.launcher.name;Барабан;Drum;Tambur
 weapon.launcher.desc;Гранатомёт на шесть гранат. Взрыв по толпе, воронка в камне.;Six-shot grenade launcher. Blasts the swarm and craters the rock.;Altı atımlık bombaatar. Sürüyü patlatır, kayada krater açar.

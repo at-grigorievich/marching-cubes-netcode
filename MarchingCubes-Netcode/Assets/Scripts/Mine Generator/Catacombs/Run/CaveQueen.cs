@@ -1390,6 +1390,10 @@ namespace MineGenerator.Catacombs
 
         private void Announce(string text) => Announced?.Invoke(text);
 
+        /// <summary>Можно ли разбудить отсюда — кнопка «действие» на таче (M5.5) и подсказка.</summary>
+        public bool CanWake(Vector3 playerPosition) =>
+            HasLair && State == QueenState.Dormant && (playerPosition - LairPosition).magnitude <= useRange + 2f;
+
         /// <summary>Строка для наложения в стенде.</summary>
         public string Describe(Vector3 playerPosition)
         {

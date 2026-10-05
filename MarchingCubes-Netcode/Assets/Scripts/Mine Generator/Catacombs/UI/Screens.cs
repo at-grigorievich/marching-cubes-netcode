@@ -599,7 +599,9 @@ namespace MineGenerator.Catacombs
         {
             _current = key;
             _shown = 0f;
-            _text.text = Loc.T(key);
+
+            // На таче — своя подпись: «ЛКМ — огонь» под пальцем ничего не значит (M5.5).
+            _text.text = _ui.TouchMode && Loc.Has(key + ".touch") ? Loc.T(key + ".touch") : Loc.T(key);
             _back.gameObject.SetActive(true);
         }
     }

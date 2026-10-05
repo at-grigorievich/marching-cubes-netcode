@@ -123,6 +123,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Сменить источник ввода: тач (M5), бот прогона.</summary>
         public void SetInputSource(IPlayerInputSource source) => _input = source;
 
+        /// <summary>Градусов поворота на единицу оси взгляда — с чувствительностью из настроек (помощь прицеливания, M5.5).</summary>
+        public float LookDegreesPerUnit => mouseSensitivity * LookScale;
+
+        /// <summary>Наклон взгляда, градусы (вниз — плюс).</summary>
+        public float Pitch => _pitch;
+
         // Через EnsureRefs: прогоны пересоздают толпу на сцене, и ссылка на удалённую
         // должна подхватить новую, а не остаться пустой.
         public CatacombWorld World { get { EnsureRefs(); return world; } }

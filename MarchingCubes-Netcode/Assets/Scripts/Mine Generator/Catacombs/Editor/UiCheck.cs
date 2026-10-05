@@ -80,6 +80,7 @@ namespace MineGenerator.Catacombs.EditorTools
                 {
                     failed += CheckScreens(ui, text);
                     failed += CheckAllocations(ui, scene, text);
+                    failed += CheckTouch(ui, scene, text);
                 }
                 finally
                 {
@@ -319,6 +320,132 @@ namespace MineGenerator.Catacombs.EditorTools
         }
 
         // ------------------------------------------------------------------ экраны
+
+        // ------------------------------------------------------------------ тач
+
+        /// <summary>
+        /// Помощь прицеливания (M5.5): паук в 3° от перекрестия — взгляд тянется к нему, а не прочь
+        /// (ошибку знака глазами на кадре не увидеть), «липкость» снижает чувствительность, автоогонь —
+        /// у револьвера да, у гранатомёта нет. И джойстик синтетическими касаниями — ход вперёд.
+        /// </summary>
+        private static int CheckTouch(GameUi ui, CheckScene scene, StringBuilder text)
+        {
+            var failed = 0;
+
+            text.AppendLine();
+            text.AppendLine("=== Тач ===");
+
+            var rig = scene.Player;
+            var crowd = scene.Crowd;
+            var arsenal = rig.GetComponent<PlayerArsenal>();
+            var touch = ui.Touch;
+
+            ui.EnableTouch();
+            touch.Injected = new List<TouchPoint>();
+
+            // Экраны прошлого раздела (карточки, смерть) оставляют ввод заблокированным.
+            rig.InputBlocked = false;
+
+            try
+            {
+                arsenal.Prepare();
+                arsenal.ClearLoadout();
+                arsenal.Give(WeaponId.Launcher);
+
+                crowd.ClearAll();
+
+                // Паука — в 5–20 юнитах на открытой линии; направление перебором, у входа стены близко.
+                var eye = rig.transform.position;
+                var slot = -1;
+                var direction = Vector3.forward;
+
+                for (var k = 0; k < 16 && slot < 0; k++)
+                {
+                    var dir = Quaternion.Euler(0f, k * 22.5f, 0f) * Vector3.forward;
+                    var candidate = crowd.SpawnAt(eye + dir * 10f, 0, 1000f);
+                    if (candidate < 0) continue;
+
+                    crowd.StepStatic(0f);
+                    var delta = crowd.PositionAt(candidate) - eye;
+
+                    if (delta.magnitude > 5f && delta.magnitude < 20f &&
+                        !Physics.Raycast(eye, delta.normalized, delta.magnitude - 1f, ~0, QueryTriggerInteraction.Ignore))
+                    {
+                        slot = candidate;
+                        direction = delta.normalized;
+                    }
+                    else
+                    {
+                        crowd.ClearAll();
+                    }
+                }
+
+                if (slot < 0)
+                {
+                    text.AppendLine("  ПЛОХО: у входа не нашлось открытой линии на паука");
+                    return failed + 1;
+                }
+
+                // Перекрестие — на 3° правее паука: тянуть должно влево.
+                rig.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, 3f, 0f) * direction, Vector3.up);
+
+                var commands = PlayerCommands.Empty;
+                touch.Step(ref commands, 1f / 30f, 0f);
+
+                text.AppendLine($"  цель {(touch.HasTarget ? "найдена" : "НЕ найдена")} в {touch.TargetAngle:0.0}°, подтяжка взгляда {commands.Look.x:+0.000;-0.000} (влево — минус), " +
+                                $"чувствительность {touch.Router.Sensitivity:0.0}, автоогонь у гранатомёта {(touch.AutoFiring ? "ДА" : "нет")}");
+
+                Expect(touch.HasTarget && Mathf.Abs(touch.TargetAngle - 3f) < 1.5f, "паук в конусе 6° найден", text, ref failed);
+                Expect(commands.Look.x < 0f, "взгляд тянется к пауку, а не прочь", text, ref failed);
+                Expect(Mathf.Approximately(touch.Router.Sensitivity, 1f), "в 3° — ещё не «липко» (порог 2.5°)", text, ref failed);
+                Expect(!touch.AutoFiring, "гранатомёт сам не стреляет", text, ref failed);
+
+                arsenal.ClearLoadout();
+                arsenal.Give(WeaponId.Revolver);
+                rig.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, 1f, 0f) * direction, Vector3.up);
+
+                commands = PlayerCommands.Empty;
+                touch.Step(ref commands, 1f / 30f, 0.1f);
+
+                text.AppendLine($"  револьвер в 1° от паука: автоогонь {(touch.AutoFiring ? "да" : "НЕТ")}, огонь {(commands.FireHeld ? "держится" : "НЕТ")}, " +
+                                $"чувствительность {touch.Router.Sensitivity:0.0}");
+
+                Expect(touch.AutoFiring && commands.FireHeld && commands.FirePressed, "револьвер стреляет сам, пока перекрестие на цели", text, ref failed);
+                Expect(Mathf.Approximately(touch.Router.Sensitivity, TouchControls.StickyScale), "над целью — «липкость» ×0.6", text, ref failed);
+
+                // Взгляд в сторону — цели нет, огня нет.
+                rig.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, 40f, 0f) * direction, Vector3.up);
+                commands = PlayerCommands.Empty;
+                touch.Step(ref commands, 1f / 30f, 0.2f);
+                Expect(!touch.HasTarget && !commands.FireHeld, "паук вне конуса — ни подтяжки, ни огня", text, ref failed);
+
+                // Джойстик: касание слева и сдвиг вверх — ход вперёд.
+                var at = new Vector2(Screen.width * 0.2f, Screen.height * 0.3f);
+                touch.Injected.Clear();
+                touch.Injected.Add(new TouchPoint(1, TouchPhase.Began, at));
+                commands = PlayerCommands.Empty;
+                touch.Step(ref commands, 1f / 30f, 0.3f);
+
+                touch.Injected.Clear();
+                touch.Injected.Add(new TouchPoint(1, TouchPhase.Moved, at + new Vector2(0f, touch.Router.JoystickRadius)));
+                commands = PlayerCommands.Empty;
+                touch.Step(ref commands, 1f / 30f, 0.4f);
+
+                text.AppendLine($"  джойстик вверх на радиус: ход {commands.Move}");
+                Expect(commands.Move.y > 0.95f, "джойстик вверх — ход вперёд", text, ref failed);
+            }
+            finally
+            {
+                touch.Injected = null;
+                touch.Router.Reset();
+                rig.SetInputSource(new DesktopInputSource());
+                Input.simulateMouseWithTouches = true;
+                crowd.ClearAll();
+                arsenal.ClearLoadout();
+            }
+
+            return failed;
+        }
 
         private static GameUi BuildUi(CheckScene scene, StringBuilder text, ref int failed)
         {

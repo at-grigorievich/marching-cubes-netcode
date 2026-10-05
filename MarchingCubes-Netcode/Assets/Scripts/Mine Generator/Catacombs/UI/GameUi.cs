@@ -22,6 +22,11 @@ namespace MineGenerator.Catacombs
         public CaveRunDirector Director { get; private set; }
         public CaveQueen Queen { get; private set; }
         public SpiderCrowd Crowd { get; private set; }
+
+        /// <summary>Тач-управление (M5.5): собрано всегда, включается первым касанием или мобильной площадкой.</summary>
+        public TouchControls Touch { get; private set; }
+
+        public bool TouchMode { get; private set; }
         public CaveSpecials Specials { get; private set; }
         public Camera Camera { get; private set; }
         public WeaponAudio Audio => Arsenal != null && Arsenal.Context != null ? Arsenal.Context.Audio : null;
@@ -107,6 +112,7 @@ namespace MineGenerator.Catacombs
             if (Instance == this) Instance = null;
 
             Unbind();
+            Touch?.Dispose();
         }
 
         /// <summary>Собрать интерфейс. Публичный — UiCheck собирает его в режиме редактирования.</summary>
@@ -150,6 +156,9 @@ namespace MineGenerator.Catacombs
             Markers = new SpecialMarkers(this);
             Markers.Build(_dynamicRoot);
 
+            Touch = new TouchControls(this);
+            Touch.Build(_dynamicRoot, _dynamic);
+
             HideScreens();
         }
 
@@ -173,6 +182,7 @@ namespace MineGenerator.Catacombs
 
                 if (Rig != null)
                 {
+                    if (TouchMode) Rig.SetInputSource(Touch);
                     Arsenal = Rig.GetComponent<PlayerArsenal>();
                     Camera = Rig.GetComponent<Camera>();
                     _vitals = Rig.GetComponent<PlayerVitals>();
@@ -246,9 +256,23 @@ namespace MineGenerator.Catacombs
             LastTickMs = clock.Elapsed.TotalMilliseconds;
         }
 
+        /// <summary>
+        /// Включить тач (M5.5): стенд читает команды через тач-слой (поверх клавиатуры), касания
+        /// больше не изображают мышь — иначе палец на джойстике стрелял бы как левая кнопка.
+        /// </summary>
+        public void EnableTouch()
+        {
+            TouchMode = true;
+            Input.simulateMouseWithTouches = false;
+            Rig?.SetInputSource(Touch);
+        }
+
         public void Tick(float deltaTime)
         {
             var state = _flow != null ? _flow.State : GameState.Playing;
+
+            if (!TouchMode && Application.isPlaying && (Platform.IsMobile || Input.touchCount > 0)) EnableTouch();
+            Touch?.Tick(TouchMode && state == GameState.Playing);
             var inRun = state == GameState.Playing || state == GameState.LevelUp || state == GameState.Dead ||
                         state == GameState.Paused;
 
