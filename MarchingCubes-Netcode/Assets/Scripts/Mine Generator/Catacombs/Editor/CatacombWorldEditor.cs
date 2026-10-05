@@ -804,6 +804,18 @@ namespace MineGenerator.Catacombs.EditorTools
             ichorObject.ApplyModifiedPropertiesWithoutUndo();
             ichor.EnsureLinks();
 
+            // Особые пауки (M3) — тем же путём.
+            Recreate<CaveSpecials>(world.gameObject);
+            var specials = world.GetComponent<CaveSpecials>();
+            var specialsObject = new SerializedObject(specials);
+            specialsObject.FindProperty("world").objectReferenceValue = world;
+            specialsObject.FindProperty("crowd").objectReferenceValue = crowd;
+            specialsObject.FindProperty("director").objectReferenceValue = director;
+            specialsObject.FindProperty("rig").objectReferenceValue = Object.FindFirstObjectByType<CatacombTestRig>();
+            specialsObject.FindProperty("unlitShader").objectReferenceValue = Shader.Find("Mine Generator/Cave Unlit");
+            specialsObject.ApplyModifiedPropertiesWithoutUndo();
+            specials.EnsureLinks();
+
             Recreate<CaveRunController>(world.gameObject);
             var run = world.GetComponent<CaveRunController>();
             var runObject = new SerializedObject(run);

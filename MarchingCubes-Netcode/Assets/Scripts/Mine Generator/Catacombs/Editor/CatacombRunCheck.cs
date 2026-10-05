@@ -1399,6 +1399,14 @@ namespace MineGenerator.Catacombs.EditorTools
         {
             director.Tick(Step);
             queen.Tick(Step);
+
+            // Плевки Матки — в общей системе снарядов (M3): в прогоне её шагать явно.
+            var arsenal = player.GetComponent<PlayerArsenal>();
+            if (arsenal != null)
+            {
+                arsenal.Prepare();
+                arsenal.Context?.Projectiles?.Tick(Step);
+            }
             crowd.Simulate(Step);
             player.TickStatus(Step);
         }

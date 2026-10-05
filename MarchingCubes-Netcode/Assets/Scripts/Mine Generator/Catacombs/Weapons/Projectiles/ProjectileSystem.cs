@@ -233,6 +233,23 @@ namespace MineGenerator.Catacombs
         /// Отразить вражеские снаряды в сфере — парирование кирки. Летят обратно по направлению
         /// <paramref name="direction"/>, хозяином становится парировавший.
         /// </summary>
+        /// <summary>Есть ли вражеский снаряд ближе радиуса — прогоны парирования и подсказка тача.</summary>
+        public bool HasHostileNear(Vector3 point, float radius)
+        {
+            var radiusSq = radius * radius;
+
+            for (var i = 0; i < _shots.Count; i++)
+            {
+                var shot = _shots[i];
+                if ((shot.Flags & ShotFlags.Hostile) != 0 && (shot.Position - point).sqrMagnitude < radiusSq) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Сколько вражеских снарядов отбито за жизнь системы — для прогонов.</summary>
+        public int ParriedTotal { get; private set; }
+
         public int Parry(Vector3 centre, float radius, Vector3 direction, int newOwner, float speedScale)
         {
             var count = 0;
@@ -256,6 +273,7 @@ namespace MineGenerator.Catacombs
                 count++;
             }
 
+            ParriedTotal += count;
             return count;
         }
 

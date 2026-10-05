@@ -204,6 +204,12 @@ namespace MineGenerator.Catacombs.EditorTools
                 used[tome.DescKey] = "том " + (TomeId)id;
             }
 
+            // Объявления аффиксов элиты собираются из имени аффикса (M3.3).
+            for (var id = 0; id < (int)EliteAffix.Count; id++)
+            {
+                used["banner.elite." + ((EliteAffix)id).ToString().ToLowerInvariant()] = "аффикс " + (EliteAffix)id;
+            }
+
             var missing = used.Where(pair => !Loc.Has(pair.Key)).Select(pair => pair.Key + " (" + pair.Value + ")").ToList();
             var unused = Loc.Keys.Where(key => !used.ContainsKey(key)).ToList();
 

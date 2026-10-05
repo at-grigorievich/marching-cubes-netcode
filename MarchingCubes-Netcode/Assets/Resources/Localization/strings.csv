@@ -11,6 +11,15 @@ hud.distance;~{0} м;~{0} m;~{0} m
 banner.final;ФИНАЛЬНЫЙ РОЙ;FINAL SWARM;SON SÜRÜ
 banner.swarm;РОЙ;SWARM;SÜRÜ
 banner.elite;ЭЛИТА;ELITE;SEÇKİN
+banner.elite.armored;ЭЛИТА — ПАНЦИРНАЯ: бей сзади;ELITE — ARMORED: strike from behind;SEÇKİN — ZIRHLI: arkadan vur
+banner.elite.poison;ЭЛИТА — ЯДОВИТАЯ: не стой рядом;ELITE — VENOMOUS: keep your distance;SEÇKİN — ZEHİRLİ: mesafeni koru
+banner.elite.brood;ЭЛИТА — КЛАДКА: убей быстро;ELITE — BROODMOTHER: kill it fast;SEÇKİN — KULUÇKA: çabuk öldür
+banner.elite.leaper;ЭЛИТА — ПРЫГУЧАЯ: держи рывок;ELITE — LEAPER: keep a dash ready;SEÇKİN — SIÇRAYAN: atılmayı hazır tut
+banner.elite.leader;ЭЛИТА — ВОЖАК: рядом с ней толпа быстрее;ELITE — PACK LEADER: the horde runs faster near it;SEÇKİN — SÜRÜ LİDERİ: yanında sürü daha hızlı
+banner.lights_out;СВЕТ ПОГАС — бей на вспышки;THE LIGHTS DIE — fight by the flashes;IŞIKLAR SÖNDÜ — parlamalara göre vur
+queen.weaver;Ткачиха;The Weaver;Dokumacı
+queen.acid;Кислотница;The Acid Mother;Asit Ana
+queen.primordial;Праматерь;The Primordial;İlk Ana
 banner.elite_dead;Элита убита;Elite slain;Seçkin öldürüldü
 banner.victory;МАТКА УБИТА — катакомбы озарены;THE QUEEN IS DEAD — the catacombs blaze with light;KRALİÇE ÖLDÜ — yeraltı mezarları aydınlandı
 banner.queen_awake;МАТКА ПРОБУДИЛАСЬ;THE QUEEN AWAKENS;KRALİÇE UYANDI

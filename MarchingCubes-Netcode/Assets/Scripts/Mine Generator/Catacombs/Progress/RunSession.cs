@@ -85,6 +85,9 @@ namespace MineGenerator.Catacombs
         public float Chitin;
 
         public int Kills;
+
+        /// <summary>Убито особых пауков (M3) — для итогов и заданий (M4).</summary>
+        public int SpecialKills;
         public int EliteKills;
         public int QueensKilled;
         public float Seconds;

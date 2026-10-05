@@ -88,6 +88,17 @@ namespace MineGenerator.Catacombs
         /// </summary>
         public DifficultyScale Difficulty { get; set; } = DifficultyScale.One;
 
+        /// <summary>Ярус вылазки (M4): 1–3 — от него число аффиксов элиты. Пока вылазки нет — первый.</summary>
+        public int Tier { get; set; } = 1;
+
+        /// <summary>Аффиксы элиты (M3.3): окраска, аура, кладка, рывок, вожак.</summary>
+        public EliteAffixes Affixes { get; } = new EliteAffixes();
+
+        private IPlayerBody _player;
+
+        // Свой генератор: общий сдвинул бы виды роёв, по которым сверяется прогон забега.
+        private System.Random _affixRandom = new System.Random(2);
+
         /// <summary>
         /// Передышка из милосердия (M1.8): цель населения и досыл на время ниже. Ставит
         /// контроллер забега по здоровью игрока; директор только умножает.
@@ -359,6 +370,8 @@ namespace MineGenerator.Catacombs
             _eliteDue[0] = _eliteDue[1] = false;
             _elitePending = 0;
             _elites.Clear();
+            Affixes.Clear();
+            _affixRandom = new System.Random(world != null ? world.CurrentSeed ^ 0xAF1 : 2);
 
             SwarmKind = -1;
             SwarmsFired = 0;
@@ -402,7 +415,7 @@ namespace MineGenerator.Catacombs
                 }
 
                 UpdateSwarms(deltaTime);
-                UpdateElites();
+                UpdateElites(deltaTime);
             }
 
             if (crowd == null) return;
@@ -605,7 +618,7 @@ namespace MineGenerator.Catacombs
         /// Элита приходит по расписанию и заводится, как только нашлось место:
         /// в самый плотный момент слотов может не быть, и элита просто дождётся.
         /// </summary>
-        private void UpdateElites()
+        private void UpdateElites(float deltaTime)
         {
             for (var i = 0; i < 2; i++)
             {
@@ -630,11 +643,17 @@ namespace MineGenerator.Catacombs
                     _elites.Add(handle);
                     ElitesSpawned++;
 
-                    Announce("banner.elite: " + (crowd.KindAt(crowd.HeaviestKind) != null
-                        ? crowd.KindAt(crowd.HeaviestKind).name.Replace('_', ' ')
-                        : "?"));
+                    // Аффикс читается окраской и объявлением: что делать с ЭТОЙ элитой — обойти,
+                    // не стоять рядом, убить быстро, держать рывок.
+                    var affixes = EliteAffixes.Pick(Tier, _affixRandom);
+                    Affixes.Attach(crowd, handle, affixes);
+
+                    Announce("banner.elite." + affixes[0].ToString().ToLowerInvariant());
                 }
             }
+
+            if (_player == null) _player = FindAnyObjectByType<CatacombTestRig>();
+            Affixes.Tick(crowd, _player, deltaTime);
 
             for (var i = _elites.Count - 1; i >= 0; i--)
             {

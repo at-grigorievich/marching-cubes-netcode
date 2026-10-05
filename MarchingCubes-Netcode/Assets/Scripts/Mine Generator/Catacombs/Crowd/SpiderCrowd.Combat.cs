@@ -237,6 +237,8 @@ namespace MineGenerator.Catacombs
 
             if (!_states.IsCreated || _runtime == null) return report;
 
+            if (_anyArmor) RefreshArmorFronts();
+
             var origin = LocalOf(spec.Origin);
             var direction = (float3)world.transform.InverseTransformDirection(spec.Direction);
             direction = math.normalizesafe(direction, new float3(0f, 0f, 1f));

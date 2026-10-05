@@ -687,7 +687,7 @@ namespace MineGenerator.Catacombs
                 _shownPylons = pylons;
                 _bossText.text = pylons >= 0
                     ? Loc.F("hud.boss.shield", queen.PylonsLitInPhase, queen.PylonsInPhase)
-                    : Loc.T("hud.boss.name");
+                    : Loc.T(queen.Profile != null ? queen.Profile.NameKey : "hud.boss.name");
             }
         }
 

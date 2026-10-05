@@ -64,6 +64,19 @@ namespace MineGenerator.Catacombs
         [Tooltip("Сторона узла в юнитах. Это не зал, а перекрёсток: места ровно столько, " +
                  "чтобы обкружить толпу, но не больше.")]
         [SerializeField] private Vector2 roomSize = new Vector2(6f, 10f);
+
+        [Header("Зал логова (M3.4)")]
+        [Tooltip("Один узел в дальней трети раздувается в зал под гигантскую Матку.")]
+        [SerializeField] private bool lairHall = true;
+
+        [Tooltip("Во сколько раз зал шире обычного узла по каждой оси (1.48 — площадь ×2.2, как у арены).")]
+        [SerializeField, Range(1f, 2.5f)] private float lairHallScale = 1.48f;
+
+        [Tooltip("Высота зала: Матка ×2.4–3.0 в обычный узел высотой 4.5 не влезает.")]
+        [SerializeField, Range(4f, 14f)] private float lairHallHeight = 9.5f;
+
+        [Tooltip("Из какой дальней доли узлов (по прямой от входа) выбирается зал.")]
+        [SerializeField, Range(0.1f, 1f)] private float lairFarShare = 0.3f;
         [SerializeField, Min(2f)] private float roomHeight = 4.5f;
 
         [Tooltip("Сколько узлов на этаже расширить до арены. 0 — сплошная теснота. " +
@@ -179,6 +192,11 @@ namespace MineGenerator.Catacombs
         public float RoomHeight => roomHeight;
 
         public int ArenasPerLevel => arenasPerLevel;
+
+        public bool LairHall => lairHall;
+        public float LairHallScale => lairHallScale;
+        public float LairHallHeight => lairHallHeight;
+        public float LairFarShare => lairFarShare;
         public float ArenaScale => arenaScale;
 
         public float CorridorWidth => corridorWidth;

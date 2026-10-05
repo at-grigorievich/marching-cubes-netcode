@@ -29,6 +29,23 @@ namespace MineGenerator.Catacombs.EditorTools
         public PlayerMobility Mobility;
         public Vector3 Entry;
 
+        /// <summary>
+        /// Общая система снарядов: плевки Матки и особых летят в ней (M3), и в прогоне, где
+        /// Update не идёт, её надо шагать явно — иначе плевок висит в воздухе и долетает
+        /// в следующем разделе прогона.
+        /// </summary>
+        public ProjectileSystem Projectiles
+        {
+            get
+            {
+                var arsenal = Player != null ? Player.GetComponent<PlayerArsenal>() : null;
+                if (arsenal == null) return null;
+
+                arsenal.Prepare();
+                return arsenal.Context != null ? arsenal.Context.Projectiles : null;
+            }
+        }
+
         /// <summary>Собрать сцену. Null — не вышло; причина уже в тексте отчёта.</summary>
         public static CheckScene Open(StringBuilder text, ref int failed, int? seed = null)
         {
@@ -90,6 +107,7 @@ namespace MineGenerator.Catacombs.EditorTools
         {
             Director.Tick(deltaTime);
             Queen.Tick(deltaTime);
+            Projectiles?.Tick(deltaTime);
             Crowd.Simulate(deltaTime);
             Player.TickStatus(deltaTime);
             Vitals.Tick(deltaTime);

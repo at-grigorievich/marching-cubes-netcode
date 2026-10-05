@@ -41,6 +41,19 @@ namespace MineGenerator.Catacombs
 
         public CatacombSettings Settings => settings;
         public CatacombLayout Layout => _layout;
+
+        /// <summary>Зал логова (M3.4): точка пола в центре, мир. Нет зала — false.</summary>
+        public bool TryGetLairHall(out Vector3 worldFloor, out float height)
+        {
+            worldFloor = default;
+            height = 0f;
+
+            if (_layout == null || !_layout.HasLairHall) return false;
+
+            worldFloor = transform.TransformPoint(_layout.LairHall);
+            height = _layout.LairHallHeight * transform.lossyScale.y;
+            return true;
+        }
         public IReadOnlyList<CatacombChunk> Chunks => _chunks;
 
         public bool IsGenerating { get; private set; }

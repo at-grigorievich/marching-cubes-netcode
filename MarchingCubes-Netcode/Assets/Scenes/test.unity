@@ -407,230 +407,6 @@ MonoBehaviour:
   craterRadius: 1.7
   craterDepth: 0.85
   scorchRadius: 2.4
---- !u!1 &454401091
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 454401095}
-  - component: {fileID: 454401094}
-  - component: {fileID: 454401093}
-  - component: {fileID: 454401092}
-  m_Layer: 0
-  m_Name: Spider Crowd
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &454401092
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 454401091}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 20f8e741d25750f48b106f5512158b9d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveCrowdAudio
-  crowd: {fileID: 0}
-  listener: {fileID: 0}
-  hearingRadius: 22
-  loudAt: 90
-  maxVolume: 0.55
-  rushPitch: 1.35
-  smoothing: 0.45
-  loopSeconds: 7.3
-  ticksPerSecond: 190
-  seed: 20250915
---- !u!82 &454401093
-AudioSource:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 454401091}
-  m_Enabled: 1
-  serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 0}
-  m_PlayOnAwake: 1
-  m_Volume: 1
-  m_Pitch: 1
-  Loop: 0
-  Mute: 0
-  Spatialize: 0
-  SpatializePostEffects: 0
-  Priority: 128
-  DopplerLevel: 1
-  MinDistance: 1
-  MaxDistance: 500
-  Pan2D: 0
-  rolloffMode: 0
-  BypassEffects: 0
-  BypassListenerEffects: 0
-  BypassReverbZones: 0
-  rolloffCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 1
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  panLevelCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  spreadCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  reverbZoneMixCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
---- !u!114 &454401094
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 454401091}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3f789bcc5e591814bbbca140e9b96122, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderCrowd
-  world: {fileID: 711213587}
-  target: {fileID: 85844953}
-  cullCamera: {fileID: 0}
-  kinds:
-  - {fileID: 11400000, guid: df7499ab28d6c6d4da259bca605782da, type: 2}
-  - {fileID: 11400000, guid: ec1c75000136aca468ac3134f7ae5084, type: 2}
-  - {fileID: 11400000, guid: d99cb035e30f0004396306e4d70e3e2c, type: 2}
-  - {fileID: 11400000, guid: 09d93a7994fc3a44cb3293eb62d4b187, type: 2}
-  - {fileID: 11400000, guid: 02de55e2e28d81944ba32c01c7587c4f, type: 2}
-  - {fileID: 11400000, guid: b6d061a9fdd7a00489c0b87f0a0263a1, type: 2}
-  - {fileID: 11400000, guid: 07bdeb751c6679f4e86decd041432c0c, type: 2}
-  - {fileID: 11400000, guid: 529d6f262df1201499a606dc3e37a06b, type: 2}
-  - {fileID: 11400000, guid: 3f36b1cd0a0c37140978052e3e37e007, type: 2}
-  - {fileID: 11400000, guid: 176dd3c80f33bd84d858e3c55fd9bf99, type: 2}
-  capacity: 1200
-  population: 450
-  spawnRate: 45
-  waveScale: 2.2
-  wavePeriod: 26
-  waveCrest: 0.25
-  nearRadius: 12
-  nearCap: 0
-  holdKillCount: 24
-  holdShare: 0.4
-  maxClimb: 2.4
-  pileTiers: 3
-  climbRate: 3
-  gravity: 30
-  detourWeight: 1.2
-  wallRange: 8
-  eyeRadius: 1.4
-  shoveSpeed: 8
-  climberShare: 0.35
-  climberPull: 0.9
-  lurkPatience: 10
-  ebbRate: 25
-  ebbSeconds: 6
-  ebbSlack: 1.1
-  deathImpulse: 14
-  corpseDrag: 2.5
-  gibShare: 0.65
-  spawnHoldAfterKill: 2.5
-  spawnSteps: {x: 6, y: 26}
-  cellSize: 1
-  attachRange: 1.6
-  floodSteps: 250
-  flowInterval: 0.25
-  separation: 3.2
-  alignment: 0.35
-  cohesion: 0.2
-  neighbourRadius: 4
-  maxNeighbours: 32
-  acceleration: 9
-  closeRange: 4
-  drawDistance: 60
-  instancesPerBatch: 128
-  castShadows: 0
-  drawFlowGizmos: 0
-  gizmoRadius: 20
---- !u!4 &454401095
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 454401091}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &711213586
 GameObject:
   m_ObjectHideFlags: 0
@@ -642,6 +418,7 @@ GameObject:
   - component: {fileID: 711213591}
   - component: {fileID: 711213587}
   - component: {fileID: 711213588}
+  - component: {fileID: 711213598}
   - component: {fileID: 711213597}
   - component: {fileID: 711213596}
   - component: {fileID: 711213595}
@@ -751,10 +528,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveRunController
   world: {fileID: 711213587}
-  crowd: {fileID: 454401094}
-  director: {fileID: 711213595}
-  queen: {fileID: 711213596}
-  ichor: {fileID: 711213594}
+  crowd: {fileID: 2103229947}
+  director: {fileID: 711213596}
+  queen: {fileID: 711213597}
+  ichor: {fileID: 711213595}
   startWeapon: 0
   mercyHealth: 0.5
   mercyAfter: 4
@@ -775,12 +552,42 @@ MonoBehaviour:
   m_GameObject: {fileID: 711213586}
   m_Enabled: 1
   m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b21f72f184f68642ad5203ad45cf0bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveSpecials
+  world: {fileID: 711213587}
+  crowd: {fileID: 2103229947}
+  director: {fileID: 711213596}
+  rig: {fileID: 85844949}
+  calmInterval: 40
+  peakInterval: 20
+  firstAt: 45
+  maxAliveTier1: 2
+  maxAliveTier3: 4
+  spitterHealth: 120
+  lurkerHealth: 160
+  weaverHealth: 140
+  bomberHealth: 200
+  ichorHits: 8
+  puddleRadius: 1.6
+  puddleSeconds: 4
+  puddleDps: 6
+  unlitShader: {fileID: 4800000, guid: d2f733f25d61bf74fab1ff6e9e3a66c1, type: 3}
+--- !u!114 &711213595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4ff2dee6d0e334f48a7c970229e4881f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.IchorField
   shader: {fileID: 4800000, guid: b98a074ee59cf2649a730ed19d54394e, type: 3}
   world: {fileID: 711213587}
-  crowd: {fileID: 454401094}
+  crowd: {fileID: 2103229947}
   lieSeconds: 3
   crawlFrom: 2
   crawlTo: 8
@@ -791,11 +598,12 @@ MonoBehaviour:
   xpPerHit: 0.06
   eliteIchor: 30
   eliteChitin: 15
+  specialChitin: 5
   chitinOneIn: 30
   ichorColor: {r: 1, g: 0.62, b: 0.12, a: 1}
   chitinColor: {r: 0.45, g: 0.85, b: 0.75, a: 1}
   cocoonColor: {r: 1, g: 0.3, b: 0.6, a: 1}
---- !u!114 &711213595
+--- !u!114 &711213596
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -808,9 +616,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveRunDirector
   world: {fileID: 711213587}
-  crowd: {fileID: 454401094}
-  fixtures: {fileID: 711213597}
-  queen: {fileID: 711213596}
+  crowd: {fileID: 2103229947}
+  fixtures: {fileID: 711213598}
+  queen: {fileID: 711213597}
   stageSeconds: 420
   curve:
     trendPeak: 2.2
@@ -851,7 +659,7 @@ MonoBehaviour:
   victoryPanicRadius: 80
   victoryPanicTime: 12
   bannerSeconds: 4
---- !u!114 &711213596
+--- !u!114 &711213597
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -864,18 +672,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveQueen
   world: {fileID: 711213587}
-  crowd: {fileID: 454401094}
-  fixtures: {fileID: 711213597}
+  crowd: {fileID: 2103229947}
+  fixtures: {fileID: 711213598}
   target: {fileID: 85844949}
   lairFarShare: 0.3
   useRange: 5
   guideReach: 90
   lairColor: {r: 0.85, g: 0.16, b: 0.1, a: 1}
   probeDistance: 20
-  sizeScale: 1.6
   baseHealth: 36
   turnSpeed: 70
-  hue: {r: 0.8, g: 0.55, b: 0.5, a: 1}
   engageRange: 45
   broodInterval: 7
   broodShieldInterval: 3.5
@@ -915,7 +721,7 @@ MonoBehaviour:
   pylonDarkColor: {r: 0.3, g: 0.46, b: 0.6, a: 1}
   pylonLitColor: {r: 1, g: 0.86, b: 0.55, a: 1}
   shieldColor: {r: 0.45, g: 0.7, b: 1, a: 1}
---- !u!114 &711213597
+--- !u!114 &711213598
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1073,6 +879,230 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &2103229944
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2103229948}
+  - component: {fileID: 2103229947}
+  - component: {fileID: 2103229946}
+  - component: {fileID: 2103229945}
+  m_Layer: 0
+  m_Name: Spider Crowd
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2103229945
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2103229944}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20f8e741d25750f48b106f5512158b9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveCrowdAudio
+  crowd: {fileID: 0}
+  listener: {fileID: 0}
+  hearingRadius: 22
+  loudAt: 90
+  maxVolume: 0.55
+  rushPitch: 1.35
+  smoothing: 0.45
+  loopSeconds: 7.3
+  ticksPerSecond: 190
+  seed: 20250915
+--- !u!82 &2103229946
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2103229944}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!114 &2103229947
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2103229944}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f789bcc5e591814bbbca140e9b96122, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderCrowd
+  world: {fileID: 711213587}
+  target: {fileID: 85844953}
+  cullCamera: {fileID: 0}
+  kinds:
+  - {fileID: 11400000, guid: df7499ab28d6c6d4da259bca605782da, type: 2}
+  - {fileID: 11400000, guid: ec1c75000136aca468ac3134f7ae5084, type: 2}
+  - {fileID: 11400000, guid: d99cb035e30f0004396306e4d70e3e2c, type: 2}
+  - {fileID: 11400000, guid: 09d93a7994fc3a44cb3293eb62d4b187, type: 2}
+  - {fileID: 11400000, guid: 02de55e2e28d81944ba32c01c7587c4f, type: 2}
+  - {fileID: 11400000, guid: b6d061a9fdd7a00489c0b87f0a0263a1, type: 2}
+  - {fileID: 11400000, guid: 07bdeb751c6679f4e86decd041432c0c, type: 2}
+  - {fileID: 11400000, guid: 529d6f262df1201499a606dc3e37a06b, type: 2}
+  - {fileID: 11400000, guid: 3f36b1cd0a0c37140978052e3e37e007, type: 2}
+  - {fileID: 11400000, guid: 176dd3c80f33bd84d858e3c55fd9bf99, type: 2}
+  capacity: 1200
+  population: 450
+  spawnRate: 45
+  waveScale: 2.2
+  wavePeriod: 26
+  waveCrest: 0.25
+  nearRadius: 12
+  nearCap: 0
+  holdKillCount: 24
+  holdShare: 0.4
+  maxClimb: 2.4
+  pileTiers: 3
+  climbRate: 3
+  gravity: 30
+  detourWeight: 1.2
+  wallRange: 8
+  eyeRadius: 1.4
+  shoveSpeed: 8
+  climberShare: 0.35
+  climberPull: 0.9
+  lurkPatience: 10
+  ebbRate: 25
+  ebbSeconds: 6
+  ebbSlack: 1.1
+  deathImpulse: 14
+  corpseDrag: 2.5
+  gibShare: 0.65
+  spawnHoldAfterKill: 2.5
+  spawnSteps: {x: 6, y: 26}
+  cellSize: 1
+  attachRange: 1.6
+  floodSteps: 250
+  flowInterval: 0.25
+  separation: 3.2
+  alignment: 0.35
+  cohesion: 0.2
+  neighbourRadius: 4
+  maxNeighbours: 32
+  acceleration: 9
+  closeRange: 4
+  drawDistance: 60
+  instancesPerBatch: 128
+  castShadows: 0
+  drawFlowGizmos: 0
+  gizmoRadius: 20
+--- !u!4 &2103229948
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2103229944}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2143660868
 GameObject:
   m_ObjectHideFlags: 0
@@ -1207,4 +1237,4 @@ SceneRoots:
   - {fileID: 711213591}
   - {fileID: 85844953}
   - {fileID: 1966224325}
-  - {fileID: 454401095}
+  - {fileID: 2103229948}

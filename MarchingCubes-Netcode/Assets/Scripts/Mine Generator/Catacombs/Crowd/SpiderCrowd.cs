@@ -1067,6 +1067,70 @@ namespace MineGenerator.Catacombs
         /// Раздаёт накопленные убийства событием <see cref="Killed"/> и очищает журнал.
         /// Толпа зовёт сама раз в кадр; прогон, шагающий без <c>Update</c>, зовёт руками.
         /// </summary>
+        /// <summary>
+        /// Записать в журнал убийство не-особи — особого паука (M3): ихор, задания и статистика
+        /// пушек слушают один журнал, и одиночке незачем заводить свой.
+        /// </summary>
+        public void RecordKill(in KillRecord record)
+        {
+            _kills.Add(record);
+            _killsBySource[(int)record.Source]++;
+        }
+
+        /// <summary>
+        /// Поле потока для одиночек (M3): они ходят по тем же ходам и прижимаются к камню тем же
+        /// правилом, что толпа, — с главного потока, их единицы.
+        /// </summary>
+        public bool TryGetSampler(out SpiderFlowField.FlowSampler sampler)
+        {
+            sampler = _flow.IsCreated ? _flow.Sampler : default;
+            return _flow.IsCreated;
+        }
+
+        /// <summary>
+        /// Место появления особого: клетка поверхности в полосе шагов от игрока, с нормалью
+        /// в заданных пределах (пол, стены, свод), которую <paramref name="accept"/> пропускает
+        /// (например, «не видна игроку»).
+        ///
+        /// Обходом полосы спавна толпы (6–26 шагов) со случайного места, а не случайными
+        /// пробами по всей сетке: поверхность — 5% клеток, и четыре тысячи проб по сетке не
+        /// находили места для ткача на полу в 12–16 шагах вовсе.
+        /// </summary>
+        public bool TryPickSurfaceCell(int minSteps, int maxSteps, float minUpY, float maxUpY, System.Random random,
+            Func<Vector3, bool> accept, out Vector3 worldFoot, out Vector3 worldUp)
+        {
+            worldFoot = default;
+            worldUp = Vector3.up;
+
+            if (!_flow.IsCreated || !_flow.SpawnCells.IsCreated || _flow.SpawnCells.Length == 0) return false;
+
+            var cells = _flow.SpawnCells;
+            var start = random.Next(cells.Length);
+
+            for (var k = 0; k < cells.Length; k++)
+            {
+                var index = cells[(start + k) % cells.Length];
+
+                var steps = _flow.Distance[index];
+                if (steps == SpiderFlowField.Unreachable || steps < minSteps || steps > maxSteps) continue;
+
+                var normal = _flow.Normal[index];
+                if (normal.y < minUpY || normal.y > maxUpY) continue;
+
+                var hover = 0.1f;
+                var foot = WorldOf(_flow.CellSurfacePoint(index, hover));
+                var up = world != null ? world.transform.TransformDirection(normal) : (Vector3)normal;
+
+                if (accept != null && !accept(foot + up)) continue;
+
+                worldFoot = foot;
+                worldUp = up;
+                return true;
+            }
+
+            return false;
+        }
+
         public void FlushKills()
         {
             if (_kills.Count == 0) return;
@@ -1188,6 +1252,161 @@ namespace MineGenerator.Catacombs
 
                 Place(slot, cell, kindIndex, 1f, SpawnHealth(_runtime[kindIndex].Kind.Health * healthScale),
                     speedScale, hue, false, _random.NextFloat(), false);
+
+                spawned++;
+                Alive++;
+            }
+
+            return spawned;
+        }
+
+        // ------------------------------------------------------------------ аффиксы элиты (M3.3)
+
+        /// <summary>Перекрасить особь по ссылке (аффикс элиты читается окраской).</summary>
+        public bool SetHue(SpiderHandle handle, Vector3 hue)
+        {
+            if (!Live(handle)) return false;
+
+            var spider = _states[handle.Slot];
+            spider.Hue = hue;
+            _states[handle.Slot] = spider;
+
+            return true;
+        }
+
+        /// <summary>Панцирь спереди: доля урона, которая проходит в лоб.</summary>
+        public bool SetArmor(SpiderHandle handle, float frontShare)
+        {
+            if (!Live(handle) || !_status.IsCreated) return false;
+
+            var status = _status[handle.Slot];
+            status.Armor = math.saturate(frontShare);
+            _status[handle.Slot] = status;
+
+            _anyArmor |= status.Armor > 0f;
+            return true;
+        }
+
+        /// <summary>Рывок прыгучей элиты: скорость особи (мир), дальше ею правит поведение.</summary>
+        public bool Lunge(SpiderHandle handle, Vector3 worldVelocity)
+        {
+            if (!Live(handle)) return false;
+
+            var spider = _states[handle.Slot];
+            spider.Velocity = world != null ? (float3)world.transform.InverseTransformDirection(worldVelocity) : (float3)worldVelocity;
+            _states[handle.Slot] = spider;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Вожак: толпа в радиусе быстрее на время. Тем же статусом, что замедление гвоздей, но
+        /// со множителем больше единицы — и только тем, кто не замедлен: гвозди сильнее вожака.
+        /// </summary>
+        public int Haste(Vector3 worldPoint, float radius, float scale, float seconds)
+        {
+            if (!_states.IsCreated || !_status.IsCreated) return 0;
+
+            var centre = LocalOf(worldPoint);
+            var reach = radius / math.max(1e-4f, world != null ? world.transform.lossyScale.x : 1f);
+            var reachSq = reach * reach;
+            var count = 0;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var spider = _states[i];
+                if (spider.Active == 0 || spider.Clip == (int)SpiderClip.Dead) continue;
+                if (math.lengthsq(spider.Position - centre) > reachSq) continue;
+
+                var status = _status[i];
+                if (status.Slow > 0f && status.SlowScale < 1f) continue;
+
+                status.Slow = math.max(status.Slow, seconds);
+                status.SlowScale = scale;
+                _status[i] = status;
+                count++;
+            }
+
+            return count;
+        }
+
+        private bool _anyArmor;
+
+        /// <summary>Проставить панцирным, куда смотрит голова, — перед ударом (джоб удара видов не знает).</summary>
+        private void RefreshArmorFronts()
+        {
+            if (!_status.IsCreated || _runtime == null) return;
+
+            for (var i = 0; i < _states.Length; i++)
+            {
+                var status = _status[i];
+                if (status.Armor <= 0f) continue;
+
+                var spider = _states[i];
+                var facing = spider.Kind >= 0 && spider.Kind < _runtime.Length && _runtime[spider.Kind].Kind.FacesMinusZ ? -1f : 1f;
+
+                status.Front = math.forward(spider.Rotation) * facing;
+                _status[i] = status;
+            }
+        }
+
+        /// <summary>Куда смотрит голова особи (мир) — прогон панцирной элиты.</summary>
+        public bool TryGetFacing(SpiderHandle handle, out Vector3 forward)
+        {
+            forward = Vector3.forward;
+            if (!Live(handle) || _runtime == null) return false;
+
+            var spider = _states[handle.Slot];
+            var facing = spider.Kind >= 0 && spider.Kind < _runtime.Length && _runtime[spider.Kind].Kind.FacesMinusZ ? -1f : 1f;
+            var local = math.forward(spider.Rotation) * facing;
+
+            forward = world != null ? world.transform.TransformDirection(local) : (Vector3)local;
+            return true;
+        }
+
+        private bool Live(SpiderHandle handle)
+        {
+            if (!_states.IsCreated || handle.Slot < 0 || handle.Slot >= _states.Length) return false;
+
+            var spider = _states[handle.Slot];
+            return spider.Active != 0 && spider.Serial == handle.Serial && spider.Clip != (int)SpiderClip.Dead;
+        }
+
+        /// <summary>
+        /// Дождь со свода (Праматерь, M3.5): засадники на своде в нескольких шагах вокруг точки.
+        /// Механика засады толпы уже есть — засадник срывается, когда игрок в семи юнитах, — так
+        /// что посаженные ближе срываются сразу и падают сверху кругом.
+        /// </summary>
+        /// <returns>Сколько посажено.</returns>
+        public int SpawnRain(Vector3 worldPoint, int count, int minSteps, int maxSteps)
+        {
+            if (_runtime == null || !_flow.IsCreated || count <= 0) return 0;
+            if (_flow.Reach(LocalOf(worldPoint), math.max(1, maxSteps), _reach) < 0) return 0;
+
+            _cellBuffer.Clear();
+
+            foreach (var pair in _reach)
+            {
+                if (pair.Value >= minSteps && _flow.Normal[pair.Key].y < -0.5f) _cellBuffer.Add(pair.Key);
+            }
+
+            if (_cellBuffer.Count == 0) return 0;
+
+            var healthScale = _directed ? _directive.HealthScale : 1f;
+            var speedScale = _directed ? _directive.SpeedScale : 1f;
+            var hue = _directed ? (float3)_directive.Hue : new float3(1f);
+            var spawned = 0;
+
+            for (var i = 0; i < count; i++)
+            {
+                var slot = FindFreeSlot();
+                if (slot < 0) break;
+
+                var cell = _cellBuffer[_random.NextInt(_cellBuffer.Count)];
+                var kindIndex = PickKind(2, false);
+
+                Place(slot, cell, kindIndex, 1f, SpawnHealth(_runtime[kindIndex].Kind.Health * healthScale),
+                    speedScale, hue, true, _random.NextFloat(), false, true);
 
                 spawned++;
                 Alive++;
@@ -2048,7 +2267,7 @@ namespace MineGenerator.Catacombs
 
         /// <summary>Кладёт особь в слот: на камень под клеткой, с разбросом вдоль поверхности.</summary>
         private void Place(int slot, int cell, int kindIndex, float sizeScale, float health, float speedScale,
-            float3 hue, bool mayLurk, float rank, bool elite)
+            float3 hue, bool mayLurk, float rank, bool elite, bool forceLurk = false)
         {
             var kind = _runtime[kindIndex].Kind;
 
@@ -2073,7 +2292,7 @@ namespace MineGenerator.Catacombs
             // Засада. Только на стенах и своде: паук, замерший посреди пола в пустом
             // коридоре, читается не как засада, а как сломавшийся паук. Сверху и сбоку
             // неподвижность объясняется сама собой.
-            var lurks = mayLurk && normal.y < 0.4f && _random.NextFloat() < kind.LurkShare;
+            var lurks = (forceLurk && normal.y < 0.4f) || (mayLurk && normal.y < 0.4f && _random.NextFloat() < kind.LurkShare);
 
             // Белая окраска, если её не задали: нулевая означала бы чёрную особь.
             if (math.csum(hue) < 0.01f) hue = new float3(1f);

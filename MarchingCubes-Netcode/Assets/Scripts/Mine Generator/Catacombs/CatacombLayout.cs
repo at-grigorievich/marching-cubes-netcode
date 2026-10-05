@@ -80,6 +80,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Узлы, из которых ведёт ровно один ход. В игре про толпу это ловушки без контригры.</summary>
         public int DeadEnds { get; private set; }
 
+        /// <summary>Зал логова (M3.4): точка пола в центре, размер по горизонтали и высота.</summary>
+        public bool HasLairHall { get; private set; }
+        public Vector3 LairHall { get; private set; }
+        public Vector2 LairHallSize { get; private set; }
+        public float LairHallHeight { get; private set; }
+
         /// <summary>Среднее число ходов из узла. 2 — сплошная кишка, 3 и выше — сеть развилок.</summary>
         public float AverageDegree { get; private set; }
 
@@ -159,6 +165,8 @@ namespace MineGenerator.Catacombs
 
             layout.DeadEnds = deadEnds;
             layout.AverageDegree = totalNodes > 0 ? totalEnds / (float)totalNodes : 0f;
+
+            if (settings.LairHall) AddLairHall(settings, seed, boxes, levelRooms, layout, margin, worldSize);
 
             layout.Boxes = new NativeArray<CaveBox>(boxes.ToArray(), Allocator.Persistent);
 
@@ -835,6 +843,57 @@ namespace MineGenerator.Catacombs
             }
 
             RouteHorizontal(settings, ref rng, boxes, previous, bottom, layout, level, bottomFloor, topFloor);
+        }
+
+        /// <summary>
+        /// Зал логова: один узел из дальней трети (по прямой от входа) раздувается вширь
+        /// и ввысь — отдельным боксом поверх прежнего. Поле плотности — объединение пустот,
+        /// поэтому прежний узел и его ходы остаются входами в зал: тупиком он не станет
+        /// (правило уровня), а входов у него столько же, сколько связей у узла — 2–3.
+        ///
+        /// Строится ПОСЛЕ всего уровня и своим генератором от сида: общий генератор уже
+        /// разметил этажи и ходы, и лишний вызов в середине сдвинул бы весь уровень того же
+        /// сида — замеры планировки перестали бы сравниваться с прежними.
+        /// </summary>
+        private static void AddLairHall(CatacombSettings settings, int seed, List<CaveBox> boxes,
+            List<List<Room>> levelRooms, CatacombLayout layout, float margin, float3 worldSize)
+        {
+            if (levelRooms.Count == 0 || levelRooms[0].Count == 0) return;
+
+            var entry = levelRooms[0][0].Floor;
+            var all = new List<Room>();
+            foreach (var rooms in levelRooms) all.AddRange(rooms);
+
+            all.Sort((a, b) => math.distancesq(b.Floor, entry).CompareTo(math.distancesq(a.Floor, entry)));
+
+            var pool = math.max(1, (int)math.round(all.Count * settings.LairFarShare));
+            var random = new Random(math.max(1u, (uint)seed ^ 0xB055u));
+            var room = all[random.NextInt(0, pool)];
+
+            var size = room.Size * settings.LairHallScale;
+            var minBound = new float2(margin, margin);
+            var maxBound = new float2(worldSize.x - margin, worldSize.z - margin);
+            size = math.min(size, (maxBound - minBound) * 0.9f);
+
+            var centre = math.clamp(room.Floor.xz, minBound + size * 0.5f, maxBound - size * 0.5f);
+            var floor = new float3(centre.x, room.Floor.y, centre.y);
+
+            // Потолок зала не выше крыши мира.
+            var height = math.min(settings.LairHallHeight, worldSize.y - margin - floor.y);
+            var round = math.min(settings.CornerRounding * 2f, math.min(height, math.cmin(size)) * 0.3f);
+
+            boxes.Add(new CaveBox
+            {
+                Center = floor + new float3(0f, height * 0.5f, 0f),
+                HalfExtents = new float3(size.x * 0.5f, height * 0.5f, size.y * 0.5f),
+                Round = math.max(0f, round),
+                Rotation = quaternion.identity
+            });
+
+            layout.HasLairHall = true;
+            layout.LairHall = floor;
+            layout.LairHallSize = size;
+            layout.LairHallHeight = height;
         }
 
         private static CaveBox MakeRoom(CatacombSettings settings, Room room)

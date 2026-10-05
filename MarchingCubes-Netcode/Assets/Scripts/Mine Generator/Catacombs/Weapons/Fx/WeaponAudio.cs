@@ -36,6 +36,14 @@ namespace MineGenerator.Catacombs
         Hurt,
         Dash,
         UiClick,
+
+        // Метки особых пауков (M3.2): их слышно раньше, чем видно — главный урок Vermintide 2.
+        SpecialAppear,
+        SpitterGurgle,
+        LurkerShriek,
+        WeaverTwang,
+        BomberSwell,
+        AcidSplash,
         Count
     }
 
@@ -259,6 +267,15 @@ namespace MineGenerator.Catacombs
                 SoundId.Hurt => Mix(LowNoise(random, 0.14f, 25f, 0.3f, 0.7f), Tone(0.12f, 140f, 80f, 25f, 0.5f)),
                 SoundId.Dash => Whoosh(random, 0.2f),
                 SoundId.UiClick => Tone(0.03f, 1200f, 1100f, 80f, 0.25f),
+
+                // Особые: каждый — своим тембром, узнаваемым на фоне шороха толпы.
+                SoundId.SpecialAppear => Mix(Tone(0.9f, 180f, 120f, 3f, 0.35f), Delay(Tone(0.7f, 240f, 150f, 4f, 0.25f), 0.2f)),
+                SoundId.SpitterGurgle => Mix(LowNoise(random, 0.8f, 3f, 0.05f, 0.6f), Buzz(0.8f, 55f, 0.25f)),
+                SoundId.LurkerShriek => Mix(Tone(1f, 1900f, 3200f, 2f, 0.45f), Tone(1f, 2850f, 4100f, 2.5f, 0.25f),
+                    Noise(random, 1f, 2f, 0.12f)),
+                SoundId.WeaverTwang => Mix(Tone(0.7f, 330f, 300f, 5f, 0.5f), Tone(0.7f, 990f, 905f, 7f, 0.2f)),
+                SoundId.BomberSwell => Mix(Tone(1f, 60f, 140f, 0.5f, 0.6f), LowNoise(random, 1f, 0.5f, 0.04f, 0.4f)),
+                SoundId.AcidSplash => Mix(Noise(random, 0.35f, 10f, 0.5f), LowNoise(random, 0.4f, 8f, 0.2f, 0.4f)),
                 _ => new float[64]
             };
 

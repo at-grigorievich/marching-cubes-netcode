@@ -191,9 +191,11 @@ namespace MineGenerator.Catacombs
             // это приближение: точно, когда все укусы сильнее брони, а слабее брони
             // укус и так даёт единицу.
             var count = Math.Max(1, hit.Count);
-            var amount = hit.PerBiteArmor || count == 1
-                ? Math.Max(count, hit.Amount - Armor * count)
-                : Math.Max(1f, hit.Amount - Armor);
+            var amount = hit.Count == 0
+                ? hit.Amount
+                : hit.PerBiteArmor || count == 1
+                    ? Math.Max(count, hit.Amount - Armor * count)
+                    : Math.Max(1f, hit.Amount - Armor);
 
             result.Armored = hit.Amount - amount;
 

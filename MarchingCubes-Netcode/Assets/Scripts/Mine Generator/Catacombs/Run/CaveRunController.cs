@@ -279,6 +279,7 @@ namespace MineGenerator.Catacombs
 
             if (_vitals != null) _vitals.Heal(float.MaxValue);
 
+            ApplyTier();
             ApplyDifficulty();
 
             _runActive = true;
@@ -296,6 +297,7 @@ namespace MineGenerator.Catacombs
             if (_rig != null) _rig.SetDeathPose(0f);
 
             RecomposeStats();
+            ApplyTier();
             ApplyDifficulty();
 
             _runActive = true;
@@ -391,6 +393,7 @@ namespace MineGenerator.Catacombs
 
                 Session.Kills++;
                 if (kill.Elite) Session.EliteKills++;
+                if (kill.Special) Session.SpecialKills++;
 
                 var weapon = WeaponIds.FromSource(kill.Source);
                 if (weapon != WeaponId.Count) Session.KillsByWeapon[(int)weapon]++;
@@ -455,6 +458,21 @@ namespace MineGenerator.Catacombs
 
             Platform.Current.GameplayStop();
             LevelUpOffered?.Invoke();
+        }
+
+        /// <summary>
+        /// Ярус вылазки — тем, кто от него зависит: какая Матка (M3.5), сколько аффиксов у элиты
+        /// и сколько особых живых одновременно (M3). Ярус ведёт сессия (M4).
+        /// </summary>
+        private void ApplyTier()
+        {
+            var tier = Mathf.Clamp(Session.Tier, 1, 3);
+
+            if (queen != null) queen.SetTier(tier);
+            if (director != null) director.Tier = tier;
+
+            var specials = FindAnyObjectByType<CaveSpecials>();
+            if (specials != null) specials.Tier = tier;
         }
 
         /// <summary>Выбрать карточку (клик, клавиша 1–4, касание).</summary>

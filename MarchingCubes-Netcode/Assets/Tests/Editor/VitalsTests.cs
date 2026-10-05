@@ -39,6 +39,22 @@ namespace MineGenerator.Catacombs.Tests
         }
 
         [Test]
+        public void DamageOverTimeIsNotRaisedToOnePerFrame()
+        {
+            // Лужа 6 HP/с, кадры по 1/30 с: за секунду — 6, а не 30 (по единице с кадра).
+            var model = Fresh();
+            model.Armor = 2f;
+
+            for (var i = 0; i < 30; i++)
+            {
+                model.TakeDamage(DamageHit.Over(6f / 30f, Vector3.zero, DamageKind.Acid));
+                model.Tick(1f / 30f);
+            }
+
+            Assert.AreEqual(94f, model.Health, 0.01f);
+        }
+
+        [Test]
         public void CapPassesFullUpToShareThenOverflow()
         {
             var model = Fresh();

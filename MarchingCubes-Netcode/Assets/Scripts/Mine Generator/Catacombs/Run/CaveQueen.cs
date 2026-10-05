@@ -32,7 +32,7 @@ namespace MineGenerator.Catacombs
     /// выводок. Когда здоровье появится, подключать урон надо в тех же местах.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class CaveQueen : MonoBehaviour
+    public sealed class CaveQueen : MonoBehaviour, IShotHandler
     {
         [SerializeField] private CatacombWorld world;
         [SerializeField] private SpiderCrowd crowd;
@@ -73,8 +73,8 @@ namespace MineGenerator.Catacombs
         [SerializeField] private float probeDistance = 20f;
 
         [Header("Матка")]
-        [Tooltip("Во сколько раз Матка крупнее самого крупного вида толпы.")]
-        [SerializeField, Range(1f, 3f)] private float sizeScale = 1.6f;
+        // Размер и окраска — из профиля яруса (QueenProfile, M3.5).
+
 
         /// <summary>
         /// Живучесть при пробуждении в самом начале стадии, в попаданиях. Попадание пока
@@ -86,9 +86,6 @@ namespace MineGenerator.Catacombs
 
         [Tooltip("Скорость доворота на игрока, градусов в секунду. Медленно: от неё бегают кругами.")]
         [SerializeField, Range(10f, 360f)] private float turnSpeed = 70f;
-
-        [Tooltip("Окраска — множитель альбедо.")]
-        [SerializeField] private Color hue = new Color(0.8f, 0.55f, 0.5f);
 
         [Tooltip("Дальше этого Матка игрока не замечает и не атакует.")]
         [SerializeField, Range(5f, 150f)] private float engageRange = 45f;
@@ -216,6 +213,22 @@ namespace MineGenerator.Catacombs
         public QueenState State { get; private set; }
 
         public bool HasLair { get; private set; }
+
+        /// <summary>Какая это Матка: ярус вылазки (M3.5). Ставит контроллер забега до пробуждения.</summary>
+        public QueenProfile Profile { get; private set; } = QueenProfile.ForTier(1);
+
+        public void SetTier(int tier) => Profile = QueenProfile.ForTier(tier);
+
+        /// <summary>Сколько раз сработала каждая атака профиля — для прогона.</summary>
+        public int PoolsLaid { get; private set; }
+        public int BombersHatched { get; private set; }
+        public int Charges { get; private set; }
+        public int ChargesLanded { get; private set; }
+        public int RainDrops { get; private set; }
+        public bool LightsAreOut { get; private set; }
+
+        /// <summary>Высота зала логова; 0 — логово в обычном узле (сцена без зала).</summary>
+        public float HallHeight { get; private set; }
         public Vector3 LairPosition { get; private set; }
 
         public float Health { get; private set; }
@@ -304,18 +317,10 @@ namespace MineGenerator.Catacombs
             public Renderer Core;
         }
 
-        private sealed class Spit
-        {
-            public Vector3 Position;
-            public Vector3 Velocity;
-            public float Life;
-            public GameObject View;
-        }
 
         private readonly List<Pylon> _pylons = new List<Pylon>();
         private readonly List<Vector3> _pylonHistory = new List<Vector3>();
         private readonly List<Vector4> _litZones = new List<Vector4>();
-        private readonly List<Spit> _spits = new List<Spit>();
         private readonly List<Vector3> _pickBuffer = new List<Vector3>();
 
         private int _nextShield;
@@ -340,22 +345,12 @@ namespace MineGenerator.Catacombs
         private Transform _shieldHalo;
         private Transform _shockDisc;
 
-        // Отрисовка — тем же материалом и той же запечённой анимацией, что у толпы.
-        private SpiderKind _kind;
-        private float _scale = 1f;
+        // Отрисовка — тем же материалом и той же запечённой анимацией, что у толпы; общий
+        // вид одиночки (M3.1): особых пауков рисует он же.
+        private readonly SoloSpiderView _view = new SoloSpiderView();
         private float _bodyLift = 1f;
         private float _hitRadius = 2f;
         private quaternion _rotation = quaternion.identity;
-        private SpiderClip _clip = SpiderClip.Idle;
-        private float _phase;
-
-        private readonly Matrix4x4[] _matrix = new Matrix4x4[1];
-        private readonly Vector4[] _anim = new Vector4[1];
-        private readonly Vector4[] _tint = new Vector4[1];
-        private MaterialPropertyBlock _block;
-
-        private static readonly int AnimStateId = Shader.PropertyToID("_AnimState");
-        private static readonly int InstanceTintId = Shader.PropertyToID("_InstanceTint");
 
         private bool _guideDirty;
 
@@ -411,6 +406,14 @@ namespace MineGenerator.Catacombs
             var pool = Mathf.Max(1, Mathf.RoundToInt(rooms.Count * lairFarShare));
             var room = rooms[random.Next(pool)];
 
+            // Зал логова (M3.4): Матка ×2.4–3.0 в обычный узел высотой 4.5 не влезает, и
+            // планировка раздувает для неё узел из той же дальней трети. Есть зал — логово в нём.
+            if (world.TryGetLairHall(out var hall, out var hallHeight))
+            {
+                room = hall + Vector3.up * Mathf.Min(2f, hallHeight * 0.3f);
+                HallHeight = hallHeight;
+            }
+
             // На пол, а не в центр зала. Луч здесь допустим: он начат в пустоте зала,
             // а грабли №1 запрещают лучи, начатые в толще породы.
             LairPosition = Physics.Raycast(room, Vector3.down, out var hit, probeDistance, ~0,
@@ -453,7 +456,6 @@ namespace MineGenerator.Catacombs
             _pylons.Clear();
             _pylonHistory.Clear();
             _litZones.Clear();
-            _spits.Clear();
 
             if (crowd != null) crowd.SetLitZones(null);
 
@@ -542,9 +544,17 @@ namespace MineGenerator.Catacombs
             }
 
             // baseHealth в сцене — в попаданиях прежней модели; здоровье — в HP (CombatUnits).
-            MaxHealth = math.max(1f, CombatUnits.Hits(baseHealth) * healthScale);
+            MaxHealth = math.max(1f, CombatUnits.Hits(baseHealth) * healthScale * Profile.HealthScale);
             Health = MaxHealth;
             State = QueenState.Awake;
+
+            _poolTimer = 6f;
+            _chargeTimer = 8f;
+            _rainTimer = 9f;
+            _chargeLeft = -1f;
+            _charge = ChargeState.Idle;
+            PoolsLaid = BombersHatched = Charges = ChargesLanded = RainDrops = 0;
+            LightsAreOut = false;
 
             // Первые секунды без атак: пробуждение должно читаться, а не сразу бить в лицо.
             _broodTimer = 2f;
@@ -618,7 +628,6 @@ namespace MineGenerator.Catacombs
             if (_guideDirty) ApplyGuide();
 
             AnimateLair(deltaTime);
-            UpdateSpits(deltaTime);
 
             if (State == QueenState.Dormant) return;
 
@@ -669,10 +678,187 @@ namespace MineGenerator.Catacombs
 
                     if (count > 0) crowd.SpawnAround(LairPosition + Vector3.up, count, broodSteps, 2);
                 }
+
+                // Кислотница выводит и бомбардиров: их облако бьёт и по её свите — подорви его
+                // в толпе, и свиту выкосит.
+                if (Profile.BomberBrood && Specials != null && crowd != null && CountBombers() < BombersMax)
+                {
+                    crowd.PickFloorPoints(LairPosition + Vector3.up, 1, 4, 9, null, _attackPoints);
+
+                    if (_attackPoints.Count > 0 && Specials.SpawnAt(SpecialKind.Bomber, _attackPoints[0], Vector3.up) != null)
+                    {
+                        BombersHatched++;
+                    }
+                }
             }
 
             UpdateShock(deltaTime, shielded);
             UpdateSpitVolley(deltaTime);
+            UpdateProfileAttacks(deltaTime, shielded);
+        }
+
+        // ------------------------------------------------------------------ атаки профиля (M3.5)
+
+        private float _poolTimer;
+        private float _chargeTimer;
+        private float _rainTimer;
+        private float _chargeLeft = -1f;
+        private Vector3 _chargeTarget;
+        private bool _chargeHit;
+        private CaveSpecials _specials;
+        private readonly List<Vector3> _attackPoints = new List<Vector3>();
+
+        private const float PoolInterval = 8f;
+        private const int PoolsPerVolley = 3;
+        private const int BombersMax = 3;
+        private const float ChargeInterval = 12f;
+        private const float ChargeWindup = 1f;
+        private const float ChargeSpeed = 14f;
+        private const float ChargeReach = 8f;
+        private const float ChargeDamage = 20f;
+        private const float RainInterval = 10f;
+        private const int RainCount = 6;
+
+        private CaveSpecials Specials => _specials != null ? _specials : _specials = FindAnyObjectByType<CaveSpecials>();
+
+        private void UpdateProfileAttacks(float deltaTime, bool shielded)
+        {
+            var profile = Profile;
+
+            // Лужи кислоты по залу: видно, куда не наступать, и бой идёт вокруг них.
+            if (profile.AcidPools)
+            {
+                _poolTimer -= deltaTime;
+
+                if (_poolTimer <= 0f && Specials != null && crowd != null)
+                {
+                    _poolTimer = PoolInterval;
+                    crowd.PickFloorPoints(LairPosition + Vector3.up, PoolsPerVolley, 3, 12, null, _attackPoints);
+
+                    foreach (var point in _attackPoints)
+                    {
+                        Specials.AddPuddle(point, Vector3.up, 1.4f);
+                        PoolsLaid++;
+                    }
+                }
+            }
+
+            // Бросок через зал: замах — красное пятно там, куда она прыгнет; потом туша летит
+            // по прямой до восьми юнитов и бьёт того, кто на пути.
+            if (profile.Charge && (_shockCharge < 0f || _charge != ChargeState.Idle)) UpdateCharge(deltaTime);
+
+            // Дождь со свода: засадники падают кругом вокруг игрока.
+            if (profile.CeilingRain && target != null && crowd != null)
+            {
+                _rainTimer -= deltaTime;
+
+                if (_rainTimer <= 0f)
+                {
+                    _rainTimer = RainInterval;
+                    RainDrops += crowd.SpawnRain(Body.BodyCentre, RainCount, 2, 6);
+                }
+            }
+        }
+
+        private enum ChargeState { Idle, Windup, Dash }
+
+        private ChargeState _charge = ChargeState.Idle;
+
+        /// <summary>
+        /// Бросок явными состояниями. Первая версия вела всё одним счётчиком замаха и после
+        /// замаха принимала его отрицательное значение за «покой»: следующий кадр начинал новый
+        /// замах, туша не летела ни разу, а прогон насчитал 14 бросков за 30 с при интервале 12.
+        /// </summary>
+        private void UpdateCharge(float deltaTime)
+        {
+            if (target == null) return;
+
+            switch (_charge)
+            {
+                case ChargeState.Idle:
+                {
+                    _chargeTimer -= deltaTime;
+                    if (_chargeTimer > 0f) return;
+
+                    var toward = Body.BodyCentre - LairPosition;
+                    toward.y = 0f;
+
+                    if (toward.magnitude < 3f || Blocked(Centre, Body.BodyCentre))
+                    {
+                        _chargeTimer = 2f;
+                        return;
+                    }
+
+                    _chargeTarget = LairPosition + toward.normalized * Mathf.Min(ChargeReach, toward.magnitude);
+                    _chargeLeft = ChargeWindup;
+                    _chargeHit = false;
+                    _charge = ChargeState.Windup;
+                    Charges++;
+
+                    ShowShockDisc(_chargeTarget, _hitRadius * 0.8f);
+                    Play(SpiderClip.Attack);
+                    return;
+                }
+
+                case ChargeState.Windup:
+                    _chargeLeft -= deltaTime;
+                    if (_chargeLeft <= 0f) _charge = ChargeState.Dash;
+                    return;
+
+                case ChargeState.Dash:
+                {
+                    var step = ChargeSpeed * deltaTime;
+                    var flat = _chargeTarget - LairPosition;
+                    flat.y = 0f;
+
+                    if (flat.magnitude > step)
+                    {
+                        var next = LairPosition + flat.normalized * step;
+
+                        // По полу: луч вниз из пустоты зала (грабли №1 — не из породы).
+                        if (Physics.Raycast(next + Vector3.up * 2f, Vector3.down, out var floor, 6f, ~0,
+                                QueryTriggerInteraction.Ignore))
+                        {
+                            next = floor.point;
+                        }
+
+                        LairPosition = next;
+                        Play(SpiderClip.Walk);
+
+                        if (!_chargeHit && (Body.BodyCentre - Centre).magnitude < _hitRadius + 0.8f && !Body.IsDashing)
+                        {
+                            _chargeHit = true;
+                            ChargesLanded++;
+                            Body.Hurt(DamageHit.Simple(ChargeDamage * DamageScale, Centre, DamageKind.Shock));
+                            Body.Push(flat.normalized * 12f + Vector3.up * 3f);
+                        }
+
+                        return;
+                    }
+
+                    _charge = ChargeState.Idle;
+                    _chargeTimer = ChargeInterval;
+                    HideShockDisc();
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Третья фаза Праматери: гаснут все светильники и генераторы.</summary>
+        private void PutLightsOut()
+        {
+            if (LightsAreOut) return;
+
+            LightsAreOut = true;
+            if (fixtures != null) fixtures.SetAllLit(false);
+
+            foreach (var pylon in _pylons)
+            {
+                if (pylon.Light != null) pylon.Light.enabled = false;
+                if (pylon.Halo != null) pylon.Halo.gameObject.SetActive(false);
+            }
+
+            Announce("banner.lights_out");
         }
 
         /// <summary>Доворот на игрока по горизонтали. Медленный: от Матки бегают кругами.</summary>
@@ -681,8 +867,7 @@ namespace MineGenerator.Catacombs
             var flat = new Vector3(toPlayer.x, 0f, toPlayer.z);
             if (flat.sqrMagnitude < 1e-4f) return;
 
-            var facing = _kind != null && _kind.FacesMinusZ ? -1f : 1f;
-            var wanted = quaternion.LookRotationSafe(flat.normalized * facing, math.up());
+            var wanted = quaternion.LookRotationSafe(flat.normalized * _view.Facing, math.up());
 
             var dot = math.abs(math.dot(_rotation.value, wanted.value));
             var angle = 2f * math.acos(math.clamp(dot, -1f, 1f));
@@ -692,7 +877,7 @@ namespace MineGenerator.Catacombs
 
             // Поворачивается — перебирает лапами. Стоящая на месте туша, скользящая
             // по кругу, читалась бы как статуя на поворотном столе.
-            if (_clip != SpiderClip.Attack) Play(angle > math.radians(8f) ? SpiderClip.Walk : SpiderClip.Idle);
+            if (_view.Clip != SpiderClip.Attack) Play(angle > math.radians(8f) ? SpiderClip.Walk : SpiderClip.Idle);
         }
 
         private void UpdateShock(float deltaTime, bool shielded)
@@ -726,9 +911,40 @@ namespace MineGenerator.Catacombs
 
             if (_shockDisc != null)
             {
+                // Матка Кислотницы и Праматери ходит броском: пятно — там, где она сейчас.
+                _shockDisc.position = LairPosition + Vector3.up * 0.15f;
                 _shockDisc.localScale = Vector3.zero;
                 _shockDisc.gameObject.SetActive(true);
             }
+        }
+
+        /// <summary>Пятно замаха броска — там, куда прыгнет.</summary>
+        private void ShowShockDisc(Vector3 point, float radius)
+        {
+            if (_shockDisc == null) return;
+
+            _shockDisc.position = point + Vector3.up * 0.15f;
+            _shockDisc.localScale = Vector3.one * (radius * 2f);
+            _shockDisc.gameObject.SetActive(true);
+        }
+
+        private void HideShockDisc()
+        {
+            if (_shockDisc != null) _shockDisc.gameObject.SetActive(false);
+        }
+
+        private int CountBombers()
+        {
+            var specials = Specials;
+            if (specials == null) return 0;
+
+            var count = 0;
+            foreach (var special in specials.All)
+            {
+                if (!special.Dead && special.Type == SpecialKind.Bomber) count++;
+            }
+
+            return count;
         }
 
         /// <summary>
@@ -783,78 +999,83 @@ namespace MineGenerator.Catacombs
             _spitLeft = spitVolley;
             _spitGapTimer = 0f;
 
-            if (_clip != SpiderClip.Attack) Play(SpiderClip.Attack);
+            if (_view.Clip != SpiderClip.Attack) Play(SpiderClip.Attack);
         }
 
         /// <summary>
         /// Плевок с упреждением: целится туда, где игрок будет, а не где он есть.
         /// Без упреждения залп бьёт в спину бегущему мимо — то есть не попадает никогда,
         /// и атака читается как фейерверк.
+        ///
+        /// Снаряд — общей системы (<see cref="ProjectileSystem"/>, M2.1), как плевки особых:
+        /// парирование кирки его отбивает, и полёт считает один код. Порода — сферой физики
+        /// из пустоты, где летит плевок (грабли №1 не про него).
         /// </summary>
         private void FireSpit()
         {
+            if (!EnsureProjectiles()) return;
+
             var from = Head;
             var body = Body.BodyCentre;
 
             var flight = (body - from).magnitude / math.max(0.1f, spitSpeed);
             var aim = body + _targetVelocity * flight;
 
-            var spit = new Spit
+            _projectiles.Launch(new Shot
             {
+                Owner = _shotOwner,
+                Visual = _spitVisual,
+                Flags = ShotFlags.Hostile,
                 Position = from,
                 Velocity = (aim - from).normalized * spitSpeed,
+                Gravity = 0f,
+                Radius = 0.15f,
                 Life = spitRange / math.max(0.1f, spitSpeed) + 0.5f
-            };
-
-            if (_container != null)
-            {
-                var view = new GameObject("Spit");
-                view.transform.SetParent(_container, false);
-                view.transform.position = from;
-
-                CaveGlowBillboard.Attach(view.transform, 0.9f, spitColor);
-                spit.View = view;
-            }
-
-            _spits.Add(spit);
+            });
         }
 
-        private void UpdateSpits(float deltaTime)
+        private ProjectileSystem _projectiles;
+        private int _shotOwner = -1;
+        private int _spitVisual = -1;
+
+        private bool EnsureProjectiles()
         {
-            for (var i = _spits.Count - 1; i >= 0; i--)
+            var arsenal = target != null ? target.GetComponent<PlayerArsenal>() : null;
+            var system = arsenal != null && arsenal.Context != null ? arsenal.Context.Projectiles : null;
+
+            if (system == null) return false;
+            if (system == _projectiles && _shotOwner >= 0) return true;
+
+            _projectiles = system;
+            _shotOwner = system.Register(this);
+
+            _spitVisual = system.AddVisual(new ShotVisual
             {
-                var spit = _spits[i];
+                Mesh = Resources.GetBuiltinResource<Mesh>("Sphere.fbx"),
+                Materials = new[] { arsenal.Context.Materials.Lit("Queen Spit", spitColor * 0.6f, 0f, 0.4f, spitColor * 0.8f) },
+                Scale = 0.3f,
+                AlignToVelocity = false,
+                StreakHead = new Color(spitColor.r, spitColor.g, spitColor.b, 0.8f),
+                StreakTail = new Color(spitColor.r, spitColor.g, spitColor.b, 0f),
+                StreakLength = 1.2f,
+                StreakWidth = 0.1f
+            });
 
-                spit.Position += spit.Velocity * deltaTime;
-                spit.Life -= deltaTime;
+            return true;
+        }
 
-                if (spit.View != null) spit.View.transform.position = spit.Position;
-
-                var hit = false;
-
-                if (target != null)
-                {
-                    Body.GetBodySegment(out var low, out var high, out var radius);
-
-                    if (DistanceToSegment(spit.Position, low, high) <= radius + 0.35f)
-                    {
-                        Body.Entangle(entangleSeconds, entangleScale);
-                        Body.Hurt(DamageHit.Simple(spitDamage * DamageScale, spit.Position - spit.Velocity,
-                            DamageKind.Spit));
-                        SpitsLanded++;
-                        hit = true;
-                    }
-                }
-
-                // Порода по полю плотности, а не физикой: плевок в толще камня
-                // физика не заметила бы вовсе (грабли №1).
-                var dead = hit || spit.Life <= 0f || (world != null && world.IsSolid(spit.Position));
-
-                if (!dead) continue;
-
-                if (spit.View != null) DestroyNow(spit.View);
-                _spits.RemoveAt(i);
+        /// <summary>Плевок долетел: спутать и ранить. Отбитый киркой уходит к ней и сюда не вернётся.</summary>
+        public void OnShot(ref Shot shot, ShotEvent what, in RaycastHit hit)
+        {
+            if (what == ShotEvent.HitPlayer && target != null)
+            {
+                Body.Entangle(entangleSeconds, entangleScale);
+                Body.Hurt(DamageHit.Simple(spitDamage * DamageScale, shot.Position - shot.Velocity.normalized,
+                    DamageKind.Spit));
+                SpitsLanded++;
             }
+
+            shot.Dead = true;
         }
 
         /// <summary>
@@ -949,6 +1170,8 @@ namespace MineGenerator.Catacombs
             if (lit < _pylons.Count) return;
 
             State = QueenState.Awake;
+
+            if (Profile.LightsOut && _nextShield >= shieldAt.Length) PutLightsOut();
 
             if (_shieldHalo != null) _shieldHalo.gameObject.SetActive(false);
 
@@ -1055,12 +1278,6 @@ namespace MineGenerator.Catacombs
             if (_shockDisc != null) _shockDisc.gameObject.SetActive(false);
             if (_shieldHalo != null) _shieldHalo.gameObject.SetActive(false);
 
-            foreach (var spit in _spits)
-            {
-                if (spit.View != null) DestroyNow(spit.View);
-            }
-
-            _spits.Clear();
 
             if (_lairLight != null) _lairLight.enabled = true;
 
@@ -1104,75 +1321,23 @@ namespace MineGenerator.Catacombs
         /// </summary>
         private bool PrepareBody()
         {
-            _kind = crowd != null ? crowd.KindAt(crowd.HeaviestKind) : null;
-            if (_kind == null) return false;
+            if (!_view.Bind(crowd != null ? crowd.KindAt(crowd.HeaviestKind) : null, Profile.SizeScale, Profile.Hue)) return false;
 
-            _scale = _kind.Scale * sizeScale;
-            _bodyLift = math.max(0.5f, _kind.RestBounds.center.y * _scale + _kind.Hover * _scale);
-            _hitRadius = math.max(1f, _kind.RestBounds.extents.magnitude * _scale * 0.7f);
-
-            _block ??= new MaterialPropertyBlock();
-            // Четвёртый канал — возраст разлёта на куски (CaveCrowd, Shatter): ноль — цела.
-            _tint[0] = new Vector4(hue.r, hue.g, hue.b, 0f);
+            _bodyLift = math.max(0.5f, _view.BodyLift);
+            _hitRadius = math.max(1f, _view.HitRadius);
 
             return true;
         }
 
-        private void Play(SpiderClip clip)
-        {
-            if (_clip == clip) return;
+        private void Play(SpiderClip clip) => _view.Play(clip);
 
-            _clip = clip;
-            _phase = 0f;
-        }
-
-        private void AdvanceClip(float deltaTime)
-        {
-            if (_kind == null) return;
-
-            var range = _kind.GetClip(_clip);
-            _phase += deltaTime / math.max(0.05f, range.Length);
-
-            if (range.Loop)
-            {
-                _phase = math.frac(_phase);
-                return;
-            }
-
-            if (_phase < 1f) return;
-
-            // Удар доигран — обратно в стояние; смерть застывает на последнем кадре.
-            if (_clip == SpiderClip.Attack) Play(SpiderClip.Idle);
-            else _phase = 1f;
-        }
+        private void AdvanceClip(float deltaTime) => _view.Advance(deltaTime);
 
         private void Draw()
         {
-            if (_kind == null || State == QueenState.Dormant || _kind.Material == null) return;
+            if (State == QueenState.Dormant) return;
 
-            var range = _kind.GetClip(_clip);
-
-            _matrix[0] = Matrix4x4.TRS(LairPosition + Vector3.up * (_kind.Hover * _scale),
-                _rotation, Vector3.one * _scale);
-
-            _anim[0] = new Vector4(range.StartRow, range.FrameCount, _phase, range.Loop ? 1f : 0f);
-
-            _block.SetVectorArray(AnimStateId, _anim);
-            _block.SetVectorArray(InstanceTintId, _tint);
-
-            var parameters = new RenderParams(_kind.Material)
-            {
-                worldBounds = new Bounds(Centre, Vector3.one * (_hitRadius * 4f)),
-                shadowCastingMode = ShadowCastingMode.On,
-                receiveShadows = true,
-                layer = gameObject.layer,
-                renderingLayerMask = 1,
-                lightProbeUsage = LightProbeUsage.Off,
-                reflectionProbeUsage = ReflectionProbeUsage.Off,
-                matProps = _block
-            };
-
-            Graphics.RenderMeshInstanced(parameters, _kind.Mesh, 0, _matrix, 1);
+            _view.Draw(LairPosition, _rotation, gameObject.layer, true);
         }
 
         // ------------------------------------------------------------------ помощники
@@ -1182,8 +1347,7 @@ namespace MineGenerator.Catacombs
         {
             get
             {
-                var facing = _kind != null && _kind.FacesMinusZ ? -1f : 1f;
-                var forward = (Vector3)math.forward(_rotation) * facing;
+                var forward = (Vector3)math.forward(_rotation) * _view.Facing;
 
                 return Centre + forward * (_hitRadius * 0.6f) + Vector3.up * 0.4f;
             }
@@ -1201,14 +1365,6 @@ namespace MineGenerator.Catacombs
             if (distance < 1f) return false;
 
             return Physics.Raycast(from, delta / distance, distance - 0.8f, ~0, QueryTriggerInteraction.Ignore);
-        }
-
-        private static float DistanceToSegment(Vector3 point, Vector3 a, Vector3 b)
-        {
-            var ab = b - a;
-            var t = ab.sqrMagnitude > 1e-6f ? Mathf.Clamp01(Vector3.Dot(point - a, ab) / ab.sqrMagnitude) : 0f;
-
-            return (point - (a + ab * t)).magnitude;
         }
 
         private void ApplyGuide()

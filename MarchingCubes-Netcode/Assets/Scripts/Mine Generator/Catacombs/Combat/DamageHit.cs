@@ -44,7 +44,10 @@ namespace MineGenerator.Catacombs
 
         public DamageKind Kind;
 
-        /// <summary>Сколько укусов сложено в этот удар (для укусов), иначе 1.</summary>
+        /// <summary>
+        /// Сколько укусов сложено в этот удар (для укусов), иначе 1. Ноль — урон по времени
+        /// (лужа, аура, прижим): броня его не режет и до единицы не поднимает.
+        /// </summary>
         public int Count;
 
         /// <summary>Номер вида паука, укусившего сильнее всех, или -1 — для разбора смертей.</summary>
@@ -59,6 +62,21 @@ namespace MineGenerator.Catacombs
             From = from,
             Kind = kind,
             Count = 1,
+            SpiderKind = -1
+        };
+
+        /// <summary>
+        /// Урон по времени за кадр: лужа кислоты, ядовитая аура, прижим ловчего. Отдельно от
+        /// <see cref="Simple"/>, потому что правило брони «укус не слабее единицы» на кадровых
+        /// долях поднимало каждую до единицы: 6 HP/с на тридцати кадрах прогона стали 30 HP/с,
+        /// на шестидесяти в игре — 60 (держал только потолок урона).
+        /// </summary>
+        public static DamageHit Over(float amount, Vector3 from, DamageKind kind) => new DamageHit
+        {
+            Amount = amount,
+            From = from,
+            Kind = kind,
+            Count = 0,
             SpiderKind = -1
         };
     }

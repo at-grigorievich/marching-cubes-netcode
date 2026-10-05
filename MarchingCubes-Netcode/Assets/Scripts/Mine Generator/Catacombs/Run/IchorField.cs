@@ -66,6 +66,9 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(1f, 200f)] private float eliteIchor = 30f;
         [SerializeField, Range(0f, 200f)] private float eliteChitin = 15f;
 
+        [Tooltip("Хитина с особого паука (M3).")]
+        [SerializeField, Range(0f, 100f)] private float specialChitin = 5f;
+
         [Tooltip("Один из скольких рядовых убитых роняет хитин.")]
         [SerializeField, Range(1, 500)] private int chitinOneIn = 30;
 
@@ -248,6 +251,13 @@ namespace MineGenerator.Catacombs
                 }
 
                 Drop(kill.Position, DropKind.Ichor, Mathf.Max(1, kill.KindHealth) * xpPerHit * ValueScale);
+
+                // Особый (M3) — ещё и хитин наверняка: его надо было найти и снять первым.
+                if (kill.Special)
+                {
+                    Drop(kill.Position + Vector3.up * 0.3f, DropKind.Chitin, specialChitin * ChitinScale);
+                    continue;
+                }
 
                 if (NextRandom() * chitinOneIn < ValueScale) Drop(kill.Position, DropKind.Chitin, ChitinScale);
             }

@@ -322,7 +322,7 @@ namespace MineGenerator.Catacombs
         {
             if (!_prepared || !Application.isPlaying) return;
 
-            Tick(_rig.Commands, Time.deltaTime, _rig.IsLooking && !_rig.InputBlocked && !_rig.IsDead);
+            Tick(_rig.Commands, Time.deltaTime, _rig.IsLooking && !_rig.InputBlocked && !_rig.IsDead && !_rig.IsPinned);
         }
 
         /// <summary>Шаг: смена, огонь активной, фон всех. Отдельно — прогоны стреляют сами.</summary>

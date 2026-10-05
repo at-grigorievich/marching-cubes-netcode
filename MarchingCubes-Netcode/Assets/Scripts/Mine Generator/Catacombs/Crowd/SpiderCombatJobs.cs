@@ -36,6 +36,15 @@ namespace MineGenerator.Catacombs
 
         /// <summary>Сколько секунд по ней идёт ток — синий отсвет и судорога.</summary>
         public float Shock;
+
+        /// <summary>
+        /// Панцирная элита (M3.3): доля урона, проходящая спереди (0 — брони нет). Сзади и сбоку
+        /// урон полный — обходить или оглушать молотом, который разворачивает.
+        /// </summary>
+        public float Armor;
+
+        /// <summary>Куда смотрит голова панцирной — проставляет толпа перед ударом.</summary>
+        public float3 Front;
     }
 
     /// <summary>Форма поражения.</summary>
@@ -282,6 +291,13 @@ namespace MineGenerator.Catacombs
 
             var crit = (CritElites != 0 && spider.Elite != 0) || (CritChance > 0f && random.NextFloat() < CritChance);
             var damage = Damage * share * (crit ? CritScale : 1f);
+
+            // Панцирь спереди: удар, пришедший с той стороны, куда смотрит голова.
+            var armor = Status[index];
+            if (armor.Armor > 0f && math.dot(armor.Front, math.normalizesafe(Origin - spider.Position)) > 0.35f)
+            {
+                damage *= armor.Armor;
+            }
 
             Crit[index] = (byte)(crit && damage > 0f ? 1 : 0);
 

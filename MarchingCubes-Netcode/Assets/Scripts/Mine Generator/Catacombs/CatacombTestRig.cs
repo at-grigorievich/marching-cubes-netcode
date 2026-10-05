@@ -264,6 +264,35 @@ namespace MineGenerator.Catacombs
 
         public bool IsEntangled => _entangleLeft > 0f;
 
+        private float _pinLeft;
+        private Vector3 _drag;
+
+        /// <summary>Сколько раз прижимали — для прогона особых.</summary>
+        public int TimesPinned { get; private set; }
+
+        public bool IsPinned => _pinLeft > 0f;
+
+        public void Pin(float seconds)
+        {
+            if (IsDashing) return;
+
+            _pinLeft = Mathf.Max(_pinLeft, seconds);
+            TimesPinned++;
+        }
+
+        public void Drag(Vector3 velocity) => _drag += new Vector3(velocity.x, 0f, velocity.z);
+
+        /// <summary>
+        /// Забрать тягу этого кадра — прогон, в котором ход стенда не идёт. Без этого она копилась:
+        /// «вытянул бы на 2071 юнит» за пять секунд.
+        /// </summary>
+        public Vector3 ConsumeDrag()
+        {
+            var drag = _drag;
+            _drag = Vector3.zero;
+            return drag;
+        }
+
         public bool IsDashing => _mobility != null && _mobility.Dash.Active;
 
         public bool IsDead => _vitals != null && _vitals.IsDead;
@@ -333,6 +362,7 @@ namespace MineGenerator.Catacombs
         public void TickStatus(float deltaTime)
         {
             _entangleLeft = Mathf.Max(0f, _entangleLeft - deltaTime);
+            _pinLeft = IsDashing ? 0f : Mathf.Max(0f, _pinLeft - deltaTime);
 
             // Экспоненциально: швырок заметен первые доли секунды и дальше не тянется.
             _push = Vector3.Lerp(_push, Vector3.zero, Mathf.Clamp01(deltaTime * 5f));
@@ -496,7 +526,11 @@ namespace MineGenerator.Catacombs
             var speed = walkSpeed * boost * stats * slow * hold;
 
             // Отброс поверх ввода: швырнуло — летишь, куда бы ни жал.
-            var move = (dash ? Vector3.zero : wish * speed) + _push;
+            // Прижатый не ходит; тяга нити — поверх ввода, как отброс, но только пока её зовут.
+            if (IsPinned && !dash) speed = 0f;
+
+            var move = (dash ? Vector3.zero : wish * speed) + _push + _drag;
+            _drag = Vector3.zero;
 
             if (_controller.isGrounded)
             {

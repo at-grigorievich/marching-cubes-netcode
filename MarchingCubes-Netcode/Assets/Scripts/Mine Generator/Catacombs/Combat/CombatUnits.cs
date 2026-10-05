@@ -78,6 +78,9 @@ namespace MineGenerator.Catacombs
 
         public bool Elite;
 
+        /// <summary>Особый паук (M3): не особь толпы, <see cref="Kind"/> у него −1.</summary>
+        public bool Special;
+
         /// <summary>Разорвана на куски, а не убита целой.</summary>
         public bool Gibbed;
 

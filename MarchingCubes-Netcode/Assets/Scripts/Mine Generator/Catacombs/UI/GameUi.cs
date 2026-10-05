@@ -22,6 +22,7 @@ namespace MineGenerator.Catacombs
         public CaveRunDirector Director { get; private set; }
         public CaveQueen Queen { get; private set; }
         public SpiderCrowd Crowd { get; private set; }
+        public CaveSpecials Specials { get; private set; }
         public Camera Camera { get; private set; }
         public WeaponAudio Audio => Arsenal != null && Arsenal.Context != null ? Arsenal.Context.Audio : null;
 
@@ -39,6 +40,7 @@ namespace MineGenerator.Catacombs
         public ResultsScreen Results { get; private set; }
         public PauseScreen Pause { get; private set; }
         public HintView Hints { get; private set; }
+        public SpecialMarkers Markers { get; private set; }
 
         /// <summary>Сколько миллисекунд занял последний кадр интерфейса — для UiCheck.</summary>
         public double LastTickMs { get; private set; }
@@ -116,6 +118,9 @@ namespace MineGenerator.Catacombs
             Hints = new HintView(this);
             Hints.Build(_screenRoot);
 
+            Markers = new SpecialMarkers(this);
+            Markers.Build(_dynamicRoot);
+
             HideScreens();
         }
 
@@ -164,6 +169,12 @@ namespace MineGenerator.Catacombs
             if (Queen == null) Queen = FindAnyObjectByType<CaveQueen>();
             if (Crowd == null) Crowd = FindAnyObjectByType<SpiderCrowd>();
 
+            if (Specials == null)
+            {
+                Specials = FindAnyObjectByType<CaveSpecials>();
+                if (Specials != null) Specials.Cued += OnSpecialCue;
+            }
+
             if (_feedback == null && Arsenal != null && Arsenal.Context != null)
             {
                 _feedback = Arsenal.Context.Feedback;
@@ -182,6 +193,7 @@ namespace MineGenerator.Catacombs
             if (_vitals != null) _vitals.Damaged -= OnDamaged;
             if (_feedback != null) _feedback.Marked -= OnMarked;
             if (_flow != null) _flow.StateChanged -= OnStateChanged;
+            if (Specials != null) Specials.Cued -= OnSpecialCue;
 
             if (Controller != null)
             {
@@ -214,6 +226,8 @@ namespace MineGenerator.Catacombs
             Hud.SetVisible(inRun);
 
             if (inRun) Hud.Tick(deltaTime);
+
+            Markers.Tick(inRun ? deltaTime : 0f);
 
             Hints.Tick(deltaTime, state);
 
@@ -272,6 +286,28 @@ namespace MineGenerator.Catacombs
             Death.SetOpen(false);
             Cards.SetOpen(false);
             Results.Show(results);
+        }
+
+        /// <summary>
+        /// Метка особого: звук своим тембром (их слышно раньше, чем видно — Vermintide 2)
+        /// и вспышка значка на краю экрана.
+        /// </summary>
+        private void OnSpecialCue(SoloSpider special, SpecialCue cue)
+        {
+            Markers.OnCue(special, cue);
+
+            if (Audio == null) return;
+
+            var sound = cue switch
+            {
+                SpecialCue.Spit => SoundId.SpitterGurgle,
+                SpecialCue.Shriek => SoundId.LurkerShriek,
+                SpecialCue.Thread => SoundId.WeaverTwang,
+                SpecialCue.Swell => SoundId.BomberSwell,
+                _ => SoundId.SpecialAppear
+            };
+
+            Audio.Play(sound, cue == SpecialCue.Shriek ? 1f : 0.8f, 1f, special.Centre, 6);
         }
 
         private void OnMarked(HitMarker marker)
