@@ -272,6 +272,13 @@ namespace MineGenerator.Catacombs
             var state = _flow != null ? _flow.State : GameState.Playing;
 
             if (!TouchMode && Application.isPlaying && (Platform.IsMobile || Input.touchCount > 0)) EnableTouch();
+
+            // Первый ввод (M6.2): долгая пауза после готовности — «не понял, что делать».
+            if (Rig != null && state == GameState.Playing)
+            {
+                var commands = Rig.Commands;
+                if (commands.Move.sqrMagnitude > 0.01f || commands.FirePressed || commands.Dash || commands.Look.sqrMagnitude > 0.01f) Analytics.Input();
+            }
             Touch?.Tick(TouchMode && state == GameState.Playing);
             var inRun = state == GameState.Playing || state == GameState.LevelUp || state == GameState.Dead ||
                         state == GameState.Paused;

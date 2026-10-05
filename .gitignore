@@ -60,3 +60,4 @@ crashlytics-build.properties
 
 # Кадры отладочных прогонов: генерируются стендами, живут вне проекта
 _shots/
+_builds/

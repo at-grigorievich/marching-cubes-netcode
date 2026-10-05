@@ -115,6 +115,8 @@ namespace MineGenerator.Catacombs.EditorTools
             BuildReport report;
             var clock = Stopwatch.StartNew();
 
+            TextureBudget(text);
+
             try
             {
                 Apply(target);
@@ -164,6 +166,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
         private struct Saved
         {
+            public bool Splash;
             public string Template;
             public WebGLCompressionFormat Compression;
             public bool Fallback;
@@ -174,6 +177,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
         private static Saved Capture() => new Saved
         {
+            Splash = PlayerSettings.SplashScreen.show,
             Template = PlayerSettings.WebGL.template,
             Compression = PlayerSettings.WebGL.compressionFormat,
             Fallback = PlayerSettings.WebGL.decompressionFallback,
@@ -189,6 +193,8 @@ namespace MineGenerator.Catacombs.EditorTools
         /// </summary>
         private static void Apply(Target target)
         {
+            // Заставка Unity — 2.7 МБ данных (замер первой сборки); в Unity 6 её можно выключить и на Personal.
+            PlayerSettings.SplashScreen.show = false;
             PlayerSettings.WebGL.template = target == Target.Yandex ? "PROJECT:Yandex" : "PROJECT:CrazyGames";
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
             PlayerSettings.WebGL.decompressionFallback = true;
@@ -200,12 +206,53 @@ namespace MineGenerator.Catacombs.EditorTools
         /// <summary>Настройки проекта — назад: сборка не должна оставлять за собой правок в ProjectSettings.</summary>
         private static void Restore(Saved saved)
         {
+            PlayerSettings.SplashScreen.show = saved.Splash;
             PlayerSettings.WebGL.template = saved.Template;
             PlayerSettings.WebGL.compressionFormat = saved.Compression;
             PlayerSettings.WebGL.decompressionFallback = saved.Fallback;
             PlayerSettings.WebGL.nameFilesAsHashes = saved.NameAsHashes;
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, saved.Stripping);
             PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, saved.CodeGeneration);
+        }
+
+        // ------------------------------------------------------------------ текстуры
+
+        /// <summary>
+        /// Бюджет текстур под WebGL (M5.7). Первая сборка: начальная загрузка 30 МБ, из них текстуры
+        /// пауков и паутины 2048² — по 5.3 МБ каждая в данных, девять штук. Паук в кадре — не больше
+        /// трети экрана, и 1024 хватает; ставится переопределением только для WebGL — в редакторе
+        /// и других сборках текстуры прежние.
+        /// </summary>
+        private static readonly (string Folder, int Size)[] Budget =
+        {
+            ("Assets/StorePackages/Spiders - characters with animations", 1024),
+            ("Assets/StorePackages/PolyOne/Cobwebs Pack", 1024)
+        };
+
+        private static void TextureBudget(StringBuilder text)
+        {
+            var changed = 0;
+
+            foreach (var (folder, size) in Budget)
+            {
+                foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { folder }))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (!(AssetImporter.GetAtPath(path) is TextureImporter importer)) continue;
+
+                    var platform = importer.GetPlatformTextureSettings("WebGL");
+                    if (platform.overridden && platform.maxTextureSize <= size) continue;
+
+                    platform.overridden = true;
+                    platform.maxTextureSize = size;
+                    platform.format = TextureImporterFormat.Automatic;
+                    importer.SetPlatformTextureSettings(platform);
+                    importer.SaveAndReimport();
+                    changed++;
+                }
+            }
+
+            text.AppendLine($"  бюджет текстур WebGL: переопределено {changed}");
         }
 
         // ------------------------------------------------------------------ файлы

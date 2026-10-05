@@ -123,6 +123,8 @@ namespace MineGenerator.Catacombs
 
             ApplyLanguage();
             Platform.Readied += ApplyLanguage;
+
+            if (_rig != null && _rig.Vitals != null) _rig.Vitals.Damaged += OnDamaged;
             Platform.Readied += ApplyQuality;
             ApplySettings();
             ApplyQuality();
@@ -134,6 +136,7 @@ namespace MineGenerator.Catacombs
                 _controller.PoolSource = BuildPool;
                 _controller.Finished += OnFinished;
                 _controller.DescentTaken += OnDescent;
+                _controller.CardChosen += OnCardChosen;
             }
 
             if (_world != null) _world.Generated += OnGenerated;
@@ -145,6 +148,7 @@ namespace MineGenerator.Catacombs
 
             Platform.Readied -= ApplyLanguage;
             Platform.Readied -= ApplyQuality;
+            if (_rig != null && _rig.Vitals != null) _rig.Vitals.Damaged -= OnDamaged;
 
             // Статические множители качества пережили бы выход из play-режима и попали бы в прогоны
             // редактора — те меряют «Высокое».
@@ -155,6 +159,7 @@ namespace MineGenerator.Catacombs
             {
                 _controller.Finished -= OnFinished;
                 _controller.DescentTaken -= OnDescent;
+                _controller.CardChosen -= OnCardChosen;
             }
 
             if (_world != null) _world.Generated -= OnGenerated;
@@ -181,10 +186,82 @@ namespace MineGenerator.Catacombs
 
         private void OnApplicationPause(bool paused)
         {
-            if (paused) Saves?.Flush();
+            if (!paused) return;
+
+            Saves?.Flush();
+            SessionEnd();
         }
 
-        private void OnApplicationQuit() => Saves?.Flush();
+        private void OnApplicationQuit()
+        {
+            Saves?.Flush();
+            SessionEnd();
+        }
+
+        // ------------------------------------------------------------------ аналитика (M6.2)
+
+        private int _sessionRuns;
+        private DamageHit _lastHit;
+        private bool _sessionEnded;
+
+        private void SessionEnd()
+        {
+            if (_sessionEnded) return;
+            _sessionEnded = true;
+
+            Analytics.F("seconds", Time.realtimeSinceStartup).F("runs", _sessionRuns).Send("session_end");
+        }
+
+        private void OnDamaged(DamageHit hit, DamageResult result)
+        {
+            if (result.Dealt > 0f) _lastHit = hit;
+        }
+
+        /// <summary>Причина смерти: чем ударили последним и шёл ли финальный рой.</summary>
+        private string DeathCause()
+        {
+            var cause = _lastHit.Kind.ToString().ToLowerInvariant();
+            if (_lastHit.Kind == DamageKind.Bite) cause += ":" + _lastHit.SpiderKind;
+            if (_director != null && _director.Phase == CaveRunDirector.RunPhase.FinalSwarm) cause += ";final_swarm";
+            return cause;
+        }
+
+        private void OnCardChosen(Card chosen, IReadOnlyList<Card> offered)
+        {
+            var list = new System.Text.StringBuilder();
+
+            for (var i = 0; i < offered.Count; i++)
+            {
+                if (i > 0) list.Append(',');
+                list.Append(Describe(offered[i]));
+            }
+
+            Analytics.F("level", _controller != null ? _controller.Session.Level : 0).F("offered", list.ToString()).F("chosen", Describe(chosen)).Send("level_up");
+        }
+
+        private static string Describe(in Card card) => card.Type switch
+        {
+            CardType.NewWeapon => "weapon:" + card.Weapon,
+            CardType.WeaponLevel => "weapon:" + card.Weapon + ">" + card.ToLevel,
+            CardType.Evolution => "evolve:" + card.Weapon,
+            CardType.NewTome => "tome:" + card.Tome,
+            CardType.TomeLevel => "tome:" + card.Tome + ">" + card.ToLevel,
+            _ => card.Type.ToString().ToLowerInvariant()
+        };
+
+        private static string WeaponsOf(RunSession session)
+        {
+            var text = new System.Text.StringBuilder();
+            foreach (var weapon in session.Weapons) text.Append(text.Length > 0 ? "," : "").Append(weapon.Id).Append(weapon.Level).Append(weapon.Evolved ? "e" : "");
+            return text.ToString();
+        }
+
+        private static string TomesOf(RunSession session)
+        {
+            var text = new System.Text.StringBuilder();
+            foreach (var tome in session.Tomes) text.Append(text.Length > 0 ? "," : "").Append(tome.Id).Append(tome.Level);
+            return text.ToString();
+        }
 
         // ------------------------------------------------------------------ связь с интерфейсом
 
@@ -330,6 +407,10 @@ namespace MineGenerator.Catacombs
 
             _restore = snapshot;
             _startOnGenerate = true;
+            _sessionRuns++;
+
+            Analytics.F("class", cls).F("depth", Depth).F("weapon", PlayerClasses.StartWeapon(cls)).F("run", Profile.Stats.Runs + 1)
+                .F("continue", snapshot != null).Send("run_start");
 
             var tier = snapshot != null ? snapshot.Tier : 1;
             var seed = snapshot != null && snapshot.Seed != 0 ? snapshot.Seed : _random.Next(1, int.MaxValue);
@@ -443,6 +524,10 @@ namespace MineGenerator.Catacombs
         private void OnDescent()
         {
             if (_controller == null) return;
+
+            var cleared = _controller.Session;
+            Analytics.F("tier", cleared.Tier).F("time", cleared.Seconds).F("level", cleared.Level).F("weapons", WeaponsOf(cleared))
+                .F("tomes", TomesOf(cleared)).Send("stage_clear");
 
             _rig?.Vitals?.Heal(_rig.Vitals.MaxHealth * RestHeal);
 
@@ -577,14 +662,19 @@ namespace MineGenerator.Catacombs
             Profile.Chitin -= price;
             Profile.UnlockedWeapons.Add((int)id);
             Saves.Flush();
+
+            Analytics.F("item", "weapon:" + id).F("price", price).F("chitin", Profile.Chitin).Send("purchase");
+            Analytics.F("what", "weapon:" + id).Send("unlock");
             return true;
         }
 
         public bool BuyUpgrade(MetaUpgrade id)
         {
+            var price = MetaUpgrades.PriceOf(Profile, id);
             if (!MetaUpgrades.Buy(Profile, id)) return false;
 
             Saves.Flush();
+            Analytics.F("item", "upgrade:" + id).F("level", Profile.UpgradeLevel(id)).F("price", price).F("chitin", Profile.Chitin).Send("purchase");
             return true;
         }
 
@@ -646,7 +736,20 @@ namespace MineGenerator.Catacombs
             Profile.AddChitin(results.Chitin);
             _lastRunChitin = results.Chitin;
 
+            var classesBefore = Profile.UnlockedClasses.Count;
             LastCompleted = Quests.Apply(Profile, summary, Today);
+
+            var session = _controller != null ? _controller.Session : null;
+            Analytics.F("tier", results.Tier).F("depth", Depth).F("time", results.Seconds).F("level", results.Level)
+                .F("cause", results.Victory ? "" : DeathCause()).F("kills", results.Kills).F("chitin", results.Chitin)
+                .F("weapons", session != null ? WeaponsOf(session) : "").F("tomes", session != null ? TomesOf(session) : "")
+                .Send(results.Victory ? "victory" : "death");
+
+            foreach (var quest in LastCompleted) Analytics.F("id", quest.Id).Send("quest_done");
+            for (var i = classesBefore; i < Profile.UnlockedClasses.Count; i++) Analytics.F("what", "class:" + (PlayerClass)Profile.UnlockedClasses[i]).Send("unlock");
+
+            // Рекорд глубины — в таблицу площадки («Бездна», M6.3): растёт только на победе.
+            if (results.Victory) Platform.Current.SubmitScore("depth", Profile.Stats.BestDepth);
 
             Profile.HasSnapshot = false;
             Saves.Flush();

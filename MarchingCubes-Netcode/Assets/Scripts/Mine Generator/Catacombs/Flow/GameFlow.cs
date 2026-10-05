@@ -278,7 +278,11 @@ namespace MineGenerator.Catacombs
             // остальное (пауза, карточки, привал, итоги, лагерь, загрузка) — стоп. Готовность —
             // при первом показе того, во что можно играть.
             Platform.SetGameplay(next == GameState.Playing);
-            if (next == GameState.Playing || next == GameState.Hub) Platform.MarkReady();
+            if (next == GameState.Playing || next == GameState.Hub)
+            {
+                Platform.MarkReady();
+                Analytics.Ready(Platform.Current.Name, MetaGame.Instance != null ? MetaGame.Instance.Quality.ToString() : "", Loc.Language);
+            }
 
             StateChanged?.Invoke(previous, next);
         }

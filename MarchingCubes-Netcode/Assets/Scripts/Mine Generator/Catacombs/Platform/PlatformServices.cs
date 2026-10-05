@@ -168,6 +168,7 @@ namespace MineGenerator.Catacombs
             Current.ShowRewarded(placement, result =>
             {
                 GameClock.Release(ClockReason.Ad);
+                Analytics.F("place", placement).F("type", "rewarded").F("result", result).Send("ad");
                 rewarded?.Invoke(result == AdResult.Completed);
             });
         }
@@ -177,9 +178,10 @@ namespace MineGenerator.Catacombs
             GameClock.Hold(ClockReason.Ad);
             AdsShown++;
 
-            Current.ShowInterstitial(placement, _ =>
+            Current.ShowInterstitial(placement, result =>
             {
                 GameClock.Release(ClockReason.Ad);
+                Analytics.F("place", placement).F("type", "interstitial").F("result", result).Send("ad");
                 done?.Invoke();
             });
         }

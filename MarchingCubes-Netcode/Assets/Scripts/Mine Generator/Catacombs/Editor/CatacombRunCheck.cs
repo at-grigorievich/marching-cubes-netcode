@@ -883,7 +883,7 @@ namespace MineGenerator.Catacombs.EditorTools
             return best;
         }
 
-        private static int PickCard(IReadOnlyList<Card> cards, WeaponId gun = WeaponId.Launcher)
+        internal static int PickCard(IReadOnlyList<Card> cards, WeaponId gun = WeaponId.Launcher)
         {
             var best = 0;
             var bestScore = int.MinValue;
@@ -927,7 +927,7 @@ namespace MineGenerator.Catacombs.EditorTools
         // ------------------------------------------------------------------ бот с каждой пушкой (M2)
 
         /// <summary>Шаг бота с настоящей пушкой: гвозди и дробь летят быстро, 1/20 с для них грубо.</summary>
-        private const float GunStep = 1f / 30f;
+        internal const float GunStep = 1f / 30f;
 
         /// <summary>Темп убийств второй пушки в руках к темпу гранатомёта, ниже которого она — балласт.</summary>
         private const float PairEfficiencyMin = 0.2f;
@@ -1108,7 +1108,7 @@ namespace MineGenerator.Catacombs.EditorTools
         }
 
         /// <summary>С какой дистанции бот открывает огонь — по смыслу пушки, а не по её полю Range.</summary>
-        private static float EngageRange(WeaponId gun) => gun switch
+        internal static float EngageRange(WeaponId gun) => gun switch
         {
             WeaponId.Launcher => 16f,
             WeaponId.Revolver => 30f,
@@ -1126,7 +1126,7 @@ namespace MineGenerator.Catacombs.EditorTools
         /// видимых. Взрыв — соседи в радиусе от точки, луч и конус — в угле от направления,
         /// молот — ближайший. При равенстве — ближайший (список уже по дальности).
         /// </summary>
-        private static Vector3 BestAim(WeaponId gun, Vector3 eye, List<Vector3> visible)
+        internal static Vector3 BestAim(WeaponId gun, Vector3 eye, List<Vector3> visible)
         {
             if (gun == WeaponId.PickHammer || gun == WeaponId.Tesla || visible.Count == 1) return visible[0];
 
@@ -1378,9 +1378,15 @@ namespace MineGenerator.Catacombs.EditorTools
         /// окружили шестеро — рывком на 4–7 шагов. Стоящая турель гибнет до первого гребня
         /// при любом уроне (грабли №72).
         /// </summary>
-        private sealed class BotLegs
+        internal sealed class BotLegs
         {
             public Vector3 Feet;
+
+            /// <summary>Сколько пауков вплотную — и рывок (M6: новичок рвётся поздно).</summary>
+            public int DashCrowd = 6;
+
+            /// <summary>Как часто бот перебирает, куда отойти (M6: новичок реагирует медленнее).</summary>
+            public float Reposition = 0.5f;
 
             private Vector3 _goal;
             private float _timer;
@@ -1400,10 +1406,10 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 if (_timer <= 0f)
                 {
-                    _timer = 0.5f;
+                    _timer = Reposition;
 
                     var crowded = crowd.CountNear(Feet + Vector3.up, 3.5f);
-                    var dashNow = _dash != null && crowded >= 6 && _dash.TryStart();
+                    var dashNow = _dash != null && crowded >= DashCrowd && _dash.TryStart();
 
                     if (dashNow) vitals.HoldInvulnerable(InvulnReason.Dash, _dash.Duration + _dash.Grace);
 

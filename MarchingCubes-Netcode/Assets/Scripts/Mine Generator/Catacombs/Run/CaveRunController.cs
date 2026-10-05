@@ -130,6 +130,9 @@ namespace MineGenerator.Catacombs
         }
 
         public event Action LevelUpOffered;
+
+        /// <summary>Карточка выбрана: какая и из каких (аналитика M6.2 — что берут, что пропускают).</summary>
+        public event Action<Card, IReadOnlyList<Card>> CardChosen;
         public event Action LevelUpClosed;
         public event Action DeathShown;
         public event Action<RunResults> Finished;
@@ -544,6 +547,7 @@ namespace MineGenerator.Catacombs
         {
             if (!_offering || index < 0 || index >= _cards.Count) return;
 
+            CardChosen?.Invoke(_cards[index], _cards);
             Apply(_cards[index]);
 
             if (!_cocoonOffer) Session.PendingLevels = Math.Max(0, Session.PendingLevels - 1);
