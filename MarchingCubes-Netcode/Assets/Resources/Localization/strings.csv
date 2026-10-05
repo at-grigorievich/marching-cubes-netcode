@@ -212,6 +212,11 @@ hub.invert;Инверсия по вертикали: {0};Invert vertical look: {
 hub.autofire;Автоогонь (касания): {0};Auto-fire (touch): {0};Otomatik ateş (dokunmatik): {0}
 hub.on;вкл;on;açık
 hub.off;выкл;off;kapalı
+hub.quality;Качество: {0};Quality: {0};Kalite: {0}
+quality.auto;Авто;Auto;Otomatik
+quality.high;Высокое;High;Yüksek
+quality.medium;Среднее;Medium;Orta
+quality.low;Низкое;Low;Düşük
 hub.daily_box;Ящик дня за рекламу: +{0} хитина;Daily crate for an ad: +{0} chitin;Reklam karşılığı günlük sandık: +{0} kitin
 # ---------------------------------------------------------------- мета-улучшения
 meta.might.name;Сила;Might;Güç

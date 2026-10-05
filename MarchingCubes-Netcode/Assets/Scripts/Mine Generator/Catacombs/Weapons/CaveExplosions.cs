@@ -175,7 +175,7 @@ namespace MineGenerator.Catacombs
             Emit(_flash, point + normal * 0.3f, Vector3.zero, 7f * scale, 0.14f, Color.white, 0f);
             Emit(_ring, point + normal * 0.2f, Vector3.zero, 11f * scale, 0.28f, Color.white, Random.Range(0f, 360f));
 
-            for (var i = 0; i < 22; i++)
+            for (var i = 0; i < Count(22); i++)
             {
                 var direction = Hemisphere(normal, 0.35f);
 
@@ -186,7 +186,7 @@ namespace MineGenerator.Catacombs
 
             // Язык огня вверх: в давке взрыв рвётся среди спин, и шар на уровне пола закрыт
             // пауками перед игроком — над кучей его видно.
-            for (var i = 0; i < 7; i++)
+            for (var i = 0; i < Count(7); i++)
             {
                 var direction = (Vector3.up * 1.5f + normal + Random.insideUnitSphere * 0.5f).normalized;
 
@@ -195,7 +195,7 @@ namespace MineGenerator.Catacombs
                     Random.Range(1.4f, 2.4f) * scale, Random.Range(0.5f, 0.85f), Color.white, Random.Range(0f, 360f));
             }
 
-            for (var i = 0; i < 14; i++)
+            for (var i = 0; i < Count(14); i++)
             {
                 var direction = Hemisphere(normal, 0.2f);
 
@@ -204,7 +204,7 @@ namespace MineGenerator.Catacombs
                     Random.Range(2f, 3.6f) * scale, Random.Range(2.2f, 3.4f), Color.white, Random.Range(0f, 360f));
             }
 
-            for (var i = 0; i < 44; i++)
+            for (var i = 0; i < Count(44); i++)
             {
                 var direction = Hemisphere(normal, 0.05f);
 
@@ -212,7 +212,7 @@ namespace MineGenerator.Catacombs
                     Random.Range(0.05f, 0.11f), Random.Range(0.3f, 0.9f), Color.white, 0f);
             }
 
-            for (var i = 0; i < 14; i++)
+            for (var i = 0; i < Count(14); i++)
             {
                 var direction = Hemisphere(normal, 0.2f);
 
@@ -220,7 +220,7 @@ namespace MineGenerator.Catacombs
                     Random.Range(0.06f, 0.13f), Random.Range(1.2f, 2.4f), Color.white, 0f);
             }
 
-            for (var i = 0; i < 12; i++)
+            for (var i = 0; i < Count(12); i++)
             {
                 var direction = Hemisphere(normal, 0.1f);
 
@@ -257,6 +257,9 @@ namespace MineGenerator.Catacombs
         /// Множитель числа частиц — уровень качества (M5): на телефоне вдвое меньше.
         /// </summary>
         public static float Density = 1f;
+
+        /// <summary>Число частиц слоя с учётом уровня качества, не меньше одной.</summary>
+        private static int Count(int full) => Mathf.Max(1, Mathf.RoundToInt(full * Density));
 
         /// <summary>Попадание пули в камень: искры и пара осколков.</summary>
         public void Impact(Vector3 point, Vector3 normal, int sparks = 8)

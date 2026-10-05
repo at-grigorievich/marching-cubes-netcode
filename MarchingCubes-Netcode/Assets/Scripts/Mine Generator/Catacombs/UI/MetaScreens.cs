@@ -344,7 +344,22 @@ namespace MineGenerator.Catacombs
 
             Stepper(Loc.F("hub.autofire", Loc.T(settings.AutoFire ? "hub.on" : "hub.off")), () => Change(() => settings.AutoFire = !settings.AutoFire),
                 () => Change(() => settings.AutoFire = !settings.AutoFire));
+
+            // Качество (M5.6): авто → высокое → среднее → низкое; на «авто» в скобках — что выбрано.
+            var quality = settings.Quality < 0
+                ? Loc.T("quality.auto") + " (" + Loc.T(QualityKey(_meta.Quality)) + ")"
+                : Loc.T(QualityKey((QualityTier)settings.Quality));
+
+            Stepper(Loc.F("hub.quality", quality), () => Change(() => settings.Quality = settings.Quality <= -1 ? 2 : settings.Quality - 1),
+                () => Change(() => settings.Quality = settings.Quality >= 2 ? -1 : settings.Quality + 1));
         }
+
+        private static string QualityKey(QualityTier tier) => tier switch
+        {
+            QualityTier.Medium => "quality.medium",
+            QualityTier.Low => "quality.low",
+            _ => "quality.high"
+        };
 
         private static void CycleLanguage(ProfileSettings settings, int step)
         {

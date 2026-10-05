@@ -108,6 +108,9 @@ namespace MineGenerator.Catacombs
         /// </summary>
         public float MercyPopulation { get; set; } = 1f;
 
+        /// <summary>Население по уровню качества (M5.6): на «Низком» ×0.6 — опыт за убийство растёт обратно.</summary>
+        public float QualityPopulation { get; set; } = 1f;
+
         public float MercySpawn { get; set; } = 1f;
 
         [Tooltip("К какой доле стадии открываются все виды. До этого тяжёлые приходят по одному.")]
@@ -465,7 +468,7 @@ namespace MineGenerator.Catacombs
 
             var directive = new CrowdDirective
             {
-                Population = (int)math.round(basePopulation * intensity * population * MercyPopulation),
+                Population = (int)math.round(basePopulation * intensity * population * MercyPopulation * QualityPopulation),
                 SpawnRate = baseSpawnRate * intensity * population * MercySpawn,
                 MicroWave = microWave,
                 HealthScale = (1f + healthGrowth * t) * math.max(0.05f, difficulty.Health),

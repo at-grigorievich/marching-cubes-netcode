@@ -452,6 +452,16 @@ namespace MineGenerator.Catacombs
         /// <summary>Потолок особей: столько слотов выделено.</summary>
         public int Capacity => _states.IsCreated ? _states.Length : capacity;
 
+        /// <summary>
+        /// Уровень качества (M5.6): потолок особей и дальность отрисовки. Потолок вступает в силу
+        /// со следующей постройкой (новый ярус), дальность — сразу.
+        /// </summary>
+        public void SetQuality(int capacityLimit, float drawRange)
+        {
+            capacity = Mathf.Max(50, capacityLimit);
+            drawDistance = Mathf.Max(10f, drawRange);
+        }
+
         /// <summary>Собственные числа толпы — от них директор считает свои.</summary>
         public int DefaultPopulation => population;
         public int DefaultNearCap => nearCap;

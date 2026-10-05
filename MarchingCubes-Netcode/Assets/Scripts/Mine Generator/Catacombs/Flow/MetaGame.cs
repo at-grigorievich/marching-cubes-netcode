@@ -123,7 +123,9 @@ namespace MineGenerator.Catacombs
 
             ApplyLanguage();
             Platform.Readied += ApplyLanguage;
+            Platform.Readied += ApplyQuality;
             ApplySettings();
+            ApplyQuality();
 
             if (_controller != null)
             {
@@ -142,6 +144,12 @@ namespace MineGenerator.Catacombs
             if (Instance == this) Instance = null;
 
             Platform.Readied -= ApplyLanguage;
+            Platform.Readied -= ApplyQuality;
+
+            // Статические множители качества пережили бы выход из play-режима и попали бы в прогоны
+            // редактора — те меряют «Высокое».
+            CaveExplosions.Density = 1f;
+            CaveBlastMarks.Slots = CaveBlastMarks.ShaderSlots;
 
             if (_controller != null)
             {
@@ -166,6 +174,7 @@ namespace MineGenerator.Catacombs
         private void Update()
         {
             Saves?.Tick(Time.unscaledDeltaTime);
+            MeasureQuality(Time.unscaledDeltaTime);
 
             if (_inHub) OrbitCamera(Time.unscaledDeltaTime);
         }
@@ -220,6 +229,64 @@ namespace MineGenerator.Catacombs
             if (Application.isEditor && string.IsNullOrEmpty(chosen) && string.IsNullOrEmpty(platform)) return;
 
             Loc.SetLanguage(Loc.Resolve(chosen, platform));
+        }
+
+        // ------------------------------------------------------------------ качество (M5.6)
+
+        public QualityTier Quality { get; private set; } = QualityTier.High;
+
+        private float _measureSeconds;
+        private int _measureFrames;
+        private bool _measured;
+
+        /// <summary>Уровень: выбранный в настройках, иначе по устройству площадки и памяти.</summary>
+        public void ApplyQuality()
+        {
+            Quality = QualityPolicy.Resolve(Profile.Settings.Quality, Platform.Current.Device, SystemInfo.systemMemorySize);
+            var preset = QualityPreset.For(Quality);
+
+            if (_crowd != null) _crowd.SetQuality(preset.CrowdCapacity, preset.DrawDistance);
+            if (_director != null) _director.QualityPopulation = preset.Population;
+            if (_ichor != null) _ichor.ValueScale = preset.ValueScale;
+
+            CaveExplosions.Density = preset.Particles;
+            CaveBlastMarks.Slots = preset.ScorchSlots;
+
+            var dust = FindAnyObjectByType<CaveDustMotes>();
+            if (dust != null) dust.enabled = preset.Dust;
+
+            // Масштаб рендера — свойство ассета пайплайна: в редакторе правка осела бы в файле
+            // (грабли №8 в рантайм-виде), поэтому — только в сборке.
+            if (!Application.isEditor && UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp)
+            {
+                urp.renderScale = preset.RenderScale;
+            }
+        }
+
+        /// <summary>
+        /// Замер (M5.6): средний кадр первых 10 с игры; дольше 26 мс — ступень вниз один раз, с записью
+        /// в профиль. Только на «авто» (выбор игрока не трогаем) и только в сборке: кадр редактора
+        /// тяжелее сборки, и замер в нём занизил бы качество всем.
+        /// </summary>
+        private void MeasureQuality(float deltaTime)
+        {
+            if (_measured || Application.isEditor || Profile == null || Profile.Settings.Quality >= 0) return;
+            if (GameFlow.Instance == null || GameFlow.Instance.State != GameState.Playing) return;
+
+            _measureSeconds += deltaTime;
+            _measureFrames++;
+
+            if (_measureSeconds < QualityPolicy.MeasureSeconds) return;
+
+            _measured = true;
+
+            var average = _measureSeconds * 1000f / Mathf.Max(1, _measureFrames);
+            var lowered = QualityPolicy.StepDown(Quality, average);
+            if (lowered == Quality) return;
+
+            Profile.Settings.Quality = (int)lowered;
+            Saves.MarkDirty();
+            ApplyQuality();
         }
 
         // ------------------------------------------------------------------ статы и пул
@@ -539,6 +606,8 @@ namespace MineGenerator.Catacombs
                 _rig.LookScale = settings.Sensitivity;
                 _rig.InvertY = settings.InvertY;
             }
+
+            if (_crowd != null) ApplyQuality();
         }
 
         // ------------------------------------------------------------------ итоги

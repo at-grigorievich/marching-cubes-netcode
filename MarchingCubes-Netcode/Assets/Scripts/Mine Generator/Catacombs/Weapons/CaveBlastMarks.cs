@@ -23,6 +23,9 @@ namespace MineGenerator.Catacombs
         /// <summary>Сколько пятен читает шейдер породы. Совпадает с CAVE_SCORCH_SLOTS в CaveTriplanar.</summary>
         public const int ShaderSlots = 16;
 
+        /// <summary>Сколько пятен отдавать шейдеру — уровень качества (M5.6): на «Низком» 8, цикл на пиксель вдвое короче.</summary>
+        public static int Slots = ShaderSlots;
+
         /// <summary>Сколько пятен помнится за уровень. Старые уходят первыми.</summary>
         public const int MaxMarks = 256;
 
@@ -319,7 +322,9 @@ namespace MineGenerator.Catacombs
 
                 var now = Time.time;
 
-                for (var i = 0; i < _order.Count && count < ShaderSlots; i++)
+                var limit = Mathf.Clamp(Slots, 0, ShaderSlots);
+
+                for (var i = 0; i < _order.Count && count < limit; i++)
                 {
                     var mark = _marks[_order[i]];
 

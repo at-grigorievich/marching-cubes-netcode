@@ -106,6 +106,38 @@ namespace MineGenerator.Catacombs.Tests
             Assert.AreEqual(1, EditorPlatform.ReadyCalls, "готовность — ровно один раз");
         }
 
+        // ------------------------------------------------------------------ качество
+
+        [Test]
+        public void QualityByDeviceUnlessChosen()
+        {
+            Assert.AreEqual(QualityTier.Low, QualityPolicy.Resolve(-1, DeviceKind.Mobile, 0));
+            Assert.AreEqual(QualityTier.Medium, QualityPolicy.Resolve(-1, DeviceKind.Tablet, 0));
+            Assert.AreEqual(QualityTier.High, QualityPolicy.Resolve(-1, DeviceKind.Desktop, 0), "память не сообщена — высокое");
+            Assert.AreEqual(QualityTier.Medium, QualityPolicy.Resolve(-1, DeviceKind.Desktop, 4096), "Chromebook с 4 ГБ");
+            Assert.AreEqual(QualityTier.High, QualityPolicy.Resolve(0, DeviceKind.Mobile, 0), "выбор игрока важнее устройства");
+        }
+
+        [Test]
+        public void SlowFramesStepDownOnce()
+        {
+            Assert.AreEqual(QualityTier.High, QualityPolicy.StepDown(QualityTier.High, 20f));
+            Assert.AreEqual(QualityTier.Medium, QualityPolicy.StepDown(QualityTier.High, 30f));
+            Assert.AreEqual(QualityTier.Low, QualityPolicy.StepDown(QualityTier.Low, 60f), "ниже некуда");
+        }
+
+        [Test]
+        public void LowQualityValueCompensatesPopulation()
+        {
+            var low = QualityPreset.For(QualityTier.Low);
+
+            // Меньше пауков — дороже каждый: опыта за минуту столько же, сколько на «Высоком».
+            Assert.AreEqual(1f, low.Population * low.ValueScale, 1e-4f);
+            Assert.AreEqual(600, low.CrowdCapacity);
+            Assert.AreEqual(8, low.ScorchSlots);
+            Assert.IsFalse(low.Dust);
+        }
+
         // ------------------------------------------------------------------ язык и устройство
 
         [Test]
