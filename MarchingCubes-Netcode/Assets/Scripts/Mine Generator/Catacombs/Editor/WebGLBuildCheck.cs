@@ -167,6 +167,7 @@ namespace MineGenerator.Catacombs.EditorTools
         private struct Saved
         {
             public bool Splash;
+            public bool SplashLogo;
             public string Template;
             public WebGLCompressionFormat Compression;
             public bool Fallback;
@@ -178,6 +179,7 @@ namespace MineGenerator.Catacombs.EditorTools
         private static Saved Capture() => new Saved
         {
             Splash = PlayerSettings.SplashScreen.show,
+            SplashLogo = PlayerSettings.SplashScreen.showUnityLogo,
             Template = PlayerSettings.WebGL.template,
             Compression = PlayerSettings.WebGL.compressionFormat,
             Fallback = PlayerSettings.WebGL.decompressionFallback,
@@ -186,17 +188,22 @@ namespace MineGenerator.Catacombs.EditorTools
             CodeGeneration = PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.WebGL)
         };
 
+        /// <summary>Сжатие сборки — замеряется прогоном (gzip против Brotli).</summary>
+        public static WebGLCompressionFormat Compression = WebGLCompressionFormat.Brotli;
+
         /// <summary>
-        /// Gzip с распаковкой на клиенте: обе площадки отдают файлы своим сервером, и заголовки
+        /// Сжатие с распаковкой на клиенте: обе площадки отдают файлы своим сервером, и заголовки
         /// Content-Encoding для Brotli там не гарантированы — без них браузер получил бы сжатый
         /// поток как есть. Распаковка на клиенте работает при любом сервере ценой пары секунд.
         /// </summary>
         private static void Apply(Target target)
         {
             // Заставка Unity — 2.7 МБ данных (замер первой сборки); в Unity 6 её можно выключить и на Personal.
+            // Вторая сборка показала: без show=false логотип остаётся в данных — выключать и его.
             PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.SplashScreen.showUnityLogo = false;
             PlayerSettings.WebGL.template = target == Target.Yandex ? "PROJECT:Yandex" : "PROJECT:CrazyGames";
-            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+            PlayerSettings.WebGL.compressionFormat = Compression;
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.nameFilesAsHashes = false;
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.High);
@@ -207,6 +214,7 @@ namespace MineGenerator.Catacombs.EditorTools
         private static void Restore(Saved saved)
         {
             PlayerSettings.SplashScreen.show = saved.Splash;
+            PlayerSettings.SplashScreen.showUnityLogo = saved.SplashLogo;
             PlayerSettings.WebGL.template = saved.Template;
             PlayerSettings.WebGL.compressionFormat = saved.Compression;
             PlayerSettings.WebGL.decompressionFallback = saved.Fallback;
