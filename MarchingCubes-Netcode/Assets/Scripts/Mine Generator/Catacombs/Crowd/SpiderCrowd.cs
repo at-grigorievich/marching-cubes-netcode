@@ -30,7 +30,7 @@ namespace MineGenerator.Catacombs
     /// чанки и поле плотности. В мир переводится только на выходе, матрицей.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class SpiderCrowd : MonoBehaviour
+    public sealed partial class SpiderCrowd : MonoBehaviour
     {
         [SerializeField] private CatacombWorld world;
 
@@ -322,7 +322,27 @@ namespace MineGenerator.Catacombs
         private NativeArray<SpiderTuning> _tuning;
         private NativeArray<float4> _frustum;
         private NativeArray<int> _killed;
+        private NativeArray<byte> _bites;
         private NativeParallelMultiHashMap<int, int> _hash;
+
+        /// <summary>
+        /// Укус элиты, HP — до множителя директора. Элита — самый живучий вид, увеличенный
+        /// и перекрашенный, и бить она должна заметно сильнее его рядовых: в план M1.2
+        /// заложено вдвое против тарантула.
+        /// </summary>
+        public const float EliteBiteDamage = 14f;
+
+        /// <summary>Во сколько раз сильнее первый укус засадника, упавшего со свода.</summary>
+        public const float AmbushBiteScale = 1.5f;
+
+        /// <summary>Укусы за шаг, сложенные в один удар. Раздаются из <see cref="Simulate"/>.</summary>
+        public event Action<DamageHit> Bitten;
+
+        /// <summary>Сколько укусов было за всё время толпы — для прогонов.</summary>
+        public int BitesTotal { get; private set; }
+
+        /// <summary>Сколько HP укусов (до брони и потолка) — для прогонов.</summary>
+        public float BiteDamageTotal { get; private set; }
 
         /// <summary>
         /// Журнал убийств за кадр. Пишется сразу после джоба урона, раздаётся пачкой
@@ -669,6 +689,7 @@ namespace MineGenerator.Catacombs
 
             TopUp(deltaTime);
             UpdateEbb(targetLocal, targetValid != 0, deltaTime);
+            TickStatuses(deltaTime);
 
             var near = targetValid != 0 ? CountNear(targetLocal) : 0;
 
@@ -692,6 +713,8 @@ namespace MineGenerator.Catacombs
                 Hash = _hash,
                 Tuning = _tuning,
                 Field = _flow.Sampler,
+                Bites = _bites,
+                Status = _status,
 
                 Target = targetLocal,
                 TargetLow = targetLow,
@@ -749,6 +772,133 @@ namespace MineGenerator.Catacombs
             handle.Complete();
 
             CountAlive();
+
+            if (targetValid != 0) CollectBites();
+        }
+
+        /// <summary>
+        /// Складывает укусы шага в один удар: урон по видам, элита сильнее, засадник сильнее
+        /// на первом укусе, всё — на множитель директора. Направление — сумма «от паука к игроку»:
+        /// дуга на экране показывает, с какой стороны грызут сильнее.
+        /// </summary>
+        private void CollectBites()
+        {
+            var count = 0;
+            var damage = 0f;
+            var direction = float3.zero;
+            var worst = -1;
+            var worstDamage = 0f;
+
+            var scale = _directed ? math.max(0f, _directive.DamageScale) : 1f;
+            var targetWorld = TargetBodyWorld();
+
+            for (var i = 0; i < _bites.Length; i++)
+            {
+                var mark = _bites[i];
+                if (mark == 0) continue;
+
+                var spider = _states[i];
+                var kind = spider.Kind >= 0 && spider.Kind < _runtime.Length ? _runtime[spider.Kind].Kind : null;
+
+                var bite = spider.Elite != 0 ? EliteBiteDamage : kind != null ? kind.BiteDamage : 2f;
+                if (mark == 2) bite *= AmbushBiteScale;
+
+                bite *= scale;
+
+                damage += bite;
+                count++;
+
+                if (bite > worstDamage)
+                {
+                    worstDamage = bite;
+                    worst = spider.Kind;
+                }
+
+                direction += math.normalizesafe((float3)targetWorld - (float3)WorldOf(spider.Position));
+            }
+
+            if (count == 0) return;
+
+            BitesTotal += count;
+            BiteDamageTotal += damage;
+
+            var from = math.lengthsq(direction) > 1e-6f
+                ? targetWorld - (Vector3)math.normalize(direction) * 2f
+                : targetWorld + Vector3.forward;
+
+            Bitten?.Invoke(new DamageHit
+            {
+                Amount = damage,
+                Count = count,
+                From = from,
+                Kind = DamageKind.Bite,
+                SpiderKind = worst,
+                PerBiteArmor = true
+            });
+        }
+
+        /// <summary>Центр капсулы цели в мире — куда направлены укусы.</summary>
+        private Vector3 TargetBodyWorld()
+        {
+            if (target == null) return Vector3.zero;
+
+            if (_targetBody == null || _targetBody.transform != target)
+            {
+                _targetBody = target.GetComponent<CharacterController>();
+            }
+
+            return _targetBody != null ? target.position + target.rotation * _targetBody.center : target.position;
+        }
+
+        /// <summary>
+        /// Сколько живых особей касается капсулы — «толпа держит»: у пауков нет коллайдеров,
+        /// и без этого окружение не было бы ловушкой вовсе. По пространственной сетке
+        /// прошлого шага, как взрыватель гранаты: спрашивается каждый кадр.
+        /// </summary>
+        /// <param name="low">Нижний центр полусферы капсулы, мир.</param>
+        /// <param name="high">Верхний центр полусферы капсулы, мир.</param>
+        /// <param name="radius">Радиус касания: капсула плюс запас.</param>
+        public int CountTouching(Vector3 low, Vector3 high, float radius)
+        {
+            if (!_states.IsCreated || !_hash.IsCreated) return 0;
+
+            var a = LocalOf(low);
+            var b = LocalOf(high);
+            var cellSize = math.max(0.1f, neighbourRadius);
+
+            var min = SpiderHash.Cell(math.min(a, b) - radius - cellSize * 0.5f, cellSize);
+            var max = SpiderHash.Cell(math.max(a, b) + radius + cellSize * 0.5f, cellSize);
+
+            var count = 0;
+
+            for (var x = min.x; x <= max.x; x++)
+            for (var y = min.y; y <= max.y; y++)
+            for (var z = min.z; z <= max.z; z++)
+            {
+                if (!_hash.TryGetFirstValue(SpiderHash.Key(new int3(x, y, z)), out var other, out var iterator)) continue;
+
+                do
+                {
+                    var neighbour = _neighbours[other];
+                    if (neighbour.w <= 0f) continue;
+
+                    // Ядро тела с частью лап — как у взрывателя.
+                    var reach = radius + neighbour.w * 0.6f;
+
+                    if (DistanceSqToSegment(neighbour.xyz, a, b) < reach * reach) count++;
+                }
+                while (_hash.TryGetNextValue(out other, ref iterator));
+            }
+
+            return count;
+        }
+
+        private static float DistanceSqToSegment(float3 p, float3 a, float3 b)
+        {
+            var ab = b - a;
+            var t = math.saturate(math.dot(p - a, ab) / math.max(1e-6f, math.lengthsq(ab)));
+
+            return math.lengthsq(p - (a + ab * t));
         }
 
         /// <summary>Собирает матрицы и отправляет толпу в кадр.</summary>
@@ -775,6 +925,7 @@ namespace MineGenerator.Catacombs
                 new SpiderRenderJob
                 {
                     States = _states,
+                    Status = _status,
                     Tuning = _tuning,
                     FrustumPlanes = _frustum,
 
@@ -875,66 +1026,19 @@ namespace MineGenerator.Catacombs
         public int DamageSphere(Vector3 worldPoint, float radius, float damage, DamageSource source,
             List<Vector3> gibbed = null)
         {
-            gibbed?.Clear();
-
-            if (!_states.IsCreated || radius <= 0f || damage <= 0f) return 0;
-
-            for (var i = 0; i < _killed.Length; i++) _killed[i] = 0;
-
-            var centre = LocalOf(worldPoint);
-            var around = CountNear(centre, nearRadius);
-
-            new SpiderDamageJob
+            if (!_states.IsCreated || radius <= 0f || damage <= 0f)
             {
-                States = _states,
-                Center = centre,
-                RadiusSq = radius * radius,
-                Damage = damage,
-                Impulse = deathImpulse,
-                GibShare = gibShare,
-                Seed = (uint)math.max(1, Environment.TickCount),
-                Killed = _killed
-            }.Schedule(_states.Length, 64).Complete();
-
-            var killed = 0;
-
-            for (var i = 0; i < _killed.Length; i++)
-            {
-                if (_killed[i] == 0) continue;
-
-                killed++;
-
-                var spider = _states[i];
-                var torn = _killed[i] == 2;
-
-                if (torn)
-                {
-                    spider.GibDrop = MeasureDrop(spider);
-                    _states[i] = spider;
-                }
-
-                var at = WorldOf(spider.Position);
-
-                if (torn) gibbed?.Add(at);
-
-                RecordKill(spider, at, torn, source);
+                gibbed?.Clear();
+                return 0;
             }
 
-            // Пролом в толпе должен постоять — но только если это ПРОЛОМ, то есть выбита
-            // заметная доля тех, кто был вокруг, а не два десятка из кучи в несколько сотен.
-            //
-            // Порог числом держался, пока толпа ждала в очереди и у игрока стояло семь
-            // десятков. Когда очередь сняли, почти любой взрыв по куче убивал больше двух
-            // десятков, и досыл стоял на паузе половину стадии — 240 секунд из 480,
-            // 148 раз подряд. Сильный игрок выключал себе волны, то есть ровно обратное
-            // реактивному спавну Megabonk: убиваешь быстрее — досылают быстрее.
-            if (killed >= holdKillCount && killed >= around * holdShare)
-            {
-                _spawnHold = spawnHoldAfterKill;
-                HoldsTriggered++;
-            }
+            // Прежний взрыв — частный случай общего удара: сфера без спада, разрыв у эпицентра.
+            // Отличие одно, и оно намеренное (план M2.2): сквозь стенку взрыв больше не бьёт —
+            // граната в одном ходе не убивает пауков в соседнем через перегородку.
+            var spec = HitSpec.Sphere(worldPoint, radius, damage, source);
+            spec.GibShare = gibShare;
 
-            return killed;
+            return Hit(spec, gibbed).Killed;
         }
 
         private void RecordKill(in SpiderState spider, Vector3 at, bool torn, DamageSource source)
@@ -1993,6 +2097,7 @@ namespace MineGenerator.Catacombs
             };
 
             _states[slot] = state;
+            _status[slot] = default;
             _neighbours[slot] = new float4(state.Position, _tuning[kindIndex].BodyRadius * state.Scale);
             _velocities[slot] = float3.zero;
             _heights[slot] = _tuning[kindIndex].Height * state.Scale;
@@ -2298,6 +2403,7 @@ namespace MineGenerator.Catacombs
                     AttackRange = kind.AttackRange,
                     StrideLength = kind.StrideLength,
                     CorpseLinger = kind.CorpseLinger,
+                    BiteAt = kind.BiteAt,
                     Hover = kind.Hover,
                     // По позе бега; у ассета, не перезапечённого после появления поля, —
                     // по габаритам, как было (вдвое выше настоящей, см. SpiderKind.PoseHeight).
@@ -2356,6 +2462,9 @@ namespace MineGenerator.Catacombs
             _climbs = new NativeArray<float>(size, Allocator.Persistent);
             _tiers = new NativeArray<int>(size, Allocator.Persistent);
             _killed = new NativeArray<int>(size, Allocator.Persistent);
+            _bites = new NativeArray<byte>(size, Allocator.Persistent);
+
+            AllocateCombat(size);
             _frustum = new NativeArray<float4>(6, Allocator.Persistent);
 
             _hash = new NativeParallelMultiHashMap<int, int>(size, Allocator.Persistent);
@@ -2398,6 +2507,9 @@ namespace MineGenerator.Catacombs
             if (_tiers.IsCreated) _tiers.Dispose();
             if (_tuning.IsCreated) _tuning.Dispose();
             if (_killed.IsCreated) _killed.Dispose();
+            if (_bites.IsCreated) _bites.Dispose();
+
+            ReleaseCombat();
             if (_frustum.IsCreated) _frustum.Dispose();
             if (_hash.IsCreated) _hash.Dispose();
 

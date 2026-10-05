@@ -80,7 +80,36 @@ namespace MineGenerator.Catacombs
         private float _shake;
 
         private IPlayerInputSource _input = new DesktopInputSource();
-        private PlayerCommands _commands;
+        private PlayerCommands _commands = PlayerCommands.Empty;
+
+        private PlayerVitals _vitals;
+        private PlayerMobility _mobility;
+
+        /// <summary>
+        /// Статы забега — класс, мета, тома. Пусто — без бонусов. Выставляет контроллер забега.
+        /// </summary>
+        public PlayerStats Stats { get; set; }
+
+        /// <summary>Ввод заблокирован: экран карточки, смерть, реклама. Взгляд и ходьба стоят.</summary>
+        public bool InputBlocked { get; set; }
+
+        public PlayerVitals Vitals
+        {
+            get
+            {
+                EnsureRefs();
+                return _vitals;
+            }
+        }
+
+        public PlayerMobility Mobility
+        {
+            get
+            {
+                EnsureRefs();
+                return _mobility;
+            }
+        }
 
         /// <summary>Команды этого кадра — их же читает оружие.</summary>
         public PlayerCommands Commands => _commands;
@@ -88,10 +117,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Сменить источник ввода: тач (M5), бот прогона.</summary>
         public void SetInputSource(IPlayerInputSource source) => _input = source;
 
-        public CatacombWorld World => world;
-        public SpiderCrowd Crowd => crowd;
-        public CaveRunDirector Director => director;
-        public CaveQueen Queen => queen;
+        // Через EnsureRefs: прогоны пересоздают толпу на сцене, и ссылка на удалённую
+        // должна подхватить новую, а не остаться пустой.
+        public CatacombWorld World { get { EnsureRefs(); return world; } }
+        public SpiderCrowd Crowd { get { EnsureRefs(); return crowd; } }
+        public CaveRunDirector Director { get { EnsureRefs(); return director; } }
+        public CaveQueen Queen { get { EnsureRefs(); return queen; } }
 
         public MoveMode Mode => mode;
         public bool Noclip => noclip;
@@ -149,6 +180,8 @@ namespace MineGenerator.Catacombs
         private void EnsureRefs()
         {
             if (_controller == null) _controller = GetComponent<CharacterController>();
+            if (_vitals == null) _vitals = GetComponent<PlayerVitals>();
+            if (_mobility == null) _mobility = GetComponent<PlayerMobility>();
             if (world == null) world = FindFirstObjectByType<CatacombWorld>();
             if (crowd == null) crowd = FindFirstObjectByType<SpiderCrowd>();
             if (director == null) director = FindFirstObjectByType<CaveRunDirector>();
@@ -176,6 +209,18 @@ namespace MineGenerator.Catacombs
         public int TimesEntangled { get; private set; }
 
         public bool IsEntangled => _entangleLeft > 0f;
+
+        public bool IsDashing => _mobility != null && _mobility.Dash.Active;
+
+        public bool IsDead => _vitals != null && _vitals.IsDead;
+
+        /// <summary>Ранить игрока. Без компонента здоровья (старая сцена) удар уходит в никуда.</summary>
+        public DamageResult Hurt(in DamageHit hit)
+        {
+            EnsureRefs();
+
+            return _vitals != null ? _vitals.TakeDamage(hit) : default;
+        }
 
         public Vector3 PushVelocity => _push;
 
@@ -252,8 +297,22 @@ namespace MineGenerator.Catacombs
 
         private void Update()
         {
-            _commands = default;
+            _commands = PlayerCommands.Empty;
             _input?.Read(ref _commands);
+
+            // Экран карточки, смерть, реклама: команды не доходят ни до ходьбы, ни до оружия.
+            // Пауза и отмена остаются — ими экран и закрывают.
+            if (InputBlocked || IsDead)
+            {
+                var pause = _commands.Pause;
+                var cancel = _commands.Cancel;
+                var card = _commands.CardKey;
+
+                _commands = PlayerCommands.Empty;
+                _commands.Pause = pause;
+                _commands.Cancel = cancel;
+                _commands.CardKey = card;
+            }
 
             UpdateCursor();
             UpdateLook();
@@ -271,7 +330,11 @@ namespace MineGenerator.Catacombs
             if (!_looking && _commands.FirePressed) SetLooking(true);
         }
 
-        private void SetLooking(bool value)
+        /// <summary>
+        /// Захватить курсор (игра) или отпустить (экран карточки, пауза, итоги). На таче
+        /// курсора нет, и захват ничего не делает, кроме флага «игрок в игре».
+        /// </summary>
+        public void SetLooking(bool value)
         {
             _looking = value;
             Cursor.lockState = value ? CursorLockMode.Locked : CursorLockMode.None;
@@ -308,7 +371,13 @@ namespace MineGenerator.Catacombs
         private void UpdateMove()
         {
             var input = new Vector3(_commands.Move.x, 0f, _commands.Move.y);
-            var boost = _commands.Sprint ? boostMultiplier : 1f;
+
+            // Ускорение — только у отладочного полёта. В ходьбе Shift — рывок.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var boost = mode == MoveMode.Fly && _commands.Sprint ? boostMultiplier : 1f;
+#else
+            var boost = 1f;
+#endif
 
             if (mode == MoveMode.Fly)
             {
@@ -349,11 +418,19 @@ namespace MineGenerator.Catacombs
             var forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
             var right = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
 
-            var speed = walkSpeed * boost * (web != null ? web.SpeedScale : 1f) *
-                        (IsEntangled ? _entangleScale : 1f);
+            var slow = (web != null ? web.SpeedScale : 1f) * (IsEntangled ? _entangleScale : 1f);
+            var wish = (forward * input.z + right * input.x).normalized;
+
+            var dash = UpdateDash(wish, forward, slow);
+
+            // Толпа держит — только не в рывке: рывок и есть выход из окружения.
+            var hold = !dash && _mobility != null ? _mobility.MeasureHold(crowd, this) : 1f;
+
+            var stats = Stats != null ? Stats.MoveScale : 1f;
+            var speed = walkSpeed * boost * stats * slow * hold;
 
             // Отброс поверх ввода: швырнуло — летишь, куда бы ни жал.
-            var move = (forward * input.z + right * input.x).normalized * speed + _push;
+            var move = (dash ? Vector3.zero : wish * speed) + _push;
 
             if (_controller.isGrounded)
             {
@@ -379,6 +456,48 @@ namespace MineGenerator.Catacombs
             if (web != null && move.y < 0f) move.y *= web.FallScale;
 
             _controller.Move(move * Time.deltaTime);
+        }
+
+        private Vector3 _dashDirection;
+
+        /// <summary>
+        /// Рывок: по направлению ввода, без ввода — вперёд по взгляду. Двигает контроллер
+        /// кусками не длиннее полуюнита: сквозь породу рывок не проходит, и упёршийся в стену
+        /// обрывается, а не скользит в неё всю оставшуюся длину.
+        /// </summary>
+        /// <returns>Идёт ли рывок на этом кадре.</returns>
+        private bool UpdateDash(Vector3 wish, Vector3 forward, float slow)
+        {
+            if (_mobility == null) return false;
+
+            var dash = _mobility.Dash;
+
+            if (_commands.Dash && !dash.Active && dash.TryStart())
+            {
+                _dashDirection = wish.sqrMagnitude > 0.01f ? wish : forward;
+                if (_vitals != null) _vitals.HoldInvulnerable(InvulnReason.Dash, dash.Duration + dash.Grace);
+            }
+
+            var distance = dash.Step(Time.deltaTime) * slow;
+            if (distance <= 0f) return false;
+
+            var pieces = Mathf.Max(1, Mathf.CeilToInt(distance / 0.5f));
+            var piece = _dashDirection * (distance / pieces);
+
+            for (var i = 0; i < pieces; i++)
+            {
+                var before = transform.position;
+                _controller.Move(piece);
+
+                // Упёрся: прошёл меньше трети куска — дальше только стена.
+                if ((transform.position - before).sqrMagnitude < piece.sqrMagnitude * 0.1f)
+                {
+                    dash.Stop();
+                    break;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

@@ -319,6 +319,7 @@ namespace MineGenerator.Catacombs.EditorTools
             EnsureDust(player);
             EnsureLauncher(player);
             EnsureDebugOverlay(player);
+            EnsureSurvival(player);
 
             Selection.activeObject = player;
             EditorSceneManager.MarkSceneDirty(scene);
@@ -374,6 +375,7 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 changes.AppendLine(EnsureLauncher(rig.gameObject));
                 changes.AppendLine(EnsureDebugOverlay(rig.gameObject));
+                changes.AppendLine(EnsureSurvival(rig.gameObject));
             }
             else
             {
@@ -928,6 +930,32 @@ namespace MineGenerator.Catacombs.EditorTools
             player.AddComponent<CatacombDebugOverlay>();
 
             return existed ? "  отладка стенда: пересоздана с умолчаниями из кода" : "  отладка стенда: добавлена";
+        }
+
+        /// <summary>
+        /// Здоровье и подвижность игрока. Пересоздаются, а не донастраиваются — числа живут
+        /// в сцене, и правка умолчаний иначе до неё не дойдёт (грабли №8, №67).
+        /// </summary>
+        internal static string EnsureSurvival(GameObject player)
+        {
+            if (player == null) return "  здоровье и рывок: игрок не найден";
+
+            var existed = Recreate<PlayerVitals>(player);
+            Recreate<PlayerMobility>(player);
+
+            return existed ? "  здоровье и рывок: пересозданы с умолчаниями из кода" : "  здоровье и рывок: добавлены";
+        }
+
+        /// <summary>Снести компонент, если есть, и поставить свежий. Возвращает, был ли он.</summary>
+        internal static bool Recreate<T>(GameObject owner) where T : Component
+        {
+            var old = owner.GetComponent<T>();
+            var existed = old != null;
+
+            if (existed) Object.DestroyImmediate(old);
+
+            owner.AddComponent<T>();
+            return existed;
         }
 
         /// <summary>Пыль висит на камере, а не на мире: она нужна только рядом с игроком.</summary>

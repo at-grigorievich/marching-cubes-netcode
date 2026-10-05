@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: Argiope
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 8
+  tuningVersion: 9
   Mesh: {fileID: 4300000, guid: 5a6933a724fbb1740a3956c63cf582fc, type: 2}
   Material: {fileID: 2100000, guid: b49d81bd0ffa0194090464746f4def32, type: 2}
   Positions: {fileID: 2800000, guid: 556373e5e8f71b543816027431ffb67c, type: 2}
@@ -54,5 +54,7 @@ MonoBehaviour:
   StrideLength: 0.28571427
   Health: 2
   CorpseLinger: 2.5
+  BiteDamage: 4
+  BiteAt: 0.45
   LurkShare: 0.3
   LurkTrigger: 7

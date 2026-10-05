@@ -164,6 +164,9 @@ namespace MineGenerator.Catacombs
         public float StrideLength;
         public float CorpseLinger;
 
+        /// <summary>На какой доле клипа удара засчитывается укус (<see cref="SpiderKind.BiteAt"/>).</summary>
+        public float BiteAt;
+
         /// <summary>На сколько центр тела отстоит от поверхности. Примерно полтолщины особи.</summary>
         public float Hover;
 
@@ -375,6 +378,16 @@ namespace MineGenerator.Catacombs
 
         public SpiderFlowField.FlowSampler Field;
 
+        /// <summary>
+        /// Метки укусов этого шага, по ячейке на особь: 0 — нет, 1 — укус, 2 — первый укус
+        /// сорвавшегося засадника (сильнее). Тот же приём, что метки убитых: без атомиков,
+        /// урон складывает главный поток.
+        /// </summary>
+        [WriteOnly] public NativeArray<byte> Bites;
+
+        /// <summary>Статусы: замедление и оглушение (<see cref="SpiderStatus"/>).</summary>
+        [ReadOnly] public NativeArray<SpiderStatus> Status;
+
         /// <summary>Игрок в локальных координатах генерации.</summary>
         public float3 Target;
 
@@ -547,6 +560,8 @@ namespace MineGenerator.Catacombs
 
         public void Execute(int index)
         {
+            Bites[index] = 0;
+
             var spider = States[index];
 
             if (spider.Active == 0) return;
@@ -592,10 +607,29 @@ namespace MineGenerator.Catacombs
             var lifted = spider.Position;
             spider.Position -= spider.Up * spider.Climb;
 
+            // Замедление (гвозди в лапах, холод) — множителем к собственной скорости особи на этот
+            // шаг; в состояние он не пишется, иначе снять его по окончании было бы нечем.
+            var status = Status[index];
+            var speedScale = spider.SpeedScale;
+            if (status.Slow > 0f) spider.SpeedScale *= math.max(0.05f, status.SlowScale);
+
             var shoved = KeepOut(ref spider, lifted, reach);
 
-            var climbTarget = Behave(index, ref spider, tuning, lifted, radius, hover, reach, stride,
-                out var progress, out var incline);
+            float climbTarget;
+            float progress = 0f;
+            float incline = 0f;
+
+            if (status.Stun > 0f)
+            {
+                climbTarget = Stunned(ref spider, tuning, hover, stride);
+            }
+            else
+            {
+                climbTarget = Behave(index, ref spider, tuning, lifted, radius, hover, reach, stride,
+                    out progress, out incline);
+            }
+
+            spider.SpeedScale = speedScale;
 
             // Влезший в личное пространство с кучи падает: лежать на голове у игрока нельзя.
             if (shoved) climbTarget = 0f;
@@ -617,6 +651,32 @@ namespace MineGenerator.Catacombs
 
             spider.Position += spider.Up * spider.Climb;
             States[index] = spider;
+        }
+
+        /// <summary>
+        /// Оглушённая особь (дробовик, молот, ток): не идёт и не кусает, катится по инерции
+        /// от толчка по своей поверхности и держится на той высоте кучи, где была. Удар
+        /// прерывается: оглушённый паук не дотягивает замах.
+        /// </summary>
+        private float Stunned(ref SpiderState spider, SpiderTuning tuning, float hover, float stride)
+        {
+            Field.SampleAt(spider.Position, out _, out var normal, out _, out var onField);
+
+            if (onField) spider.Up = math.normalizesafe(math.lerp(spider.Up, normal, math.saturate(DeltaTime * 8f)), normal);
+
+            if (spider.Clip == (int)SpiderClip.Attack || spider.Clip == (int)SpiderClip.Idle)
+            {
+                spider.Clip = (int)SpiderClip.Walk;
+                spider.Phase = 0f;
+            }
+
+            // Толчок — по поверхности: составляющая вдоль нормали означала бы отрыв от камня.
+            spider.Velocity -= spider.Up * math.dot(spider.Velocity, spider.Up);
+            spider.Velocity = math.lerp(spider.Velocity, float3.zero, math.saturate(DeltaTime * 3f));
+
+            Advance(ref spider, tuning, hover, stride, onField, 0f);
+
+            return spider.Climb;
         }
 
         /// <summary>
@@ -785,7 +845,7 @@ namespace MineGenerator.Catacombs
                     return held;
                 }
 
-                UpdateAttack(ref spider, tuning, toTarget, distance, normal, depth, hover, onField);
+                UpdateAttack(index, ref spider, tuning, toTarget, distance, reach, normal, depth, hover, onField);
 
                 return held;
             }
@@ -1187,13 +1247,34 @@ namespace MineGenerator.Catacombs
             spider.Phase = 0f;
             spider.Velocity = -spider.Up * (tuning.MoveSpeed * 1.5f);
 
+            // Первый укус сорвавшегося засадника сильнее. Метка — отрицательный таймер:
+            // у живой особи вне засады таймер свободен (он про трупы и уход в щель,
+            // и оба выставляют его заново), а заводить поле в состоянии ради одного бита
+            // значит гонять лишние байты через каждый джоб толпы.
+            spider.Timer = -1f;
+
             return false;
         }
 
-        private void UpdateAttack(ref SpiderState spider, SpiderTuning tuning, float3 toTarget, float distance,
-            float3 normal, float depth, float hover, bool onField)
+        private void UpdateAttack(int index, ref SpiderState spider, SpiderTuning tuning, float3 toTarget,
+            float distance, float reach, float3 normal, float depth, float hover, bool onField)
         {
+            var before = spider.Phase;
+
             spider.Phase += DeltaTime / math.max(0.05f, tuning.AttackLength);
+
+            // Укус — в момент, когда хелицеры смыкаются, а не в начале замаха: замах должен
+            // читаться раньше урона. И только если игрок всё ещё в досягаемости: от удара
+            // можно отшагнуть, пока он замахивается.
+            if (TargetValid != 0 && before < tuning.BiteAt && spider.Phase >= tuning.BiteAt &&
+                distance <= reach * 1.1f)
+            {
+                var ambush = spider.Timer < 0f;
+
+                Bites[index] = (byte)(ambush ? 2 : 1);
+
+                if (ambush) spider.Timer = 0f;
+            }
 
             if (spider.Phase >= 1f)
             {
@@ -1832,6 +1913,7 @@ namespace MineGenerator.Catacombs
     public struct SpiderRenderJob : IJob
     {
         [ReadOnly] public NativeArray<SpiderState> States;
+        [ReadOnly] public NativeArray<SpiderStatus> Status;
         [ReadOnly] public NativeArray<SpiderTuning> Tuning;
         [ReadOnly] public NativeArray<float4> FrustumPlanes;
 
@@ -1926,7 +2008,25 @@ namespace MineGenerator.Catacombs
                     float4x4.TRS(spider.Position, rotation, scale));
 
                 AnimState[written] = new float4(row.x, row.y, spider.Phase, seed);
-                Tints[written] = new float4(spider.Hue * tint, gibAge);
+
+                // Статусы видны оттенком: горящий рыжеет и мерцает, под током синеет.
+                // Умножением, как элита: светлая добавка делала толпу мультяшной (грабли №22).
+                var hue = spider.Hue;
+                var status = Status[i];
+
+                if (spider.Clip != (int)SpiderClip.Dead)
+                {
+                    if (status.Burn > 0f)
+                    {
+                        var flicker = 0.85f + 0.3f * math.frac(spider.Phase * 7.3f + i * 0.37f);
+                        hue *= new float3(1.7f, 0.85f, 0.45f) * flicker;
+                    }
+
+                    if (status.Shock > 0f) hue *= new float3(0.75f, 1.05f, 1.9f);
+                    else if (status.Slow > 0f) hue *= new float3(0.85f, 0.85f, 0.95f);
+                }
+
+                Tints[written] = new float4(hue * tint, gibAge);
 
                 written++;
             }

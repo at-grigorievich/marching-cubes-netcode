@@ -72,6 +72,30 @@ namespace MineGenerator.Catacombs
         [Tooltip("На сколько вырастает скорость к концу стадии.")]
         [SerializeField, Range(0f, 1f)] private float speedGrowth = 0.15f;
 
+        /// <summary>
+        /// Рост укусов к концу стадии. Скромный, как и рост живучести: игрок растёт картами,
+        /// а укусы и так крепнут числом — на втором гребне кусающих вдвое больше, чем на первом.
+        /// </summary>
+        [Tooltip("На сколько вырастает урон укусов к концу стадии. 0.4 — в 1.4 раза.")]
+        [SerializeField, Range(0f, 3f)] private float damageGrowth = 0.4f;
+
+        [Tooltip("Прибавка урона укусов за каждую ступень финального роя.")]
+        [SerializeField, Range(0f, 2f)] private float finalDamagePerTier = 0.25f;
+
+        /// <summary>
+        /// Внешний множитель сложности — ярус и глубина вылазки (M4), мягкий старт новичка.
+        /// Задаёт контроллер забега; директор только умножает.
+        /// </summary>
+        public DifficultyScale Difficulty { get; set; } = DifficultyScale.One;
+
+        /// <summary>
+        /// Передышка из милосердия (M1.8): цель населения и досыл на время ниже. Ставит
+        /// контроллер забега по здоровью игрока; директор только умножает.
+        /// </summary>
+        public float MercyPopulation { get; set; } = 1f;
+
+        public float MercySpawn { get; set; } = 1f;
+
         [Tooltip("К какой доле стадии открываются все виды. До этого тяжёлые приходят по одному.")]
         [SerializeField, Range(0.1f, 1f)] private float heavyUnlock = 0.6f;
 
@@ -362,7 +386,7 @@ namespace MineGenerator.Catacombs
             // Матка и так дерётся на два фронта с игроком.
             var t = math.min(Progress, 1.5f);
 
-            return queen.TrySummon(playerPosition, 1f + queenGrowth * t);
+            return queen.TrySummon(playerPosition, (1f + queenGrowth * t) * math.max(0.05f, Difficulty.Health));
         }
 
         /// <summary>Перематывает стадию — отладка, чтобы не ждать гребня вживую.</summary>
@@ -381,13 +405,17 @@ namespace MineGenerator.Catacombs
             var t = math.min(1f, Progress);
             var intensity = curve.Intensity(t);
 
+            var difficulty = Difficulty;
+            var population = math.max(0f, difficulty.Population);
+
             var directive = new CrowdDirective
             {
-                Population = (int)math.round(basePopulation * intensity),
-                SpawnRate = baseSpawnRate * intensity,
+                Population = (int)math.round(basePopulation * intensity * population * MercyPopulation),
+                SpawnRate = baseSpawnRate * intensity * population * MercySpawn,
                 MicroWave = microWave,
-                HealthScale = 1f + healthGrowth * t,
+                HealthScale = (1f + healthGrowth * t) * math.max(0.05f, difficulty.Health),
                 SpeedScale = 1f + speedGrowth * t,
+                DamageScale = (1f + damageGrowth * t) * math.max(0f, difficulty.Bite),
                 NearCap = crowd != null ? crowd.DefaultNearCap : 0,
                 SwarmKind = -1,
                 SwarmShare = 0f,
@@ -455,6 +483,7 @@ namespace MineGenerator.Catacombs
             var tier = FinalTier;
 
             directive.HealthScale *= 1f + finalHealthPerTier * tier;
+            directive.DamageScale *= 1f + finalDamagePerTier * tier;
             directive.Hue = tier switch
             {
                 2 => (Vector3)(Vector4)finalHueThird,
@@ -552,7 +581,8 @@ namespace MineGenerator.Catacombs
 
             if (crowd != null && _elitePending > 0)
             {
-                var handle = crowd.SpawnElite(eliteSize, eliteHealth * (1f + healthGrowth * math.min(1f, Progress)),
+                var handle = crowd.SpawnElite(eliteSize,
+                    eliteHealth * (1f + healthGrowth * math.min(1f, Progress)) * math.max(0.05f, Difficulty.Health),
                     eliteSpeed, (Vector3)(Vector4)eliteHue);
 
                 if (handle.IsValid)

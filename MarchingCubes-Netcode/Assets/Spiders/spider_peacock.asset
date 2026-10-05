@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: spider_peacock
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 8
+  tuningVersion: 9
   Mesh: {fileID: 4300000, guid: 085f33164d10cb6428ce02aa5ec78611, type: 2}
   Material: {fileID: 2100000, guid: f230338f815252e40ae806f3670c9ff6, type: 2}
   Positions: {fileID: 2800000, guid: 96959f065b6355c479d1f5540e99c40a, type: 2}
@@ -54,5 +54,7 @@ MonoBehaviour:
   StrideLength: 0.44444445
   Health: 1
   CorpseLinger: 2.5
+  BiteDamage: 2
+  BiteAt: 0.45
   LurkShare: 0.2
   LurkTrigger: 7

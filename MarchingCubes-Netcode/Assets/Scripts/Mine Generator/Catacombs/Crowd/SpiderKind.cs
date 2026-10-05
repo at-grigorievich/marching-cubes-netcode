@@ -72,7 +72,7 @@ namespace MineGenerator.Catacombs
         /// не имеет права их трогать (вдруг их подбирали руками), а с версией знает,
         /// что её значения устарели, и пересчитывает.
         /// </summary>
-        public const int CurrentTuningVersion = 8;
+        public const int CurrentTuningVersion = 9;
 
         [SerializeField, HideInInspector] private int tuningVersion;
 
@@ -177,6 +177,22 @@ namespace MineGenerator.Catacombs
         [Tooltip("Сколько секунд труп лежит после конца клипа смерти, прежде чем место " +
                  "освободится под новую особь.")]
         [Min(0f)] public float CorpseLinger = 2.5f;
+
+        [Header("Укус")]
+        /// <summary>
+        /// Урон укуса по игроку, HP — до множителя директора (время стадии, ярус, глубина).
+        /// Проставляет запекатель по живучести вида (SpiderVatBaker.BiteFor), а не умолчание:
+        /// умолчание срабатывает один раз при создании ассета, дальше живёт в нём (грабли №8).
+        /// </summary>
+        [Tooltip("Урон укуса по игроку, HP.")]
+        [Min(0f)] public float BiteDamage = 2f;
+
+        /// <summary>
+        /// На какой доле клипа удара хелицеры смыкаются — тогда и засчитывается укус.
+        /// Не в начале клипа: замах должен читаться раньше урона, иначе укус «из ниоткуда».
+        /// </summary>
+        [Tooltip("На какой доле клипа удара засчитывается укус.")]
+        [Range(0f, 1f)] public float BiteAt = 0.45f;
 
         [Header("Роль в орде")]
         /// <summary>

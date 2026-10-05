@@ -773,7 +773,65 @@ namespace MineGenerator.Catacombs.EditorTools
             // которую подбирали руками по ощущению от игры. Просто «только при создании»
             // тоже нельзя: правка умолчаний в коде до готовых ассетов не доходит,
             // и на этом в проекте уже обжигались (грабли №8).
-            if (created || kind.IsTuningOutdated)
+            if (created || kind.IsTuningOutdated) ApplyTuning(kind, prefabName, bounds);
+
+            EditorUtility.SetDirty(kind);
+            return kind;
+        }
+
+        /// <summary>
+        /// Урон укуса по живучести вида, HP: мелочь 2, середина 4, тарантул 7 (элита — 14,
+        /// но это множитель директора, а не вид). Стартовые числа плана M1.2; подбираются
+        /// прогоном SurvivalCheck по времени жизни окружённого.
+        /// </summary>
+        public static float BiteFor(int health) => health <= 1 ? 2f : health <= 3 ? 4f : 7f;
+
+        /// <summary>
+        /// Пересчитать числа поведения у уже запечённых видов, НЕ перезапекая текстуры.
+        ///
+        /// Перезапечка всех видов — минуты и переписанные карты анимации, а поменялись только
+        /// числа (версия набора, грабли №16). Числа выводятся из тех же таблиц и габаритов,
+        /// что лежат в ассете, — результат тот же, что дала бы полная запечка.
+        /// </summary>
+        [MenuItem("Tools/Mine Generator/Пауки: обновить числа поведения (без перезапечки)")]
+        private static void RetuneMenu() => Debug.Log(RetuneExisting(false));
+
+        /// <param name="force">Пересчитать и свежие ассеты — сбросит настройку, подобранную руками.</param>
+        public static string RetuneExisting(bool force)
+        {
+            var report = new StringBuilder("Числа поведения пауков:");
+            var retuned = 0;
+
+            foreach (var guid in AssetDatabase.FindAssets("t:SpiderKind", new[] { OutputFolder }))
+            {
+                var kind = AssetDatabase.LoadAssetAtPath<SpiderKind>(AssetDatabase.GUIDToAssetPath(guid));
+                if (kind == null) continue;
+
+                if (!force && !kind.IsTuningOutdated)
+                {
+                    report.AppendLine().Append($"  {kind.name}: свежий, не тронут");
+                    continue;
+                }
+
+                // Имя ассета — имя префаба с подчёркиваниями вместо пробелов (см. BakeOne).
+                var prefabName = DefaultKinds.FirstOrDefault(n => n.Replace(' ', '_') == kind.name) ?? kind.name;
+
+                ApplyTuning(kind, prefabName, kind.RestBounds);
+                EditorUtility.SetDirty(kind);
+                retuned++;
+
+                report.AppendLine().Append($"  {kind.name}: живучесть {kind.Health}, укус {kind.BiteDamage:0} HP " +
+                                           $"на {kind.BiteAt:P0} клипа, скорость {kind.MoveSpeed:0.0}");
+            }
+
+            AssetDatabase.SaveAssets();
+            report.AppendLine().Append($"  пересчитано видов: {retuned}");
+
+            return report.ToString();
+        }
+
+        private static void ApplyTuning(SpiderKind kind, string prefabName, Bounds bounds)
+        {
             {
                 var size = bounds.size;
                 var span = Mathf.Max(size.x, size.z);
@@ -786,6 +844,9 @@ namespace MineGenerator.Catacombs.EditorTools
                 kind.Health = role.Health;
                 kind.LurkShare = role.Lurk;
                 kind.LurkTrigger = 7f;
+
+                kind.BiteDamage = BiteFor(role.Health);
+                kind.BiteAt = 0.45f;
 
                 // Половина поперечника: тела соприкасаются, но не срастаются.
                 //
@@ -821,9 +882,6 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 kind.MarkTuned();
             }
-
-            EditorUtility.SetDirty(kind);
-            return kind;
         }
 
         /// <summary>Подставляет запечённые виды в толпу на сцене, если она там есть.</summary>

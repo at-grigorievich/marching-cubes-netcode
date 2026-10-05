@@ -25,5 +25,11 @@ namespace MineGenerator.Catacombs
         void Entangle(float seconds, float speedScale);
 
         bool IsEntangled { get; }
+
+        /// <summary>Ранить: броня, потолок урона, временное здоровье — решает здоровье игрока.</summary>
+        DamageResult Hurt(in DamageHit hit);
+
+        /// <summary>Игрок сейчас в рывке: сквозь толпу, неуязвим, прижим и путы не держат.</summary>
+        bool IsDashing { get; }
     }
 }

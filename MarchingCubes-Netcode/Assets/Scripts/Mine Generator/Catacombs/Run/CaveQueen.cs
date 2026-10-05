@@ -44,6 +44,12 @@ namespace MineGenerator.Catacombs
         /// <summary>Тело игрока — через интерфейс: Матке не нужны ни камера, ни ввод стенда.</summary>
         private IPlayerBody Body => target;
 
+        /// <summary>
+        /// Множитель урона директора — тот же, что у укусов толпы: время стадии, ярус, глубина.
+        /// Читается из директивы толпы, а не у директора: Матка про директора не знает.
+        /// </summary>
+        private float DamageScale => crowd != null && crowd.IsDirected ? math.max(0f, crowd.Directive.DamageScale) : 1f;
+
         [Header("Логово")]
         /// <summary>
         /// Из какой доли самых дальних залов выбирается логово.
@@ -132,6 +138,18 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(0f, 1f)] private float entangleScale = 0.2f;
 
         [SerializeField] private Color spitColor = new Color(0.75f, 0.9f, 0.65f);
+
+        [Header("Урон по игроку")]
+        /// <summary>
+        /// Урон атак Матки, HP — до множителя директора. Волна бьёт сильно, но редко
+        /// и с красным пятном замаха: от неё уходят. Плевок слабый — его смысл в путах.
+        /// Под щитом урон волны не растёт: растёт частота (см. shockShieldInterval).
+        /// </summary>
+        [Tooltip("Урон ударной волны, HP.")]
+        [SerializeField, Range(0f, 200f)] private float shockDamage = 25f;
+
+        [Tooltip("Урон паутинного плевка, HP.")]
+        [SerializeField, Range(0f, 100f)] private float spitDamage = 8f;
 
         [Header("Щит и генераторы")]
         /// <summary>
@@ -696,6 +714,7 @@ namespace MineGenerator.Catacombs
             var strength = 1f - 0.5f * distance / reach;
 
             Body.Push(direction * (shockPush * strength) + Vector3.up * shockLift);
+            Body.Hurt(DamageHit.Simple(shockDamage * DamageScale, Centre, DamageKind.Shock));
             ShocksLanded++;
         }
 
@@ -782,6 +801,8 @@ namespace MineGenerator.Catacombs
                     if (DistanceToSegment(spit.Position, low, high) <= radius + 0.35f)
                     {
                         Body.Entangle(entangleSeconds, entangleScale);
+                        Body.Hurt(DamageHit.Simple(spitDamage * DamageScale, spit.Position - spit.Velocity,
+                            DamageKind.Spit));
                         SpitsLanded++;
                         hit = true;
                     }

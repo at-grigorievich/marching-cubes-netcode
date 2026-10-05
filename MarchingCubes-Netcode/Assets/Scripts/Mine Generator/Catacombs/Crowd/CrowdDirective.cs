@@ -47,6 +47,12 @@ namespace MineGenerator.Catacombs
 
         /// <summary>Остервенение финального роя: засад нет, все бегут сразу.</summary>
         public bool Frenzy;
+
+        /// <summary>
+        /// Множитель укусов по игроку: растёт со временем стадии, а в M4 — с ярусом и глубиной.
+        /// Без директивы толпа кусает на единицу.
+        /// </summary>
+        public float DamageScale;
     }
 
     /// <summary>

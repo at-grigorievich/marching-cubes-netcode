@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: spider_cross
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 8
+  tuningVersion: 9
   Mesh: {fileID: 4300000, guid: 304b32633551d5942afee3da57ad6e47, type: 2}
   Material: {fileID: 2100000, guid: 936e54f76912ff642983c83662b12dd5, type: 2}
   Positions: {fileID: 2800000, guid: bff58427f861a0349902f6f410f18046, type: 2}
@@ -54,5 +54,7 @@ MonoBehaviour:
   StrideLength: 0.21505377
   Health: 2
   CorpseLinger: 2.5
+  BiteDamage: 4
+  BiteAt: 0.45
   LurkShare: 0.3
   LurkTrigger: 7

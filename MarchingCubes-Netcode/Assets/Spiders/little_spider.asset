@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95457d354443c204389396703787b1b5, type: 3}
   m_Name: little_spider
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.SpiderKind
-  tuningVersion: 8
+  tuningVersion: 9
   Mesh: {fileID: 4300000, guid: fdd6dbf8780e814489c0b4a943bd7156, type: 2}
   Material: {fileID: 2100000, guid: 90b15aec848eb3e4687e5e87231f734d, type: 2}
   Positions: {fileID: 2800000, guid: 2aa19526244e0ab4a90b3465f6de950b, type: 2}
@@ -54,5 +54,7 @@ MonoBehaviour:
   StrideLength: 0.46464646
   Health: 1
   CorpseLinger: 2.5
+  BiteDamage: 2
+  BiteAt: 0.45
   LurkShare: 0.1
   LurkTrigger: 7
