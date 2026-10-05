@@ -25,6 +25,21 @@ namespace MineGenerator.Catacombs
 
         private const float CoinChainBonus = 1.5f;
 
+        /// <summary>
+        /// Добивание рикошетом: пуля, убившая паука, отскакивает в ближайшего видимого с долей
+        /// урона и прыгает дальше, пока убивает. Без этого револьвер в орде голодал: пауки идут
+        /// по полу, стенам и своду, а не в линию, и пробитие почти не работало — бот прогона
+        /// убивал 2–3 паука в секунду против 18–20 у гранатомёта и гиб до первого гребня.
+        /// Против элиты и Матки прыжков нет — там остаётся снайперский выстрел с критом.
+        /// </summary>
+        private const int KillChainHops = 4;
+
+        private const float KillChainReach = 10f;
+        private const float KillChainShare = 0.75f;
+
+        /// <summary>Сколько цепочек добивания запускает один выстрел (по убитым лучом).</summary>
+        private const int KillChainsPerShot = 3;
+
         private int _ammo;
         private float _nextShot;
         private float _reloadLeft;
@@ -190,6 +205,8 @@ namespace MineGenerator.Catacombs
 
                 var report = Strike(spec);
 
+                if (report.Killed > 0) ChainKills(report.FirstHitPoint, Mathf.Min(report.Killed, KillChainsPerShot));
+
                 if (rock.collider != null && length < range) Ctx.Explosions?.Impact(rock.point, rock.normal, 6);
 
                 if (report.Killed > 0) Ctx.Audio?.Play(SoundId.KillTick, 0.5f);
@@ -204,6 +221,39 @@ namespace MineGenerator.Catacombs
 
             Ctx.Feedback.Kick(1.8f);
             Ctx.Feedback.Shake(0.06f);
+        }
+
+        /// <summary>Цепочки добивания от точки попадания: каждая — до четырёх прыжков, пока убивает.</summary>
+        private void ChainKills(Vector3 start, int chains)
+        {
+            if (Ctx.Crowd == null) return;
+
+            for (var chain = 0; chain < chains; chain++)
+            {
+                var from = start;
+                var damage = N.Damage * KillChainShare;
+
+                for (var hop = 0; hop < KillChainHops; hop++)
+                {
+                    CollectRicochetTargets(from, KillChainReach, 1, false);
+                    if (_candidates.Count == 0) break;
+
+                    var target = _candidates[0].Point;
+                    var toTarget = target - from;
+
+                    var spec = HitSpec.Ray(from, toTarget, toTarget.magnitude + 0.6f, 0.3f, damage, Source);
+                    spec.MaxTargets = 1;
+
+                    var report = Strike(spec);
+
+                    Ctx.Fx?.Line(from, target, 0.022f, new Color(1f, 0.85f, 0.5f, 0.8f), new Color(1f, 0.6f, 0.25f, 0.1f), 0.1f);
+
+                    if (report.Killed == 0) break;
+
+                    from = target;
+                    damage *= KillChainShare;
+                }
+            }
         }
 
         private bool TryHitCoin(Vector3 origin, Vector3 direction, float length, out Shot coin)
@@ -330,11 +380,11 @@ namespace MineGenerator.Catacombs
         /// Цели рикошета: Матка или особый (по опасности) первым, потом элита и ближайшие из толпы,
         /// в пределах дальности и на прямой видимости. Сплит берёт первые три.
         /// </summary>
-        private void CollectRicochetTargets(Vector3 from, float reach, int count)
+        private void CollectRicochetTargets(Vector3 from, float reach, int count, bool threatsFirst = true)
         {
             _candidates.Clear();
 
-            if (Ctx.TryFindThreat(from, reach, out var threat, out _)) _candidates.Add((threat, -1));
+            if (threatsFirst && Ctx.TryFindThreat(from, reach, out var threat, out _)) _candidates.Add((threat, -1));
 
             if (Ctx.Crowd == null || _candidates.Count >= count) return;
 

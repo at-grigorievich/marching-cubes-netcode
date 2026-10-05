@@ -774,39 +774,12 @@ namespace MineGenerator.Catacombs.EditorTools
             var stage = director.StageSeconds;
             var killsBefore = crowd.KillsBy(DamageSource.GrenadeLauncher);
 
-            var feet = entry;
-            var goal = entry;
-            var moveTimer = 0f;
-            var mobility = player.GetComponent<PlayerMobility>();
-            var dash = mobility != null ? mobility.Dash : null;
-            var points = new List<Vector3>();
+            var legs = new BotLegs(entry, player.GetComponent<PlayerMobility>());
 
             for (var time = 0f; time < stage + 30f; time += Step)
             {
-                // Отход по коридору: раз в полсекунды — к самой пустой точке пола рядом, шагом
-                // ходьбы; окружили — рывком подальше. Стоящая на месте турель гибнет до первого
-                // гребня при любом уроне: так в эту игру не играют.
-                moveTimer -= Step;
-
-                if (moveTimer <= 0f)
-                {
-                    moveTimer = 0.5f;
-
-                    var crowded = crowd.CountNear(feet + Vector3.up, 3.5f);
-                    var dashNow = dash != null && crowded >= 6 && dash.TryStart();
-
-                    if (dashNow) vitals.HoldInvulnerable(InvulnReason.Dash, dash.Duration + dash.Grace);
-
-                    goal = Emptiest(crowd, feet, dashNow ? 4 : 1, dashNow ? 7 : 3, points, goal);
-                    if (dashNow) feet = goal;
-                }
-
-                if (dash != null) dash.Step(Step);
-
-                var speed = 6f * controller.Stats.MoveScale;
-                feet = Vector3.MoveTowards(feet, goal, speed * Step);
-
-                PlaceBody(player, feet);
+                legs.Step(crowd, vitals, controller.Stats.MoveScale, Step);
+                PlaceBody(player, legs.Feet);
 
                 director.Tick(Step);
                 crowd.Simulate(Step);
@@ -886,14 +859,14 @@ namespace MineGenerator.Catacombs.EditorTools
             return best;
         }
 
-        private static int PickCard(IReadOnlyList<Card> cards)
+        private static int PickCard(IReadOnlyList<Card> cards, WeaponId gun = WeaponId.Launcher)
         {
             var best = 0;
             var bestScore = int.MinValue;
 
             for (var i = 0; i < cards.Count; i++)
             {
-                var score = CardScore(cards[i]);
+                var score = CardScore(cards[i], gun);
                 if (score <= bestScore) continue;
 
                 best = i;
@@ -903,7 +876,7 @@ namespace MineGenerator.Catacombs.EditorTools
             return best;
         }
 
-        private static int CardScore(Card card)
+        private static int CardScore(Card card, WeaponId gun)
         {
             switch (card.Type)
             {
@@ -911,7 +884,7 @@ namespace MineGenerator.Catacombs.EditorTools
                     return 100;
 
                 case CardType.WeaponLevel:
-                    return card.Weapon == WeaponId.Launcher ? 80 : 20;
+                    return card.Weapon == gun ? 80 : 20;
 
                 case CardType.NewTome:
                 case CardType.TomeLevel:
@@ -924,6 +897,499 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 default:
                     return 10;
+            }
+        }
+
+        // ------------------------------------------------------------------ бот с каждой пушкой (M2)
+
+        /// <summary>Шаг бота с настоящей пушкой: гвозди и дробь летят быстро, 1/20 с для них грубо.</summary>
+        private const float GunStep = 1f / 30f;
+
+        /// <summary>Темп убийств второй пушки в руках к темпу гранатомёта, ниже которого она — балласт.</summary>
+        private const float PairEfficiencyMin = 0.2f;
+
+        /// <summary>
+        /// Сколько прогонов на пушку: выживание бота — пороговое событие на подъёме к первому
+        /// гребню, и один прогон его не меряет. Три — минимум, при котором «большинство» значит
+        /// что-то; весь прогон идёт около четверти часа.
+        /// </summary>
+        public static int GunRepeats = 3;
+
+        /// <summary>Только эти пушки (ключи через запятую) — для подбора чисел; пусто — все.</summary>
+        public static string GunFilter;
+
+        /// <summary>Отдельный прогон: тот же бот с ростом, но стреляет настоящей пушкой — по разу на каждую.</summary>
+        public static void RunWeapons()
+        {
+            var code = 0;
+
+            try
+            {
+                code = ReportWeapons();
+            }
+            catch (Exception error)
+            {
+                Debug.LogError("ПРОГОН ПУШЕК В ЗАБЕГЕ УПАЛ: " + error);
+                code = 1;
+            }
+
+            EditorApplication.Exit(code);
+        }
+
+        /// <summary>
+        /// Бот с ростом и НАСТОЯЩЕЙ пушкой (план M2: «проходит с каждой из восьми пушек у бота»).
+        /// Прежний бот бьёт абстрактным взрывом и меряет кривую; этот меряет пушки: целится
+        /// в ближайшего видимого, стреляет в ритме пушки (рельса заряжает и отпускает, молот бьёт
+        /// сериями), выбирает карточки своей пушки и томов, отходит и рвётся из окружения.
+        /// Альт-огонь не трогает — это нижняя граница пушки, а не потолок.
+        /// </summary>
+        public static int ReportWeapons()
+        {
+            var text = new StringBuilder();
+            var failed = 0;
+            var clock = Stopwatch.StartNew();
+
+            var scene = CheckScene.Open(text, ref failed);
+            if (scene == null) return Fail(text, failed + 1);
+
+            var controller = UnityEngine.Object.FindAnyObjectByType<CaveRunController>();
+            var ichor = UnityEngine.Object.FindAnyObjectByType<IchorField>();
+            var arsenal = scene.Player.GetComponent<PlayerArsenal>();
+
+            if (controller == null || ichor == null || arsenal == null)
+            {
+                text.AppendLine("  ПЛОХО: нет контроллера забега, ихора или арсенала — «Починить свет» их не создал");
+                return Fail(text, failed + 1);
+            }
+
+            controller.EnsureLinks();
+            ichor.EnsureLinks();
+            arsenal.Prepare();
+            arsenal.Context.Audio.Muted = true;
+
+            var secondPeak = scene.Director.Curve.secondPeak * scene.Director.StageSeconds;
+
+            text.AppendLine($"=== Бот с настоящей пушкой: целится, стреляет в её ритме, растёт, отходит (шаг {GunStep:0.000} с) ===");
+
+            var survived = 0;
+
+            for (var id = 0; id < (int)WeaponId.Count; id++)
+            {
+                var gun = (WeaponId)id;
+                if (!string.IsNullOrEmpty(GunFilter) && !GunFilter.Split(',').Contains(WeaponIds.Key(gun))) continue;
+
+                var paired = !IsClassStarter(gun);
+                var lived = 0;
+                var shares = 0f;
+                var efficiency = 0f;
+
+                // Повторы: смерть бота и доля пушки в паре — числа хаотичной системы, и один прогон
+                // их не меряет (грабли №24). Откат рельсы 4.5 → 4 с дал в одном прогоне МЕНЬШЕ убийств
+                // (766 → 465) — разброс между прогонами больше эффекта правки.
+                for (var repeat = 0; repeat < Math.Max(1, GunRepeats); repeat++)
+                {
+                    var run = RunGunBot(gun, scene, controller, ichor, arsenal, paired);
+
+                    var fate = run.DiedAt >= 0f ? "погиб на " + Clock(run.DiedAt) : "дожил до конца";
+                    var levels = string.Join(" ", run.LevelAtMinute.Take(8).Select((l, m) => (m + 1) + ":" + l));
+                    var share = run.AllKills > 0 ? (float)run.Kills / run.AllKills : 0f;
+                    var pairText = paired
+                        ? $", доля в паре {share:P0}, в руках {run.InHand:0} с, темп в руках {run.Efficiency:P0} гранатомёта"
+                        : "";
+
+                    text.AppendLine($"  {WeaponIds.Key(gun),-9}{(paired ? "+гранатомёт" : "           ")} {fate,-16} уровень {run.Level,2} [{levels}], " +
+                                    $"пушка ур. {run.GunLevel}{(run.Evolved ? " ★" : "")}, убито {run.Kills,5} (за 2 мин {run.KillsAt2,4}" +
+                                    $"{pairText}), урона {run.Damage / 1000f:0.0} тыс. HP, шаг пушки до {run.GunMs:0.00} мс, милосердие {run.Mercy}");
+
+                    if (run.DiedAt < 0f || run.DiedAt >= secondPeak) lived++;
+                    shares += share;
+                    efficiency += run.Efficiency;
+                }
+
+                var repeats = Math.Max(1, GunRepeats);
+                var meanShare = shares / repeats;
+                var meanEfficiency = efficiency / repeats;
+
+                // Доживает в большинстве прогонов: один неудачный из трёх — разброс, а не пушка.
+                var ok = lived * 2 > repeats;
+
+                if (!ok) text.AppendLine($"    ПЛОХО: {WeaponIds.Key(gun)} не доживает до второго гребня ({Clock(secondPeak)}): {lived} из {repeats}");
+
+                // Вторая пушка, которая в руках убивает медленнее пятой части гранатомёта, — балласт
+                // в слоте: её время в руках лучше отдать основной.
+                if (paired && meanEfficiency < PairEfficiencyMin)
+                {
+                    ok = false;
+                    text.AppendLine($"    ПЛОХО: {WeaponIds.Key(gun)} в руках убивает в темпе {meanEfficiency:P0} гранатомёта, " +
+                                    $"меньше {PairEfficiencyMin:P0}");
+                }
+                else if (paired && repeats > 1)
+                {
+                    text.AppendLine($"    в среднем: доля в паре {meanShare:P0}, темп в руках {meanEfficiency:P0} гранатомёта");
+                }
+
+                if (ok) survived++;
+            }
+
+            var tested = string.IsNullOrEmpty(GunFilter) ? (int)WeaponId.Count : GunFilter.Split(',').Length;
+
+            Expect(survived == tested, $"с каждой пушкой бот доживает до второго гребня, вторые пушки набирают свою долю " +
+                                       $"({survived} из {tested})", text, ref failed);
+
+            arsenal.ClearLoadout();
+            controller.StartWeapon = WeaponId.Launcher;
+
+            text.AppendLine();
+            text.AppendLine($"прогон занял {clock.Elapsed.TotalSeconds:0.0} с");
+
+            if (failed > 0) return Fail(text, failed);
+
+            Debug.Log($"Проверка пушек в забеге пройдена:{Environment.NewLine}{text}");
+            return 0;
+        }
+
+        private sealed class GunRun
+        {
+            public float DiedAt = -1f;
+            public int Level;
+            public int[] LevelAtMinute = new int[9];
+            public int GunLevel;
+            public bool Evolved;
+            public int Kills;
+
+            /// <summary>Убито всеми пушками бота — для доли второй пушки в паре.</summary>
+            public int AllKills;
+
+            /// <summary>Сколько секунд в руках была эта пушка и сколько длился забег.</summary>
+            public float InHand;
+            public float Seconds;
+
+            /// <summary>
+            /// Темп убийств второй пушки, пока она в руках, к темпу гранатомёта за весь забег —
+            /// с перезарядками. Доля убийств зависит от того, как часто пушку берут (рельсу —
+            /// на секунду из пяти), а темп в руках — нет. База — гранатомёт за весь забег, а не
+            /// «пока в руках»: в паре он в руках только заряженный, перезарядки уходят второй
+            /// пушке, и его темп в руках завышен.
+            /// </summary>
+            public float Efficiency =>
+                InHand > 0f && Seconds > 0f && AllKills > Kills
+                    ? Kills / InHand / ((AllKills - Kills) / Seconds)
+                    : 0f;
+
+            /// <summary>Убито за первые две минуты — сравнимо между пушками, когда бы бот ни погиб.</summary>
+            public int KillsAt2;
+            public float Damage;
+            public int Mercy;
+            public double GunMs;
+        }
+
+        /// <summary>С какой дистанции бот открывает огонь — по смыслу пушки, а не по её полю Range.</summary>
+        private static float EngageRange(WeaponId gun) => gun switch
+        {
+            WeaponId.Launcher => 16f,
+            WeaponId.Revolver => 30f,
+            WeaponId.Shotgun => 10f,
+            WeaponId.Nailgun => 22f,
+            WeaponId.Rail => 30f,
+            WeaponId.Flamer => 7f,
+            WeaponId.Tesla => 14f,
+            WeaponId.PickHammer => 3.3f,
+            _ => 14f
+        };
+
+        /// <summary>
+        /// Куда целиться: кандидат, на направлении которого форма пушки накрывает больше всего
+        /// видимых. Взрыв — соседи в радиусе от точки, луч и конус — в угле от направления,
+        /// молот — ближайший. При равенстве — ближайший (список уже по дальности).
+        /// </summary>
+        private static Vector3 BestAim(WeaponId gun, Vector3 eye, List<Vector3> visible)
+        {
+            if (gun == WeaponId.PickHammer || gun == WeaponId.Tesla || visible.Count == 1) return visible[0];
+
+            var best = visible[0];
+            var bestScore = -1;
+
+            var cone = gun switch
+            {
+                WeaponId.Shotgun => 9f,
+                WeaponId.Flamer => 11f,
+                _ => 4f
+            };
+
+            var cos = Mathf.Cos(cone * Mathf.Deg2Rad);
+
+            for (var i = 0; i < visible.Count; i++)
+            {
+                var score = 0;
+                var direction = (visible[i] - eye).normalized;
+
+                for (var j = 0; j < visible.Count; j++)
+                {
+                    if (gun == WeaponId.Launcher)
+                    {
+                        if ((visible[j] - visible[i]).sqrMagnitude < 25f) score++;
+                    }
+                    else if (Vector3.Dot((visible[j] - eye).normalized, direction) >= cos)
+                    {
+                        score++;
+                    }
+                }
+
+                if (score <= bestScore) continue;
+
+                bestScore = score;
+                best = visible[i];
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// Стартовые пушки классов (план M4.5) — им тянуть забег в одиночку. Гвоздомёт и рельса
+        /// стартовыми не бывают, это вторые пушки: их бот берёт в пару к гранатомёту.
+        /// </summary>
+        private static bool IsClassStarter(WeaponId id) =>
+            id != WeaponId.Nailgun && id != WeaponId.Rail;
+
+        /// <summary>
+        /// Бот с пушкой. Без пары — стреляет ей одной. С парой — основная гранатомёт, а пока он
+        /// перезаряжается, бот берёт вторую (смена 0.15 с): так вторую пушку и держит игрок.
+        /// </summary>
+        private static GunRun RunGunBot(WeaponId gun, CheckScene scene, CaveRunController controller, IchorField ichor,
+            PlayerArsenal arsenal, bool paired = false)
+        {
+            var run = new GunRun();
+            var director = scene.Director;
+            var crowd = scene.Crowd;
+            var vitals = scene.Vitals;
+            var player = scene.Player;
+
+            // Чистый уровень на каждый прогон: гранатомёт и молот копают воронки, и пушка,
+            // шедшая следом, играла на изрытой карте с перестроенной сеткой. Дробовик после
+            // гранатомёта убивал за две минуты 1413, сам по себе — 1085, стабильно.
+            scene.World.GenerateImmediate(scene.World.CurrentSeed);
+            scene.Queen.Rebuild();
+            scene.PlaceBody(scene.Entry);
+
+            director.Restart();
+            crowd.Rebuild();
+            controller.StartWeapon = paired ? WeaponId.Launcher : gun;
+            controller.StartRun();
+
+            if (paired)
+            {
+                arsenal.Give(gun);
+                controller.Session.Weapons.Add(new OwnedWeapon { Id = gun, Level = 1 });
+            }
+
+            ichor.Clear();
+            vitals.ResetForRun();
+            controller.RecomposeStats();
+
+            var source = WeaponIds.SourceOf(gun);
+            var killsBefore = crowd.KillsBy(source);
+            var allBefore = arsenal.TotalKills;
+            var legs = new BotLegs(scene.Entry, player.GetComponent<PlayerMobility>());
+            var near = new List<int>();
+            var visible = new List<Vector3>();
+            var minute = 0;
+            var holding = 0f;
+            var wasFiring = false;
+            var stage = director.StageSeconds;
+
+            for (var time = 0f; time < stage + 30f; time += GunStep)
+            {
+                legs.Step(crowd, vitals, controller.Stats.MoveScale, GunStep);
+                scene.PlaceBody(legs.Feet);
+
+                director.Tick(GunStep);
+                crowd.Simulate(GunStep);
+                crowd.FlushKills();
+                ichor.Tick(GunStep);
+                vitals.Tick(GunStep);
+                player.TickStatus(GunStep);
+                controller.Tick(GunStep, GunStep);
+
+                if (controller.Offering)
+                {
+                    controller.Choose(PickCard(controller.Cards, gun));
+                }
+
+                if (vitals.IsDead)
+                {
+                    run.DiedAt = director.Elapsed;
+                    break;
+                }
+
+                var commands = PlayerCommands.Empty;
+                var active = arsenal.Active != null ? arsenal.Active.Id : gun;
+
+                if (paired)
+                {
+                    // Гвоздомёт — пока гранатомёт перезаряжается. Рельса с откатом 6 с — как только
+                    // готова: так держат пушку-спецприём, а не «чем занять перезарядку»; в первой
+                    // версии бот брал её только на перезарядку, и рельса набирала 4% убийств.
+                    var launcher = arsenal.Get(WeaponId.Launcher);
+                    var second = arsenal.Get(gun);
+                    var reloading = launcher != null && (launcher.Hud.Reload > 0f || launcher.Hud.Ammo == 0);
+                    var ready = second != null && second.Hud.Reload <= 0f && second.Hud.Ammo != 0;
+                    var want = gun == WeaponId.Rail
+                        ? (ready || (active == WeaponId.Rail && holding > 0f) ? gun : WeaponId.Launcher)
+                        : (reloading ? gun : WeaponId.Launcher);
+
+                    if (want != active)
+                    {
+                        for (var slot = 0; slot < arsenal.Weapons.Count; slot++)
+                        {
+                            if (arsenal.Weapons[slot] != null && arsenal.Weapons[slot].Id == want) commands.WeaponSlot = slot;
+                        }
+
+                        holding = 0f;
+                        wasFiring = false;
+                    }
+                }
+
+                // Цель — видимые в дистанции пушки (FindNearest сквозь стенку не видит по заливке,
+                // линия из глаз отсекает тех, кто за углом, но близко по ходам), а из них — та,
+                // по направлению на которую форма пушки накроет больше всего. Так целится живой
+                // игрок: вдоль толпы, а не в ближайшего. Бот, бьющий ближайшего, мерил бы
+                // не пушку, а свой прицел — лучу и конусу это стоило вчетверо убийств.
+                var eye = player.transform.position;
+                var hasTarget = false;
+                var target = Vector3.zero;
+
+                visible.Clear();
+
+                if (crowd.FindNearest(eye, EngageRange(active), 24, near) > 0)
+                {
+                    foreach (var index in near)
+                    {
+                        var position = crowd.PositionAt(index);
+                        if (!Physics.Linecast(eye, position, ~0, QueryTriggerInteraction.Ignore)) visible.Add(position);
+                        if (visible.Count >= 12) break;
+                    }
+                }
+
+                if (visible.Count > 0)
+                {
+                    hasTarget = true;
+                    target = BestAim(active, eye, visible);
+                }
+
+                if (hasTarget)
+                {
+                    player.transform.rotation = Quaternion.LookRotation((target - eye).normalized, Vector3.up);
+
+                    switch (active)
+                    {
+                        // Рельса: держать заряд секунду и отпустить.
+                        case WeaponId.Rail:
+                            holding += GunStep;
+                            commands.FireHeld = holding < 1f;
+                            commands.FirePressed = holding <= GunStep * 1.5f;
+                            if (holding >= 1f + GunStep) holding = 0f;
+                            break;
+
+                        // Молот: серия взмахов — нажатие через кадр.
+                        case WeaponId.PickHammer:
+                            holding += GunStep;
+                            commands.FirePressed = ((int)(holding / GunStep) & 1) == 0;
+                            commands.FireHeld = commands.FirePressed;
+                            break;
+
+                        default:
+                            commands.FireHeld = true;
+                            commands.FirePressed = !wasFiring;
+                            break;
+                    }
+                }
+                else
+                {
+                    holding = 0f;
+
+                    // Целиться не во что — дозарядиться, как сделал бы игрок.
+                    commands.Reload = true;
+                }
+
+                wasFiring = commands.FireHeld;
+
+                if (active == gun) run.InHand += GunStep;
+                run.Seconds += GunStep;
+
+                var started = Stopwatch.GetTimestamp();
+
+                arsenal.Tick(commands, GunStep, true);
+                arsenal.Context.Projectiles.Tick(GunStep);
+
+                run.GunMs = Math.Max(run.GunMs, (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency);
+
+                while (minute < run.LevelAtMinute.Length && director.Elapsed >= (minute + 1) * 60f)
+                {
+                    run.LevelAtMinute[minute] = controller.Session.Level;
+                    if (minute == 1) run.KillsAt2 = crowd.KillsBy(source) - killsBefore;
+                    minute++;
+                }
+            }
+
+            crowd.FlushKills();
+            if (minute < 2) run.KillsAt2 = crowd.KillsBy(source) - killsBefore;
+
+            for (; minute < run.LevelAtMinute.Length; minute++) run.LevelAtMinute[minute] = controller.Session.Level;
+
+            var owned = controller.Session.Weapons.FirstOrDefault(w => w.Id == gun);
+
+            run.Level = controller.Session.Level;
+            run.GunLevel = owned.Level;
+            run.Evolved = owned.Evolved;
+            run.Kills = crowd.KillsBy(source) - killsBefore;
+            run.AllKills = arsenal.TotalKills - allBefore;
+            run.Damage = arsenal.Get(gun) != null ? arsenal.Get(gun).DamageDealt + crowd.BurnDamageBy(source) : 0f;
+            run.Mercy = controller.MercyTriggers;
+
+            return run;
+        }
+
+        /// <summary>
+        /// Ноги бота: раз в полсекунды — к самой пустой точке пола в 1–3 шагах, шагом ходьбы;
+        /// окружили шестеро — рывком на 4–7 шагов. Стоящая турель гибнет до первого гребня
+        /// при любом уроне (грабли №72).
+        /// </summary>
+        private sealed class BotLegs
+        {
+            public Vector3 Feet;
+
+            private Vector3 _goal;
+            private float _timer;
+            private readonly DashModel _dash;
+            private readonly List<Vector3> _points = new List<Vector3>();
+
+            public BotLegs(Vector3 start, PlayerMobility mobility)
+            {
+                Feet = start;
+                _goal = start;
+                _dash = mobility != null ? mobility.Dash : null;
+            }
+
+            public void Step(SpiderCrowd crowd, PlayerVitals vitals, float moveScale, float deltaTime)
+            {
+                _timer -= deltaTime;
+
+                if (_timer <= 0f)
+                {
+                    _timer = 0.5f;
+
+                    var crowded = crowd.CountNear(Feet + Vector3.up, 3.5f);
+                    var dashNow = _dash != null && crowded >= 6 && _dash.TryStart();
+
+                    if (dashNow) vitals.HoldInvulnerable(InvulnReason.Dash, _dash.Duration + _dash.Grace);
+
+                    _goal = Emptiest(crowd, Feet, dashNow ? 4 : 1, dashNow ? 7 : 3, _points, _goal);
+                    if (dashNow) Feet = _goal;
+                }
+
+                _dash?.Step(deltaTime);
+
+                Feet = Vector3.MoveTowards(Feet, _goal, 6f * moveScale * deltaTime);
             }
         }
 

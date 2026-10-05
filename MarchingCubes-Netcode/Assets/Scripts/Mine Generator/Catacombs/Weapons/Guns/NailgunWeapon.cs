@@ -173,7 +173,7 @@ namespace MineGenerator.Catacombs
                 Proximity = 0.25f,
                 Life = N.Range,
                 Tag = KindNail,
-                Hits = saw ? 1 + Mathf.RoundToInt(N[WeaponStat.Pierce]) : 1,
+                Hits = 1 + Mathf.RoundToInt(N[WeaponStat.Pierce]),
                 Payload = saw ? 2f : 0f
             });
 

@@ -20,7 +20,7 @@ namespace MineGenerator.Catacombs
     public sealed class ShotgunWeapon : Weapon
     {
         /// <summary>Доля дальности, до которой урон полный: 4 юнита из 12.</summary>
-        private const float FullShare = 4f / 12f;
+        private const float FullShare = 6f / 12f;
 
         private int _shells;
         private float _nextShot;
