@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using TMPro;
@@ -174,6 +175,15 @@ namespace MineGenerator.Catacombs.EditorTools
                     foreach (Match match in literal.Matches(lines[i]))
                     {
                         var key = match.Groups[1].Value;
+
+                        // «loading.tip" + номер» — начало собираемого ключа, а не ключ: семейство
+                        // заводится ниже целиком.
+                        if (lines[i].Substring(match.Index + match.Length).TrimStart().StartsWith("+")) continue;
+
+                        // Номера заданий (M4.5) похожи на ключи и делят с ними префиксы: «class.miner» —
+                        // задание, открывающее класс, а не подпись.
+                        if (Quests.Find(key) != null) continue;
+
                         if (!used.ContainsKey(key)) used[key] = Path.GetFileName(path) + ":" + (i + 1);
                     }
                 }
@@ -209,6 +219,29 @@ namespace MineGenerator.Catacombs.EditorTools
             {
                 used["banner.elite." + ((EliteAffix)id).ToString().ToLowerInvariant()] = "аффикс " + (EliteAffix)id;
             }
+
+            // Мета-игра (M4): улучшения, классы, тексты заданий по виду, вкладки лагеря, советы загрузки.
+            for (var id = 0; id < (int)MetaUpgrade.Count; id++)
+            {
+                var def = MetaUpgrades.Get((MetaUpgrade)id);
+                used[def.NameKey] = "улучшение " + (MetaUpgrade)id;
+                used[def.DescKey] = "улучшение " + (MetaUpgrade)id;
+            }
+
+            for (var id = 0; id < (int)PlayerClass.Count; id++)
+            {
+                used[PlayerClasses.NameKey((PlayerClass)id)] = "класс " + (PlayerClass)id;
+                used[PlayerClasses.DescKey((PlayerClass)id)] = "класс " + (PlayerClass)id;
+            }
+
+            foreach (var quest in Quests.Permanent) used[quest.TextKey] = "задание " + quest.Id;
+            foreach (var quest in Quests.DailyFor(0)) used[quest.TextKey] = "ежедневное " + quest.Kind;
+
+            var tabs = typeof(HubScreen).GetNestedType("Tab", BindingFlags.NonPublic);
+            foreach (var tab in Enum.GetNames(tabs).Where(name => name != "Count")) used["hub.tab." + tab.ToLowerInvariant()] = "вкладка лагеря";
+
+            var tips = (int)typeof(LoadingView).GetField("Tips", BindingFlags.NonPublic | BindingFlags.Static).GetRawConstantValue();
+            for (var i = 0; i < tips; i++) used["loading.tip" + i] = "совет загрузки " + i;
 
             var missing = used.Where(pair => !Loc.Has(pair.Key)).Select(pair => pair.Key + " (" + pair.Value + ")").ToList();
             var unused = Loc.Keys.Where(key => !used.ContainsKey(key)).ToList();

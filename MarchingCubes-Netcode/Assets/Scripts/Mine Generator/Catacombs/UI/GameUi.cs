@@ -52,6 +52,32 @@ namespace MineGenerator.Catacombs
         /// <summary>Экран лагеря (M4) — его ставит мета, когда она есть.</summary>
         public IUiScreen HubScreen { get; set; }
 
+        public RestScreen Rest { get; private set; }
+        public LoadingView Loading { get; private set; }
+
+        private MetaGame _meta;
+        private CatacombWorld _world;
+
+        /// <summary>Лагерь и привал — только когда есть мета (M4). Зовёт она сама.</summary>
+        public void EnsureHub(MetaGame meta)
+        {
+            if (_meta != null || meta == null) return;
+
+            _meta = meta;
+
+            var hub = new HubScreen(this, meta);
+            hub.Build(_screenRoot);
+            hub.SetOpen(false);
+            HubScreen = hub;
+
+            Rest = new RestScreen(this, meta);
+            Rest.Build(_screenRoot);
+            Rest.SetOpen(false);
+
+            meta.RestOffered += () => Rest.Show();
+            meta.HubEntered += hub.Refresh;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -117,6 +143,9 @@ namespace MineGenerator.Catacombs
 
             Hints = new HintView(this);
             Hints.Build(_screenRoot);
+
+            Loading = new LoadingView();
+            Loading.Build(_screenRoot);
 
             Markers = new SpecialMarkers(this);
             Markers.Build(_dynamicRoot);
@@ -233,6 +262,18 @@ namespace MineGenerator.Catacombs
 
             if (Cards.IsOpen) Cards.Tick();
             if (Death.IsOpen) Death.Tick();
+            if (Rest != null && Rest.IsOpen)
+            {
+                if (state == GameState.StageClear) Rest.Tick();
+                else Rest.SetOpen(false);
+            }
+
+            // Лагерь — по состоянию, а не только по событию: мета входит в лагерь в своём Start,
+            // раньше, чем интерфейс в первом кадре подпишется на смену состояния.
+            if (HubScreen != null && HubScreen.IsOpen != (state == GameState.Hub)) HubScreen.SetOpen(state == GameState.Hub);
+
+            if (_world == null) _world = FindAnyObjectByType<CatacombWorld>();
+            Loading.Tick(state == GameState.Loading && _world != null && _world.IsGenerating, _world != null ? _world.Progress : 0f);
 
             // Пауза — Esc / кнопка; в карточках Esc ничего не делает (выбор обязателен).
             if (Rig != null && Rig.Commands.Pause && _flow != null)
@@ -263,7 +304,7 @@ namespace MineGenerator.Catacombs
         {
             Pause.SetOpen(next == GameState.Paused);
 
-            if (next == GameState.Playing || next == GameState.Loading)
+            if (next == GameState.Playing || next == GameState.Loading || next == GameState.Hub)
             {
                 Death.SetOpen(false);
                 Results.SetOpen(false);

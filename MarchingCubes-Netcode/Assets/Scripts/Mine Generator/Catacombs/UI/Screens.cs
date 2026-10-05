@@ -63,7 +63,7 @@ namespace MineGenerator.Catacombs
         private bool _adRerollUsed;
         private int _shownLevel = -1;
 
-        private sealed class CardView
+        internal sealed class CardView
         {
             public Button Button;
             public Image Stripe;
@@ -84,31 +84,7 @@ namespace MineGenerator.Catacombs
             for (var i = 0; i < MaxCards; i++)
             {
                 var index = i;
-                var view = new CardView();
-
-                view.Button = UiKit.Button(Root, "Card " + i, "", () => Pick(index), 250f, 340f,
-                    new Color(0.1f, 0.075f, 0.06f, 0.97f));
-
-                var card = view.Button.transform;
-                card.GetComponentInChildren<TextMeshProUGUI>().text = "";
-
-                view.Stripe = UiKit.Panel(card, "Stripe", UiKit.Amber);
-                view.Stripe.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(230f, 6f));
-
-                view.Kind = UiKit.Text(card, "Kind", 16f, UiKit.Dim, TextAlignmentOptions.Center);
-                view.Kind.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(230f, 24f));
-
-                view.Name = UiKit.Text(card, "Name", 26f, UiKit.Paper, TextAlignmentOptions.Center, true);
-                view.Name.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -50f), new Vector2(230f, 64f));
-
-                view.Body = UiKit.Text(card, "Body", 18f, UiKit.Paper, TextAlignmentOptions.Top);
-                view.Body.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(222f, 180f));
-
-                view.Key = UiKit.Text(card, "Key", 18f, UiKit.Amber, TextAlignmentOptions.Center, true);
-                view.Key.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(60f, 26f));
-                view.Key.text = $"[{i + 1}]";
-
-                _cards[i] = view;
+                _cards[i] = BuildCard(Root, i, () => Pick(index));
             }
 
             _reroll = UiKit.Button(Root, "Reroll", "", Reroll, 220f, 48f);
@@ -137,6 +113,35 @@ namespace MineGenerator.Catacombs
 
             Refresh();
             SetOpen(true);
+        }
+
+        /// <summary>Карточка — кнопка с полосой, видом, именем и описанием. Общая с привалом (M4).</summary>
+        internal static CardView BuildCard(Transform root, int i, System.Action onClick)
+        {
+            var view = new CardView();
+
+            view.Button = UiKit.Button(root, "Card " + i, "", onClick, 250f, 340f, new Color(0.1f, 0.075f, 0.06f, 0.97f));
+
+            var card = view.Button.transform;
+            card.GetComponentInChildren<TextMeshProUGUI>().text = "";
+
+            view.Stripe = UiKit.Panel(card, "Stripe", UiKit.Amber);
+            view.Stripe.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(230f, 6f));
+
+            view.Kind = UiKit.Text(card, "Kind", 16f, UiKit.Dim, TextAlignmentOptions.Center);
+            view.Kind.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -22f), new Vector2(230f, 24f));
+
+            view.Name = UiKit.Text(card, "Name", 26f, UiKit.Paper, TextAlignmentOptions.Center, true);
+            view.Name.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -50f), new Vector2(230f, 64f));
+
+            view.Body = UiKit.Text(card, "Body", 18f, UiKit.Paper, TextAlignmentOptions.Top);
+            view.Body.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(222f, 180f));
+
+            view.Key = UiKit.Text(card, "Key", 18f, UiKit.Amber, TextAlignmentOptions.Center, true);
+            view.Key.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(60f, 26f));
+            view.Key.text = $"[{i + 1}]";
+
+            return view;
         }
 
         private void Refresh()
@@ -180,7 +185,7 @@ namespace MineGenerator.Catacombs
             _banish.SetLabel(_banishing ? Loc.T("cards.banish_pick") : Loc.F("cards.banish", session.Banishes));
         }
 
-        private static void Describe(Card card, RunSession session, CardView view)
+        internal static void Describe(Card card, RunSession session, CardView view)
         {
             switch (card.Type)
             {

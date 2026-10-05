@@ -206,6 +206,16 @@ namespace MineGenerator.Catacombs
             Context?.Projectiles?.Clear();
         }
 
+        /// <summary>
+        /// Модели пушек в руках. В лагере их нет: камера облетает зал, и ствол, висящий перед ней,
+        /// читался бы чужим предметом в кадре.
+        /// </summary>
+        public void ShowViews(bool show)
+        {
+            Prepare();
+            if (_viewRoot != null) _viewRoot.gameObject.SetActive(show);
+        }
+
         public bool Has(WeaponId id) => Get(id) != null;
 
         public Weapon Get(WeaponId id)

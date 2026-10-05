@@ -681,6 +681,47 @@ namespace MineGenerator.Catacombs
 
                     return;
                 }
+
+                // Вдоль градиента камня нет — но это не значит, что его нет рядом. На седловине
+                // и в вогнутом углу градиент смотрит вкось, и трасса уходит мимо пола в метре под
+                // клеткой. Такие клетки рвали сетку на картах ярусов (M4.7): на 6×4×6 кусок верхнего
+                // этажа в 576 клеток отрывался одной клеткой в 0.8 над полом. Тогда — по осям:
+                // ближайший камень по шести направлениям, нормаль — от него.
+                var bestT = AttachRange + 1f;
+                var bestAxis = float3.zero;
+
+                for (var a = 0; a < 6; a++)
+                {
+                    var axis = new float3(a == 0 ? 1f : a == 1 ? -1f : 0f, a == 2 ? 1f : a == 3 ? -1f : 0f, a == 4 ? 1f : a == 5 ? -1f : 0f);
+
+                    var lastT = 0f;
+                    var lastD = here;
+
+                    for (var i = 1; i <= steps; i++)
+                    {
+                        var t = math.min(AttachRange, i * ProbeStep);
+                        if (t >= bestT) break;
+
+                        var d = Sample(centre + axis * t);
+
+                        if (d > IsoLevel)
+                        {
+                            lastT = t;
+                            lastD = d;
+                            continue;
+                        }
+
+                        bestT = math.lerp(lastT, t, (lastD - IsoLevel) / math.max(1e-5f, lastD - d));
+                        bestAxis = axis;
+                        break;
+                    }
+                }
+
+                if (bestT > AttachRange) return;
+
+                Walkable[index] = 1;
+                Normal[index] = -bestAxis;
+                Depth[index] = bestT;
             }
 
             private float Sample(float3 position)

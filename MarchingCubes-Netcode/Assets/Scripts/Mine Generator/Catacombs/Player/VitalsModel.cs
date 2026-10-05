@@ -228,6 +228,13 @@ namespace MineGenerator.Catacombs
             return result;
         }
 
+        /// <summary>Выставить здоровье долей максимума — продолжение вылазки с контрольной точки (M4.1).</summary>
+        public void SetHealthShare(float share)
+        {
+            if (Dead) return;
+            Health = Math.Max(1f, Math.Min(MaxHealth, MaxHealth * share));
+        }
+
         public void Heal(float amount)
         {
             if (Dead || amount <= 0f) return;

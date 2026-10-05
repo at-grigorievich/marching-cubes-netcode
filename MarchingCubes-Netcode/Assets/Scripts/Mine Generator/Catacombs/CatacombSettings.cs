@@ -182,6 +182,21 @@ namespace MineGenerator.Catacombs
         public float BoundaryThickness => boundaryThickness;
         public float GridStep => gridStep;
 
+        /// <summary>
+        /// Применить рецепт уровня (M4.7). Только к КОПИИ ассета (<c>Instantiate</c>): правка самого
+        /// ассета в рантайме в редакторе осела бы в файле (грабли №8 в рантайм-виде). Правила уровня
+        /// (тупиков 0, связность, зал логова) рецепт не трогает.
+        /// </summary>
+        public void ApplyRecipe(in LevelRecipe recipe)
+        {
+            worldSizeInChunks = new Vector3Int(recipe.ChunksX, recipe.ChunksY, recipe.ChunksZ);
+            levelCount = recipe.LevelCount;
+            roomsPerLevel = new Vector2Int(recipe.RoomsMin, recipe.RoomsMax);
+            galleryShare = recipe.GalleryShare;
+            pinchChance = recipe.PinchChance;
+            pathChaos = recipe.PathChaos;
+        }
+
         public int Seed => seed;
         public bool RandomizeSeed => randomizeSeed;
 

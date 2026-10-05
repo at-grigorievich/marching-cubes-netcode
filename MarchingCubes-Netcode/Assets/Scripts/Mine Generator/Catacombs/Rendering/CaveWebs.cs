@@ -90,6 +90,9 @@ namespace MineGenerator.Catacombs
             if (world != null) world.Generated -= Rebuild;
         }
 
+        /// <summary>Множитель доли щелей с паутиной — рецепт уровня (M4.7): глубже — больше паутины.</summary>
+        public float Density { get; set; } = 1f;
+
         public void Rebuild()
         {
             Clear();
@@ -109,7 +112,7 @@ namespace MineGenerator.Catacombs
 
             foreach (var pinch in pinches)
             {
-                if (random.NextDouble() >= webShare) continue;
+                if (random.NextDouble() >= webShare * Density) continue;
 
                 SpawnWeb(pinch, random);
             }

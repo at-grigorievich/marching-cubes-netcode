@@ -264,6 +264,11 @@ namespace MineGenerator.Catacombs
 
         public bool IsEntangled => _entangleLeft > 0f;
 
+        /// <summary>Чувствительность и инверсия из настроек профиля (M4.2) — множителем к сцене.</summary>
+        public float LookScale { get; set; } = 1f;
+
+        public bool InvertY { get; set; }
+
         private float _pinLeft;
         private Vector3 _drag;
 
@@ -429,8 +434,8 @@ namespace MineGenerator.Catacombs
         {
             if (_looking)
             {
-                _yaw += _commands.Look.x * mouseSensitivity;
-                _pitch = Mathf.Clamp(_pitch - _commands.Look.y * mouseSensitivity, -89f, 89f);
+                _yaw += _commands.Look.x * mouseSensitivity * LookScale;
+                _pitch = Mathf.Clamp(_pitch - _commands.Look.y * mouseSensitivity * LookScale * (InvertY ? -1f : 1f), -89f, 89f);
             }
 
             var dt = Time.deltaTime;

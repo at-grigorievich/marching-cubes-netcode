@@ -1130,6 +1130,11 @@ namespace MineGenerator.Catacombs
             Announce("banner.shield");
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Отладка и проверки play-режима: игрок будто стоит у всех генераторов сразу.</summary>
+        public bool DebugNearAllPylons { get; set; }
+#endif
+
         private void UpdatePylons(float deltaTime)
         {
             var player = target;
@@ -1152,6 +1157,10 @@ namespace MineGenerator.Catacombs
 
                     near = flat.magnitude <= pylonRadius && math.abs(feet.y - pylon.Position.y) <= 3f;
                 }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if (DebugNearAllPylons) near = true;
+#endif
 
                 pylon.Charge = near
                     ? math.min(1f, pylon.Charge + deltaTime / math.max(0.1f, pylonCharge))

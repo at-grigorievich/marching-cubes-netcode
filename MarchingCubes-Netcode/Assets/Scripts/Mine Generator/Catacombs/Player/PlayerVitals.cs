@@ -211,6 +211,10 @@ namespace MineGenerator.Catacombs
 
         public void Heal(float amount) => _model.Heal(amount);
 
+        public void SetHealthShare(float share) => _model.SetHealthShare(share);
+
+        public float HealthShare => _model.MaxHealth > 0f ? _model.Health / _model.MaxHealth : 1f;
+
         public void AddTemp(float amount) => _model.AddTemp(amount);
 
         public void HoldInvulnerable(InvulnReason reason, float seconds) => _model.HoldInvulnerable(reason, seconds);

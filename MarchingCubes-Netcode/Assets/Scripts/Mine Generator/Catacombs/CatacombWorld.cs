@@ -40,6 +40,15 @@ namespace MineGenerator.Catacombs
         private int _builderCells = -1;
 
         public CatacombSettings Settings => settings;
+
+        /// <summary>
+        /// Подменить настройки — рецепт уровня (M4.7) кладёт сюда КОПИЮ ассета. Сам ассет в рантайме
+        /// не правится: в редакторе правка осела бы в файле (грабли №8 в рантайм-виде).
+        /// </summary>
+        public void UseSettings(CatacombSettings copy)
+        {
+            if (copy != null) settings = copy;
+        }
         public CatacombLayout Layout => _layout;
 
         /// <summary>Зал логова (M3.4): точка пола в центре, мир. Нет зала — false.</summary>

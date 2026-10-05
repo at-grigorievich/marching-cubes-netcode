@@ -868,7 +868,24 @@ namespace MineGenerator.Catacombs
 
             var pool = math.max(1, (int)math.round(all.Count * settings.LairFarShare));
             var random = new Random(math.max(1u, (uint)seed ^ 0xB055u));
-            var room = all[random.NextInt(0, pool)];
+            var pick = random.NextInt(0, pool);
+
+            // Зал растёт вверх, и узел верхнего этажа его не вмещает: потолок упирается в крышу мира.
+            // На рецептах ярусов (M4.7) с тремя этажами в трёх-четырёх чанках высоты так выходило
+            // 4.5 вместо 9.5 — Праматерь ×3.0 в такой зал не влезает. Тогда берётся следующий
+            // по удалённости узел, который вмещает; выпавший и вмещающий не меняется — прежние
+            // уровни тех же сидов остаются прежними.
+            var roof = worldSize.y - margin;
+            var room = all[pick];
+
+            for (var i = 0; i < all.Count; i++)
+            {
+                var candidate = all[(pick + i) % all.Count];
+                if (candidate.Floor.y + settings.LairHallHeight > roof) continue;
+
+                room = candidate;
+                break;
+            }
 
             var size = room.Size * settings.LairHallScale;
             var minBound = new float2(margin, margin);

@@ -91,6 +91,9 @@ namespace MineGenerator.Catacombs
         /// <summary>Ярус вылазки (M4): 1–3 — от него число аффиксов элиты. Пока вылазки нет — первый.</summary>
         public int Tier { get; set; } = 1;
 
+        /// <summary>Два аффикса у элиты на любом ярусе — правило глубины 3+ (M4.8).</summary>
+        public bool TwoAffixes { get; set; }
+
         /// <summary>Аффиксы элиты (M3.3): окраска, аура, кладка, рывок, вожак.</summary>
         public EliteAffixes Affixes { get; } = new EliteAffixes();
 
@@ -645,7 +648,7 @@ namespace MineGenerator.Catacombs
 
                     // Аффикс читается окраской и объявлением: что делать с ЭТОЙ элитой — обойти,
                     // не стоять рядом, убить быстро, держать рывок.
-                    var affixes = EliteAffixes.Pick(Tier, _affixRandom);
+                    var affixes = EliteAffixes.Pick(TwoAffixes ? Mathf.Max(Tier, 3) : Tier, _affixRandom);
                     Affixes.Attach(crowd, handle, affixes);
 
                     Announce("banner.elite." + affixes[0].ToString().ToLowerInvariant());
@@ -699,7 +702,7 @@ namespace MineGenerator.Catacombs
             Announce("banner.victory");
         }
 
-        private void Announce(string text)
+        public void Announce(string text)
         {
             Banner = text;
             BannerLeft = bannerSeconds;

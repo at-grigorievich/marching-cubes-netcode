@@ -275,13 +275,20 @@ namespace MineGenerator.Catacombs
             }
         }
 
+        /// <summary>
+        /// Множитель числа ламп и жил — рецепт уровня (M4.7): ярус 1 светлее, ярус 3 и «тьма»
+        /// глубины 4 — темнее. Живёт в коде, не в сцене: его ставит вылазка перед генерацией.
+        /// </summary>
+        public float CountScale { get; set; } = 1f;
+
         private void PlaceLamps(List<Origin> origins, System.Random random)
         {
-            var placed = new List<Vector3>(lampCount);
+            var lamps = Mathf.Max(1, Mathf.RoundToInt(lampCount * CountScale));
+            var placed = new List<Vector3>(lamps);
             var spacingSqr = lampSpacing * lampSpacing;
-            var attempts = lampCount * 16;
+            var attempts = lamps * 16;
 
-            for (var i = 0; i < attempts && placed.Count < lampCount; i++)
+            for (var i = 0; i < attempts && placed.Count < lamps; i++)
             {
                 var height = Mathf.Lerp(lampHeight.x, lampHeight.y, (float)random.NextDouble());
                 var node = origins[random.Next(origins.Count)];
@@ -313,11 +320,12 @@ namespace MineGenerator.Catacombs
 
         private void PlaceVeins(List<Origin> origins, System.Random random)
         {
-            var placed = new List<Vector3>(veinCount);
+            var veins = Mathf.Max(1, Mathf.RoundToInt(veinCount * CountScale));
+            var placed = new List<Vector3>(veins);
             var spacingSqr = veinSpacing * veinSpacing;
-            var attempts = veinCount * 12;
+            var attempts = veins * 12;
 
-            for (var i = 0; i < attempts && placed.Count < veinCount; i++)
+            for (var i = 0; i < attempts && placed.Count < veins; i++)
             {
                 var node = origins[random.Next(origins.Count)];
                 var origin = node.Position;

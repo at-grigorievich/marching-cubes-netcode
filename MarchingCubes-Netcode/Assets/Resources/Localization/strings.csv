@@ -173,3 +173,115 @@ tome.insight.name;Чутьё;Insight;Sezgi
 tome.insight.desc;+10% опыта;+10% experience;+%10 deneyim
 tome.greed.name;Жадность;Greed;Açgözlülük
 tome.greed.desc;+12% хитина;+12% chitin;+%12 kitin
+# ---------------------------------------------------------------- лагерь (M4)
+hub.title;ЛАГЕРЬ;CAMP;KAMP
+hub.chitin;хитин: {0};chitin: {0};kitin: {0}
+hub.streak;Серия входов: день {0}, +{1} хитина;Login streak: day {0}, +{1} chitin;Giriş serisi: gün {0}, +{1} kitin
+hub.upgrade_hint;Улучшения — у тебя {0} хитина;Upgrades — you have {0} chitin;Geliştirmeler — {0} kitinin var
+hub.tab.play;В бой;Fight;Savaş
+hub.tab.arsenal;Арсенал;Arsenal;Cephanelik
+hub.tab.upgrades;Улучшения;Upgrades;Geliştirmeler
+hub.tab.classes;Классы;Classes;Sınıflar
+hub.tab.quests;Задания;Quests;Görevler
+hub.tab.settings;Настройки;Settings;Ayarlar
+hub.class;Класс: {0};Class: {0};Sınıf: {0}
+hub.start_weapon;Стартовая пушка: {0};Starting gun: {0};Başlangıç silahı: {0}
+hub.depth;Глубина: {0} из {1};Depth: {0} of {1};Derinlik: {0} / {1}
+hub.recommended;Рекомендуется глубина {0};Recommended depth: {0};Önerilen derinlik: {0}
+hub.continue;Продолжить вылазку: ярус {0}, глубина {1};Continue the descent: tier {0}, depth {1};Inişe devam et: kat {0}, derinlik {1}
+hub.fight;В БОЙ;FIGHT;SAVAŞ
+hub.weapon_kills;убито: {0};kills: {0};öldürme: {0}
+hub.unlock_for;Открыть за {0};Unlock for {0};{0} ile aç
+hub.buy_for;Купить за {0};Buy for {0};{0} ile al
+hub.refund;Сбросить и вернуть хитин;Reset and refund chitin;Sıfırla ve kitini geri al
+hub.class_open;открыт;unlocked;açık
+hub.class_locked;закрыт — {0};locked — {0};kilitli — {0}
+hub.daily;Ежедневные (серия: {0});Daily (streak: {0});Günlük (seri: {0})
+hub.permanent;Задания;Quests;Görevler
+hub.quests_done;Выполнено {0} из {1};Completed {0} of {1};Tamamlanan {0} / {1}
+hub.sensitivity;Чувствительность: {0};Sensitivity: {0};Hassasiyet: {0}
+hub.volume;Громкость: {0}%;Volume: {0}%;Ses: %{0}
+hub.language;Язык: {0};Language: {0};Dil: {0}
+hub.invert;Инверсия по вертикали: {0};Invert vertical look: {0};Dikey ters çevirme: {0}
+hub.autofire;Автоогонь (касания): {0};Auto-fire (touch): {0};Otomatik ateş (dokunmatik): {0}
+hub.on;вкл;on;açık
+hub.off;выкл;off;kapalı
+# ---------------------------------------------------------------- мета-улучшения
+meta.might.name;Сила;Might;Güç
+meta.might.desc;+5% урона за уровень;+5% damage per level;Seviye başına +%5 hasar
+meta.armor.name;Броня;Armor;Zırh
+meta.armor.desc;+1 брони: каждый укус слабее;+1 armor: every bite is weaker;+1 zırh: her ısırık daha zayıf
+meta.vitality.name;Живучесть;Vitality;Dayanıklılık
+meta.vitality.desc;+10% здоровья;+10% health;+%10 can
+meta.regen.name;Регенерация;Regeneration;Yenilenme
+meta.regen.desc;+0.15 здоровья в секунду;+0.15 health per second;Saniyede +0.15 can
+meta.haste.name;Темп;Haste;Hız
+meta.haste.desc;+3% скорострельности;+3% fire rate;+%3 atış hızı
+meta.reach.name;Охват;Reach;Erişim
+meta.reach.desc;+5% площади поражения;+5% area of effect;+%5 etki alanı
+meta.agility.name;Проворство;Agility;Çeviklik
+meta.agility.desc;+4% скорости;+4% move speed;+%4 hareket hızı
+meta.magnet.name;Магнит;Magnet;Mıknatıs
+meta.magnet.desc;+20% радиуса сбора ихора;+20% ichor pickup radius;+%20 iksir toplama yarıçapı
+meta.luck.name;Удача;Luck;Şans
+meta.luck.desc;+8% шанс четвёртой карточки;+8% chance of a fourth card;Dördüncü kart için +%8 şans
+meta.greed.name;Жадность;Greed;Açgözlülük
+meta.greed.desc;+10% хитина;+10% chitin;+%10 kitin
+meta.insight.name;Чутьё;Insight;Sezgi
+meta.insight.desc;+4% опыта;+4% experience;+%4 deneyim
+meta.revival.name;Возрождение;Revival;Diriliş
+meta.revival.desc;Одно возрождение за забег;One revival per run;Koşu başına bir diriliş
+meta.rerolls.name;Перебросы;Rerolls;Yeniden çekme
+meta.rerolls.desc;+2 переброса карточек;+2 card rerolls;+2 kart yeniden çekme
+meta.skips.name;Пропуски;Skips;Atlamalar
+meta.skips.desc;+1 пропуск карточек;+1 card skip;+1 kart atlama
+meta.banishes.name;Изгнания;Banishes;Sürgünler
+meta.banishes.desc;+1 изгнание карточки;+1 card banish;+1 kart sürgünü
+meta.lamp.name;Фонарь;Headlamp;Kafa lambası
+meta.lamp.desc;+15% дальности фонаря;+15% headlamp range;+%15 lamba menzili
+meta.lairsense.name;Чутьё логова;Lair sense;Yuva sezgisi
+meta.lairsense.desc;Указатель логова с начала стадии;Lair pointer from the start of the stage;Yuva işaretçisi aşamanın başından
+# ---------------------------------------------------------------- классы
+class.ranger.name;Рейнджер;Ranger;Korucu
+class.ranger.desc;Барабан. +10% площади поражения;Drum launcher. +10% area of effect;Davul. +%10 etki alanı
+class.gunslinger.name;Стрелок;Gunslinger;Silahşor
+class.gunslinger.desc;Монета. Монеты вдвое быстрее, +10% крита;Coin revolver. Coins recharge twice as fast, +10% crit;Para. Paralar iki kat hızlı dolar, +%10 kritik
+class.stormer.name;Штурмовик;Stormer;Hücumcu
+class.stormer.desc;Ядро. +2 брони, отброс ×1.25;Core shotgun. +2 armor, knockback ×1.25;Çekirdek. +2 zırh, geri itme ×1.25
+class.miner.name;Шахтёр;Miner;Madenci
+class.miner.desc;Забой. +20% здоровья, пробой без отката раз в 30 с;Pick-hammer. +20% health, free breach every 30 s;Kazma. +%20 can, 30 sn'de bir bekleme süresiz delme
+class.firefighter.name;Огнеборец;Firebrand;Ateşkeş
+class.firefighter.desc;Напалм. Не горит, горение ×1.3;Napalm. Immune to fire, burning ×1.3;Napalm. Yanmaz, yanma ×1.3
+class.electrician.name;Электрик;Electrician;Elektrikçi
+class.electrician.desc;Дуга. +1 громоотвод;Arc. +1 lightning rod;Ark. +1 paratoner
+# ---------------------------------------------------------------- задания
+quest.killswithweapon;Убей {0} пауков: {1};Kill {0} spiders with {1};{1} ile {0} örümcek öldür
+quest.killstotal;Убей {0} пауков;Kill {0} spiders;{0} örümcek öldür
+quest.killsbyfire;Сожги {0} пауков;Burn {0} spiders;{0} örümcek yak
+quest.queenoftier;Убей Матку: {0};Kill the Queen: {0};Kraliçeyi öldür: {0}
+quest.queenoftierunder;Убей {0} быстрее {1};Kill {0} in under {1};{0} kraliçesini {1} altında öldür
+quest.queenstotal;Убей {0} Маток;Kill {0} Queens;{0} Kraliçe öldür
+quest.reachtier;Дойди до яруса {0};Reach tier {0};{0}. kata ulaş
+quest.survivefinalswarm;Продержись {0} с в финальном рое;Survive {0} s of the final swarm;Son sürüde {0} sn dayan
+quest.elitekills;Убей {0} элиты;Kill {0} elites;{0} seçkin öldür
+quest.specialkills;Убей {0} особых пауков;Kill {0} special spiders;{0} özel örümcek öldür
+quest.runs;Сыграй {0} забегов;Play {0} runs;{0} koşu oyna
+quest.reachdepth;Дойди до глубины {0};Reach depth {0};{0}. derinliğe ulaş
+quest.tierwithoutacid;Пройди {0} ярусов без урона кислотой;Clear {0} tiers without acid damage;Asit hasarı almadan {0} kat geç
+quest.tierwithweapon;Пройди ярус {0} с пушкой {1};Clear tier {0} with the {1};{1} ile {0}. katı geç
+# ---------------------------------------------------------------- привал и загрузка
+rest.title;ПРИВАЛ;REST;MOLA
+rest.body;+{0}% здоровья. Выбери одно — и вниз, на ярус {1};+{0}% health. Pick one — then down to tier {1};+%{0} can. Birini seç — sonra {1}. kata in
+rest.skip;Без карточки — вниз;No card — go down;Kartsız — aşağı
+rest.heal_ad;Полное лечение за рекламу;Full heal for an ad;Reklam izle, tam iyileş
+loading.title;Спуск…;Descending…;İniliyor…
+loading.tip0;Рывок (Shift) неуязвим — им выходят из окружения;Dash (Shift) is invulnerable — use it to break out of a surround;Atılma (Shift) hasarsızdır — kuşatmadan böyle çıkılır
+loading.tip1;Ихор ползёт к тебе сам — пятиться можно;Ichor crawls to you by itself — you can keep backing away;İksir sana kendisi sürünür — geri çekilebilirsin
+loading.tip2;Длинные галереи прощают: дальняя линия — безопасная стрельба;Long galleries are forgiving: a long line means safe shooting;Uzun galeriler affedicidir: uzun hat güvenli atış demek
+loading.tip3;Визг ловчего — сигнал к рывку;The lurker's shriek is your cue to dash;Pusucunun çığlığı atılma işaretidir
+loading.tip4;Бомбардира лучше подорвать в толпе;Pop the bomber inside the horde;Bombacıyı sürünün içinde patlat
+loading.tip5;Нить ткача рвёт любой выстрел по её линии;Any shot along the weaver's thread cuts it;Dokumacının ipini hattı boyunca her atış keser
+loading.tip6;Панцирную элиту бей сзади или оглуши молотом;Hit the armored elite from behind or stun it with the hammer;Zırhlı seçkine arkadan vur ya da çekiçle sersemlet
+loading.tip7;Под щитом Матки запусти генераторы — стой рядом;Under the Queen's shield, power the generators — stand next to them;Kraliçenin kalkanı altında jeneratörleri çalıştır — yanlarında dur
+results.chitin_total;В копилке хитина: {0};Chitin in store: {0};Depodaki kitin: {0}
+results.quest_done;Задание: {0};Quest done: {0};Görev tamam: {0}

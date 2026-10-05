@@ -64,6 +64,13 @@ namespace MineGenerator.Catacombs
 
         private CatacombTestRig _rig;
         private PlayerArsenal _arsenal;
+
+        /// <summary>
+        /// Фонарь на камере и его дальность из сцены. Мета «Фонарь» (M4) множит именно её, а не текущую:
+        /// иначе каждый пересчёт статов растил бы дальность снова.
+        /// </summary>
+        private Light _headlamp;
+        private float _headlampRange = -1f;
         private PlayerVitals _vitals;
         private PlayerMobility _mobility;
         private GameFlow _flow;
@@ -128,6 +135,26 @@ namespace MineGenerator.Catacombs
         public event Action<RunResults> Finished;
         public event Action<string> Announced;
 
+        /// <summary>
+        /// Сам ли начинать забег на свежем уровне. Лагерь (M4) строит свой маленький уровень, и забега
+        /// на нём нет; вылазку начинает <see cref="MetaGame"/>. Без меты (прогоны, старые сцены) — сам.
+        /// </summary>
+        public bool AutoStart { get; set; } = true;
+
+        /// <summary>Сводка забега для заданий и статистики (M4.6) — копится по ходу.</summary>
+        public RunSummary Summary { get; private set; } = new RunSummary();
+
+        /// <summary>Провал вниз открыт: Матка яруса убита, а ярус не последний.</summary>
+        public bool DescentOpen { get; private set; }
+
+        public Vector3 DescentPosition { get; private set; }
+
+        /// <summary>Игрок шагнул в провал (E рядом) — вылазка ведёт на следующий ярус.</summary>
+        public event Action DescentTaken;
+
+        /// <summary>Последний ярус вылазки — смерть его Матки это победа (M4.1).</summary>
+        public int FinalTier { get; set; } = SortieDifficulty.MaxTier;
+
         /// <summary>Новый забег начат (после генерации уровня).</summary>
         public event Action RunStarted;
 
@@ -153,6 +180,12 @@ namespace MineGenerator.Catacombs
                 if (_arsenal == null) _arsenal = _rig.GetComponent<PlayerArsenal>();
                 if (_vitals == null) _vitals = _rig.GetComponent<PlayerVitals>();
                 if (_mobility == null) _mobility = _rig.GetComponent<PlayerMobility>();
+
+                if (_headlamp == null)
+                {
+                    _headlamp = _rig.GetComponentInChildren<Light>();
+                    if (_headlamp != null) _headlampRange = _headlamp.range;
+                }
             }
 
             Bind();
@@ -215,7 +248,7 @@ namespace MineGenerator.Catacombs
             EnsureLinks();
 
             // Уровень мог собраться раньше, чем контроллер подписался.
-            if (world != null && world.Layout != null && !world.IsGenerating && !_runActive) StartRun();
+            if (AutoStart && world != null && world.Layout != null && !world.IsGenerating && !_runActive) StartRun();
         }
 
         // ------------------------------------------------------------------ забег
@@ -231,7 +264,7 @@ namespace MineGenerator.Catacombs
                 return;
             }
 
-            StartRun();
+            if (AutoStart) StartRun();
         }
 
         private bool _continueOnGenerate;
@@ -245,6 +278,8 @@ namespace MineGenerator.Catacombs
             EnsureLinks();
 
             Session = restore ?? new RunSession();
+            Summary = new RunSummary { Depth = Session.Depth, MaxTier = Session.Tier, StartWeapon = startWeapon };
+            ResetTierTracking();
             _random = new System.Random(world != null ? world.CurrentSeed ^ 0x51C0 : Environment.TickCount);
 
             _offering = false;
@@ -293,6 +328,9 @@ namespace MineGenerator.Catacombs
         {
             EnsureLinks();
 
+            Summary.MaxTier = Mathf.Max(Summary.MaxTier, Session.Tier);
+            ResetTierTracking();
+
             if (ichor != null) ichor.Clear();
             if (_rig != null) _rig.SetDeathPose(0f);
 
@@ -325,6 +363,7 @@ namespace MineGenerator.Catacombs
             if (_mobility != null) _mobility.ApplyStats(_stats);
             if (_arsenal != null) _arsenal.SetStats(_stats);
             if (ichor != null) ichor.MagnetRadius = _stats.MagnetRadius;
+            if (_headlamp != null && _headlampRange > 0f) _headlamp.range = _headlampRange * _stats.LampScale;
 
             if (Session.Rerolls == 0 && Session.Skips == 0 && Session.Banishes == 0 && Session.Level == 1)
             {
@@ -353,6 +392,7 @@ namespace MineGenerator.Catacombs
             {
                 Session.Seconds += deltaTime;
                 UpdateMercy(deltaTime);
+                TickSortie(deltaTime);
             }
 
             // Уровни, набранные под стоп-кадром или в смерти, ждут игры.
@@ -395,8 +435,17 @@ namespace MineGenerator.Catacombs
                 if (kill.Elite) Session.EliteKills++;
                 if (kill.Special) Session.SpecialKills++;
 
+                Summary.Kills++;
+                if (kill.Elite) Summary.EliteKills++;
+                if (kill.Special) Summary.SpecialKills++;
+                if (kill.Source == DamageSource.Flamer) Summary.KillsByFire++;
+
                 var weapon = WeaponIds.FromSource(kill.Source);
-                if (weapon != WeaponId.Count) Session.KillsByWeapon[(int)weapon]++;
+                if (weapon != WeaponId.Count)
+                {
+                    Session.KillsByWeapon[(int)weapon]++;
+                    Summary.KillsByWeapon[(int)weapon]++;
+                }
             }
         }
 
@@ -409,7 +458,19 @@ namespace MineGenerator.Catacombs
             var tier = Mathf.Clamp(Session.Tier - 1, 0, queenChitin.Length - 1);
             if (ichor != null) ichor.Drop(position + Vector3.up, DropKind.Chitin, queenChitin[tier] * Difficulty.Chitin);
 
+            Summary.QueensByTier[tier]++;
+
+            var fight = _queenWokeAt >= 0f ? Session.Seconds - _queenWokeAt : 0f;
+            if (fight > 0f && (Summary.QueenSeconds[tier] <= 0f || fight < Summary.QueenSeconds[tier])) Summary.QueenSeconds[tier] = fight;
+
+            Summary.TiersCleared++;
+            if (!_acidThisTier) Summary.TiersWithoutAcid++;
+
             Platform.Current.Happytime();
+
+            // Последний ярус — победа вылазки; иначе в зале логова открывается провал вниз.
+            if (Session.Tier >= FinalTier) _victoryIn = VictoryDelay;
+            else OpenDescent();
         }
 
         // ------------------------------------------------------------------ карточки
@@ -469,7 +530,11 @@ namespace MineGenerator.Catacombs
             var tier = Mathf.Clamp(Session.Tier, 1, 3);
 
             if (queen != null) queen.SetTier(tier);
-            if (director != null) director.Tier = tier;
+            if (director != null)
+            {
+                director.Tier = tier;
+                director.TwoAffixes = SortieDifficulty.Rules(Session.Depth, 0).TwoAffixes;
+            }
 
             var specials = FindAnyObjectByType<CaveSpecials>();
             if (specials != null) specials.Tier = tier;
@@ -585,6 +650,106 @@ namespace MineGenerator.Catacombs
         {
             _lastHitKind = hit.Kind;
             _lastHitSpider = hit.SpiderKind;
+
+            if (hit.Kind == DamageKind.Acid && result.Dealt > 0f) _acidThisTier = true;
+        }
+
+        // ------------------------------------------------------------------ вылазка (M4)
+
+        /// <summary>Победа — через несколько секунд после смерти Праматери: катакомбы озаряются, это видно.</summary>
+        private const float VictoryDelay = 4f;
+
+        private float _queenWokeAt = -1f;
+        private bool _acidThisTier;
+        private float _victoryIn = -1f;
+        private GameObject _descentView;
+
+        private void ResetTierTracking()
+        {
+            _queenWokeAt = -1f;
+            _acidThisTier = false;
+            _victoryIn = -1f;
+            CloseDescent();
+        }
+
+        /// <summary>Ход вылазки: пробуждение Матки, финальный рой, провал, победа.</summary>
+        private void TickSortie(float deltaTime)
+        {
+            if (queen != null && _queenWokeAt < 0f && queen.State != CaveQueen.QueenState.Dormant &&
+                queen.State != CaveQueen.QueenState.Dead)
+            {
+                _queenWokeAt = Session.Seconds;
+            }
+
+            if (director != null && director.Phase == CaveRunDirector.RunPhase.FinalSwarm)
+            {
+                Summary.FinalSwarmSeconds = Mathf.Max(Summary.FinalSwarmSeconds, director.Elapsed - director.StageSeconds);
+            }
+
+            if (_victoryIn >= 0f)
+            {
+                _victoryIn -= deltaTime;
+                if (_victoryIn < 0f) Finish(true);
+                return;
+            }
+
+            if (!DescentOpen || _rig == null) return;
+
+            if (_descentView != null)
+            {
+                var pulse = 1f + 0.12f * Mathf.Sin(Session.Seconds * 3f);
+                _descentView.transform.localScale = Vector3.one * pulse;
+            }
+
+            if (_rig.Commands.Interact && (_rig.BodyCentre - DescentPosition).magnitude < 3.5f) TakeDescent();
+        }
+
+        /// <summary>Шагнуть в провал — прогоны зовут напрямую.</summary>
+        public void TakeDescent()
+        {
+            if (!DescentOpen) return;
+
+            CloseDescent();
+            DescentTaken?.Invoke();
+        }
+
+        private void OpenDescent()
+        {
+            DescentOpen = true;
+
+            // В зале логова; нет зала — у логова.
+            DescentPosition = world != null && world.TryGetLairHall(out var hall, out _)
+                ? hall
+                : queen != null ? queen.LairPosition : transform.position;
+
+            if (Application.isPlaying)
+            {
+                _descentView = new GameObject("Descent");
+                _descentView.transform.SetParent(transform, false);
+                _descentView.transform.position = DescentPosition + Vector3.up * 0.2f;
+
+                CaveGlowBillboard.Attach(_descentView.transform, 3.2f, new Color(0.45f, 0.8f, 1f), false);
+
+                var light = _descentView.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = new Color(0.5f, 0.8f, 1f);
+                light.intensity = 6f;
+                light.range = 10f;
+            }
+
+            if (director != null) director.Announce("banner.descent");
+        }
+
+        private void CloseDescent()
+        {
+            DescentOpen = false;
+
+            if (_descentView == null) return;
+
+            if (Application.isPlaying) Destroy(_descentView);
+            else DestroyImmediate(_descentView);
+
+            _descentView = null;
         }
 
         private void OnDied()
@@ -717,7 +882,7 @@ namespace MineGenerator.Catacombs
             }
 
             if (_vitals == null || director == null || _mercyCooldownLeft > 0f) return;
-            if (director.Phase != CaveRunDirector.RunPhase.Stage || Session.Depth >= 3) return;
+            if (director.Phase != CaveRunDirector.RunPhase.Stage || SortieDifficulty.Rules(Session.Depth, 0).MercyOff) return;
 
             if (_vitals.Fraction < mercyHealth && _vitals.LowHealthSeconds >= mercyAfter)
             {

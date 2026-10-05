@@ -275,12 +275,14 @@ namespace MineGenerator.Catacombs.EditorTools
                 CheckScene.Expect(lost[0] > lost[1] && lost[1] > lost[2], "каждый следующий слабее", text, ref failed);
             }
 
-            // 3. Дробовик: двое на оси, один в стороне на 45° — его конус не задевает.
+            // 3. Дробовик: двое на оси бьются, третий — нет, когда ствол отвёрнут от него на 45°.
+            // Поворачивается прицел, а не паук: точка «3 вперёд, 3 вбок» в ходе шириной 3.5 лежит
+            // в стене, и паук садился в ближайшую проходимую клетку — после правки разметки сетки
+            // (M4) это клетка в углу пола и стены, в 26° от оси, внутри конуса.
             {
                 Equip(WeaponId.Shotgun);
                 var near = Put(Ahead(3f));
                 var far = Put(Ahead(8f));
-                var side = Put(Ahead(3f, 3f));
 
                 AimForward();
                 Tap();
@@ -288,6 +290,17 @@ namespace MineGenerator.Catacombs.EditorTools
 
                 var ln = Lost(near, full);
                 var lf = Lost(far, full);
+
+                _crowd.ClearAll();
+                var side = Put(Ahead(3f));
+                var eye = _floor + Vector3.up * EyeHeight;
+                Aim(eye + Quaternion.Euler(0f, 45f, 0f) * _forward * 10f);
+
+                // Выстрел дробовика — не чаще 1.9 в секунду: ждать, пока он снова готов.
+                Wait(0.6f);
+                Tap();
+                Wait(0.2f);
+
                 var ls = Lost(side, full);
 
                 text.AppendLine($"  дробовик: в 3 юнитах −{ln:0}, в 8 −{lf:0}, сбоку на 45° −{ls:0}");
@@ -406,12 +419,27 @@ namespace MineGenerator.Catacombs.EditorTools
                 // сторону тонкой стенки — тогда это не проверка стенки, а промах раскладки.
                 if (slot < 0 || !Blocked(origin, _crowd.PositionAt(slot))) continue;
 
-                tested++;
+                // И сел не за углом: паук садится в ближайшую проходимую клетку, а не в точку,
+                // и та бывает в нескольких шагах обхода от стены. Тогда взрыв достаёт его ходами
+                // честно. Отсев — своей заливкой по сетке (`Field.Reach`), не той, что режет взрыв:
+                // иначе проверка доказывала бы сама себя.
+                if (NearByCorridor(origin, _crowd.PositionAt(slot), 7)) continue;
 
                 var distance = (_crowd.PositionAt(slot) - origin).magnitude;
                 _arsenal.Detonate(origin, -direction);
 
                 var lost = Lost(slot, full);
+
+                // Воронка копается ДО удара (куски ложатся на дно ямы), и яма у тонкого места
+                // открывает короткий ход за перегородку — по пустоте, а не сквозь камень. Взрыв тогда
+                // достаёт паука честно, и это уже не проверка стенки.
+                if (NearByCorridor(origin, _crowd.PositionAt(slot), 7))
+                {
+                    text.AppendLine($"  перегородка {thickness:0.0} юнита: воронка открыла ход за неё (паук потерял {lost:0} HP) — не в счёт");
+                    continue;
+                }
+
+                tested++;
 
                 text.AppendLine($"  перегородка {thickness:0.0} юнита: взрыв у стенки, паук за ней в {distance:0.0} юнита " +
                                 $"потерял {lost:0} HP");
@@ -452,9 +480,37 @@ namespace MineGenerator.Catacombs.EditorTools
                 if (tested >= 4) break;
             }
 
-            if (tested == 0) text.AppendLine("  перегородки тоньше полутора юнитов с ходом за ней рядом со входом не нашлось — пропуск");
+            // Пустая проверка не доказывает ничего: перегородка у входа на сиде сцены есть всегда.
+            if (tested == 0) text.AppendLine("  перегородки тоньше двух с половиной юнитов с ходом за ней рядом со входом не нашлось");
+            CheckScene.Expect(tested > 0, "нашлась хотя бы одна перегородка для проверки", text, ref failed);
 
             return failed;
+        }
+
+        private static readonly Dictionary<int, int> CorridorSteps = new Dictionary<int, int>();
+
+        /// <summary>Есть ли по сетке путь от точки до клеток вокруг паука не длиннее steps шагов.</summary>
+        private static bool NearByCorridor(Vector3 from, Vector3 spider, int steps)
+        {
+            var world = _scene.World.transform;
+            var field = _crowd.Field;
+
+            field.Reach((float3)world.InverseTransformPoint(from), steps, CorridorSteps);
+
+            var local = (float3)world.InverseTransformPoint(spider);
+            var cell = (int3)math.floor(local / field.CellSize);
+
+            for (var dz = -1; dz <= 1; dz++)
+            for (var dy = -1; dy <= 1; dy++)
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                var c = cell + new int3(dx, dy, dz);
+                if (math.any(c < 0) || math.any(c >= field.Dim)) continue;
+
+                if (CorridorSteps.ContainsKey((c.z * field.Dim.y + c.y) * field.Dim.x + c.x)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>Есть ли камень между точками — по полю плотности (грабли №1).</summary>
@@ -508,8 +564,11 @@ namespace MineGenerator.Catacombs.EditorTools
                     var far = inside + dir * (t + 0.6f);
                     if (world.IsSolid(far)) continue;
 
-                    // Ходами — далеко: иначе это не перегородка, а угол того же хода.
-                    _crowd.Field.Reach((float3)world.transform.InverseTransformPoint(eye), 8, steps);
+                    // Ходами — далеко ОТ ТОЧКИ ВЗРЫВА: иначе это не перегородка, а угол того же хода.
+                    // Мерить от глаз нельзя: взрыв режется заливкой от стены, а не от глаз, и паук
+                    // за углом мог быть дальше восьми шагов от глаз, но в шести от стены. Предел взрыва
+                    // гранатомёта — радиус 5 в клетках плюс одна (MarkReach), здесь ещё одна про запас.
+                    _crowd.Field.Reach((float3)world.transform.InverseTransformPoint(hit.point - dir * 0.3f), 7, steps);
 
                     var farCell = _crowd.Field.FindNearestWalkable((float3)world.transform.InverseTransformPoint(far), 2);
                     if (farCell < 0 || steps.ContainsKey(farCell)) continue;

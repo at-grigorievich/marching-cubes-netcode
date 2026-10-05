@@ -741,15 +741,39 @@ namespace MineGenerator.Catacombs.EditorTools
             var medium = runs[0];
             var secondPeak = director.Curve.secondPeak * director.StageSeconds;
 
-            Expect(medium.DiedAt < 0f || medium.DiedAt >= secondPeak, "средний бот доживает до второго гребня", text, ref failed);
+            // Исход одного прогона — монетка: директор тянет рои и элиту своим генератором, и на
+            // неизменном коде средний то доживал до конца с 13-м уровнем, то гиб на 2:20. Серии
+            // по шесть (M4): 4 из 6 и 5 из 6 до второго гребня — около трёх из четырёх. Утверждение
+            // поэтому про долю: хотя бы в половине прогонов, до шести, с остановкой, как только
+            // ответ ясен (грабли №24: метрику хаотичной системы одним замером не снимают).
+            bool Lives(BotRun r) => r.DiedAt < 0f || r.DiedAt >= secondPeak;
+
+            var lived = Lives(medium) ? 1 : 0;
+            var tries = 1;
+            var fates = new List<string> { medium.DiedAt >= 0f ? Clock(medium.DiedAt) : "дожил" };
+            var mediums = new List<BotRun> { medium };
+
+            while (tries < 6 && lived < 3 && tries - lived < 4)
+            {
+                var again = RunBot(profiles[0], director, crowd, controller, ichor, vitals, player, entry);
+                tries++;
+                if (Lives(again)) lived++;
+                fates.Add(again.DiedAt >= 0f ? Clock(again.DiedAt) : "дожил");
+                mediums.Add(again);
+            }
+
+            text.AppendLine($"  средний до второго гребня ({Clock(secondPeak)}): {lived} из {tries} — {string.Join(", ", fates)}");
+            Expect(lived >= 3, "средний бот доживает до второго гребня хотя бы в половине прогонов", text, ref failed);
             Expect(runs.All(r => r.PeakDrops <= IchorField.Capacity), "капель живых не больше потолка", text, ref failed);
             Expect(runs[1].Mercy >= 1 && runs[1].Mercy <= 4, "у слабого милосердие срабатывает 1–4 раза", text, ref failed);
             Expect(runs[2].Mercy == 0, "у сильного милосердия нет", text, ref failed);
 
-            // Уровни: к концу пятой минуты (длина яруса 1 в M4) — 9–12 у среднего.
-            var atFive = medium.LevelAtMinute[4];
-            text.AppendLine($"  средний к 5:00 — уровень {atFive} (цель яруса 1: 9–12)");
-            Expect(atFive >= 8 && atFive <= 14, "уровень к 5:00 около цели яруса 1", text, ref failed);
+            // Уровни: к концу пятой минуты (длина яруса 1 в M4) — 9–12 у среднего. Мерить по тем,
+            // кто до 5:00 дожил: у погибшего на 2:38 «уровень к 5:00» — уровень в момент смерти.
+            var atFive = mediums.Where(r => r.DiedAt < 0f || r.DiedAt >= 300f).Select(r => r.LevelAtMinute[4]).OrderBy(l => l).ToList();
+            var median = atFive.Count > 0 ? atFive[atFive.Count / 2] : 0;
+            text.AppendLine($"  средний к 5:00 — уровень {median} (медиана по дожившим: {string.Join(", ", atFive)}; цель яруса 1: 9–12)");
+            Expect(median >= 8 && median <= 14, "уровень к 5:00 около цели яруса 1", text, ref failed);
 
             return failed;
         }
