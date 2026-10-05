@@ -79,8 +79,16 @@ namespace MineGenerator.Catacombs
         public bool IsInvulnerable => _model.Invulnerable;
         public int Revives => _model.Revives;
 
-        /// <summary>Сколько секунд подряд здоровье ниже четверти — для передышки из милосердия.</summary>
+        /// <summary>
+        /// Накопленное время «при смерти» — для передышки из милосердия. Растёт, пока здоровье
+        /// ниже <see cref="DistressShare"/>, и тает вдвое медленнее, когда выше: под потолком урона
+        /// здоровье с четверти до нуля уходит за секунду с небольшим, и условие «столько-то секунд
+        /// ПОДРЯД» не выполнялось ни разу. Копится серия близких смертей, а не одна.
+        /// </summary>
         public float LowHealthSeconds { get; private set; }
+
+        public const float DistressShare = 0.4f;
+        private const float DistressDecay = 0.5f;
 
         /// <summary>Удар прошёл: что пришло и что сделало.</summary>
         public event Action<DamageHit, DamageResult> Damaged;
@@ -185,7 +193,9 @@ namespace MineGenerator.Catacombs
             Bind();
             _model.Tick(deltaTime);
 
-            LowHealthSeconds = !_model.Dead && _model.Fraction < 0.25f ? LowHealthSeconds + deltaTime : 0f;
+            if (_model.Dead) LowHealthSeconds = 0f;
+            else if (_model.Fraction < DistressShare) LowHealthSeconds += deltaTime;
+            else LowHealthSeconds = Math.Max(0f, LowHealthSeconds - deltaTime * DistressDecay);
         }
 
         public DamageResult TakeDamage(in DamageHit hit)

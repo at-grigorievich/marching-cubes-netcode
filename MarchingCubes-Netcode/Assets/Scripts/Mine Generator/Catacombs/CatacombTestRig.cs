@@ -182,6 +182,30 @@ namespace MineGenerator.Catacombs
 
         public bool IsLunging => _lungeLeft > 0f;
 
+        private float _deathPose;
+        private Vector3 _deathFrom;
+
+        /// <summary>
+        /// Камера оседает при смерти: 0 — стоит, 1 — лежит (на 0.9 ниже, с креном). Возврат в 0 —
+        /// туда, откуда оседала: возрождённый встаёт на том же месте.
+        /// </summary>
+        public void SetDeathPose(float pose)
+        {
+            pose = Mathf.Clamp01(pose);
+
+            if (pose > 0f && _deathPose <= 0f) _deathFrom = transform.position;
+            if (pose <= 0f && _deathPose > 0f) transform.position = _deathFrom;
+
+            _deathPose = pose;
+
+            if (pose > 0f)
+            {
+                var k = Mathf.SmoothStep(0f, 1f, pose);
+                transform.position = _deathFrom + Vector3.down * (0.9f * k);
+                transform.rotation = Quaternion.Euler(_pitch + 25f * k, _yaw, 28f * k);
+            }
+        }
+
         private void Awake()
         {
             EnsureRefs();
@@ -402,6 +426,8 @@ namespace MineGenerator.Catacombs
             var shakePitch = (Mathf.PerlinNoise(t, 0.3f) - 0.5f) * 2f * amplitude;
             var shakeYaw = (Mathf.PerlinNoise(0.7f, t) - 0.5f) * 2f * amplitude;
             var shakeRoll = (Mathf.PerlinNoise(t, t * 0.5f) - 0.5f) * amplitude;
+
+            if (_deathPose > 0f) return;
 
             if (!_looking && _kick < 0.01f && amplitude < 0.01f) return;
 

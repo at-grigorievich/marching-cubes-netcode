@@ -794,6 +794,26 @@ namespace MineGenerator.Catacombs.EditorTools
             director.EnsureLinks();
             director.Restart();
 
+            // Ихор и контроллер забега — тем же путём: пересоздать с умолчаниями из кода.
+            Recreate<IchorField>(world.gameObject);
+            var ichor = world.GetComponent<IchorField>();
+            var ichorObject = new SerializedObject(ichor);
+            ichorObject.FindProperty("shader").objectReferenceValue = Shader.Find("Mine Generator/Cave Ichor");
+            ichorObject.FindProperty("world").objectReferenceValue = world;
+            ichorObject.FindProperty("crowd").objectReferenceValue = crowd;
+            ichorObject.ApplyModifiedPropertiesWithoutUndo();
+            ichor.EnsureLinks();
+
+            Recreate<CaveRunController>(world.gameObject);
+            var run = world.GetComponent<CaveRunController>();
+            var runObject = new SerializedObject(run);
+            runObject.FindProperty("world").objectReferenceValue = world;
+            runObject.FindProperty("crowd").objectReferenceValue = crowd;
+            runObject.FindProperty("director").objectReferenceValue = director;
+            runObject.FindProperty("queen").objectReferenceValue = queen;
+            runObject.FindProperty("ichor").objectReferenceValue = ichor;
+            runObject.ApplyModifiedPropertiesWithoutUndo();
+
             var what = rebuilt ? "пересозданы" : "добавлены";
             var lair = queen.HasLair
                 ? $"логово в ({queen.LairPosition.x:0}, {queen.LairPosition.y:0}, {queen.LairPosition.z:0})"

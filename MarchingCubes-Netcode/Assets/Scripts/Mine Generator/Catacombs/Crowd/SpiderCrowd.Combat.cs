@@ -737,6 +737,16 @@ namespace MineGenerator.Catacombs
             }
         }
 
+        /// <summary>
+        /// Сколько шагов по ходам от игрока до точки — указатель логова (M1.9): «~80 м» по пути,
+        /// а не по прямой (грабли №42). За пределом заливки — <see cref="SpiderFlowField.Unreachable"/>,
+        /// без проходимой клетки рядом — −1.
+        /// </summary>
+        public int PathStepsTo(Vector3 worldPoint) => _flow.IsCreated ? StepsFromTarget(LocalOf(worldPoint)) : -1;
+
+        /// <summary>Размер клетки сетки в мире — шаг в юнитах для указателя.</summary>
+        public float StepLength => _flow.IsCreated ? _flow.CellSize * math.max(1e-4f, world.transform.lossyScale.x) : 1f;
+
         // ------------------------------------------------------------------ прогоны
 
         /// <summary>

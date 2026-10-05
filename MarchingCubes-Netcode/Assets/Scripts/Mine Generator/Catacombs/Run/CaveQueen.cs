@@ -245,6 +245,26 @@ namespace MineGenerator.Catacombs
         }
 
         /// <summary>Позиции генераторов текущей фазы щита.</summary>
+        /// <summary>Ближайший незапущенный генератор — для указателя интерфейса.</summary>
+        public bool TryGetNearestDarkPylon(Vector3 from, out Vector3 position)
+        {
+            position = default;
+            var best = float.MaxValue;
+
+            foreach (var pylon in _pylons)
+            {
+                if (pylon.Lit) continue;
+
+                var distance = (pylon.Position - from).sqrMagnitude;
+                if (distance >= best) continue;
+
+                best = distance;
+                position = pylon.Position;
+            }
+
+            return best < float.MaxValue;
+        }
+
         public IEnumerable<Vector3> PylonPositions
         {
             get
@@ -533,7 +553,7 @@ namespace MineGenerator.Catacombs
 
             if (target != null) _lastTargetPosition = Body.BodyCentre;
 
-            Announce($"МАТКА ПРОБУДИЛАСЬ — {MaxHealth:0} HP");
+            Announce("banner.queen_awake");
             return true;
         }
 
@@ -886,7 +906,7 @@ namespace MineGenerator.Catacombs
             _shockTimer = math.min(_shockTimer, 1.5f);
             _broodTimer = math.min(_broodTimer, 1f);
 
-            Announce($"ЩИТ: Матка лечится — запустите генераторы (0/{_pylons.Count})");
+            Announce("banner.shield");
         }
 
         private void UpdatePylons(float deltaTime)
@@ -923,7 +943,7 @@ namespace MineGenerator.Catacombs
                 IgnitePylon(pylon);
                 lit++;
 
-                Announce($"Генератор запущен ({lit}/{_pylons.Count})");
+                Announce($"banner.pylon: {lit}/{_pylons.Count}");
             }
 
             if (lit < _pylons.Count) return;
@@ -937,7 +957,7 @@ namespace MineGenerator.Catacombs
             _shockTimer = math.max(_shockTimer, 3f);
             _spitTimer = math.max(_spitTimer, 3f);
 
-            Announce("ЩИТ СПАЛ — бейте Матку");
+            Announce("banner.shield_down");
         }
 
         /// <summary>

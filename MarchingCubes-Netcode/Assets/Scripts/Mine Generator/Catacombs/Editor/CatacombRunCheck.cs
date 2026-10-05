@@ -138,6 +138,7 @@ namespace MineGenerator.Catacombs.EditorTools
             failed += CheckCurve(director, text);
             failed += CheckStage(director, crowd, player, entry, text);
             failed += CheckQueen(world, director, queen, crowd, fixtures, player, entry, text);
+            failed += CheckGrowth(world, director, queen, crowd, player, entry, text);
 
             text.AppendLine();
             text.AppendLine($"прогон занял {clock.Elapsed.TotalSeconds:0.0} с");
@@ -662,6 +663,268 @@ namespace MineGenerator.Catacombs.EditorTools
             Expect(intruders == 0, "в свете генераторов пополнение не заводится", text, ref failed);
 
             return failed;
+        }
+
+        // ------------------------------------------------------------------ бот с ростом (M1)
+
+        /// <summary>Сила бота: урон взрыва и пауза между выстрелами.</summary>
+        private struct BotProfile
+        {
+            public string Name;
+            public float DamageScale;
+            public float Interval;
+        }
+
+        private sealed class BotRun
+        {
+            public float DiedAt = -1f;
+            public int Level;
+            public int[] LevelAtMinute = new int[9];
+            public int Mercy;
+            public int PeakDrops;
+            public double IchorMs;
+            public int Kills;
+            public float Chitin;
+            public int Cards;
+        }
+
+        /// <summary>
+        /// Бот с ростом: стоит на точке входа, бьёт взрывом по ближайшему (урон ограничен, как у
+        /// гранатомёта — грабли №45), подбирает ихор, который ползёт к нему сам, выбирает карточки,
+        /// и его кусают. Мерится: доживает ли до второго гребня, уровни по минутам, капель
+        /// не больше потолка, милосердие — исключение у слабого и ноль у сильного.
+        /// </summary>
+        private static int CheckGrowth(CatacombWorld world, CaveRunDirector director, CaveQueen queen, SpiderCrowd crowd,
+            CatacombTestRig player, Vector3 entry, StringBuilder text)
+        {
+            var failed = 0;
+
+            text.AppendLine();
+            text.AppendLine("=== Бот с ростом: стреляет, подбирает ихор, выбирает карточки, его кусают ===");
+
+            var controller = UnityEngine.Object.FindAnyObjectByType<CaveRunController>();
+            var ichor = UnityEngine.Object.FindAnyObjectByType<IchorField>();
+            var vitals = player.GetComponent<PlayerVitals>();
+
+            if (controller == null || ichor == null || vitals == null)
+            {
+                text.AppendLine("  ПЛОХО: нет контроллера забега, ихора или здоровья — «Починить свет» их не создал");
+                return 1;
+            }
+
+            controller.EnsureLinks();
+            ichor.EnsureLinks();
+            vitals.Bind();
+
+            var profiles = new[]
+            {
+                new BotProfile { Name = "средний", DamageScale = 1f, Interval = KillEvery },
+                new BotProfile { Name = "слабый", DamageScale = 0.5f, Interval = 1.3f },
+                new BotProfile { Name = "сильный", DamageScale = 2.5f, Interval = 0.45f }
+            };
+
+            var runs = new BotRun[profiles.Length];
+
+            for (var p = 0; p < profiles.Length; p++)
+            {
+                runs[p] = RunBot(profiles[p], director, crowd, controller, ichor, vitals, player, entry);
+
+                var r = runs[p];
+                var levels = string.Join(" ", r.LevelAtMinute.Take(8).Select((l, m) => (m + 1) + ":" + l));
+                var fate = r.DiedAt >= 0f ? "погиб на " + Clock(r.DiedAt) : "дожил до конца стадии";
+
+                text.AppendLine($"  {profiles[p].Name,-8} {fate}, уровень {r.Level}, по минутам [{levels}], " +
+                                $"карточек {r.Cards}, убито {r.Kills}, хитина {r.Chitin:0}, капель живых до {r.PeakDrops}, " +
+                                $"милосердие {r.Mercy} раз, шаг ихора до {r.IchorMs:0.00} мс");
+            }
+
+            var medium = runs[0];
+            var secondPeak = director.Curve.secondPeak * director.StageSeconds;
+
+            Expect(medium.DiedAt < 0f || medium.DiedAt >= secondPeak, "средний бот доживает до второго гребня", text, ref failed);
+            Expect(runs.All(r => r.PeakDrops <= IchorField.Capacity), "капель живых не больше потолка", text, ref failed);
+            Expect(runs[1].Mercy >= 1 && runs[1].Mercy <= 4, "у слабого милосердие срабатывает 1–4 раза", text, ref failed);
+            Expect(runs[2].Mercy == 0, "у сильного милосердия нет", text, ref failed);
+
+            // Уровни: к концу пятой минуты (длина яруса 1 в M4) — 9–12 у среднего.
+            var atFive = medium.LevelAtMinute[4];
+            text.AppendLine($"  средний к 5:00 — уровень {atFive} (цель яруса 1: 9–12)");
+            Expect(atFive >= 8 && atFive <= 14, "уровень к 5:00 около цели яруса 1", text, ref failed);
+
+            return failed;
+        }
+
+        private static BotRun RunBot(BotProfile profile, CaveRunDirector director, SpiderCrowd crowd,
+            CaveRunController controller, IchorField ichor, PlayerVitals vitals, CatacombTestRig player, Vector3 entry)
+        {
+            var run = new BotRun();
+
+            PlaceBody(player, entry);
+
+            director.Restart();
+            crowd.Rebuild();
+            controller.StartRun();
+            ichor.Clear();
+            vitals.ResetForRun();
+            controller.RecomposeStats();
+
+            var aim = new List<Vector3>();
+            var killTimer = 0f;
+            var minute = 0;
+            var stage = director.StageSeconds;
+            var killsBefore = crowd.KillsBy(DamageSource.GrenadeLauncher);
+
+            var feet = entry;
+            var goal = entry;
+            var moveTimer = 0f;
+            var mobility = player.GetComponent<PlayerMobility>();
+            var dash = mobility != null ? mobility.Dash : null;
+            var points = new List<Vector3>();
+
+            for (var time = 0f; time < stage + 30f; time += Step)
+            {
+                // Отход по коридору: раз в полсекунды — к самой пустой точке пола рядом, шагом
+                // ходьбы; окружили — рывком подальше. Стоящая на месте турель гибнет до первого
+                // гребня при любом уроне: так в эту игру не играют.
+                moveTimer -= Step;
+
+                if (moveTimer <= 0f)
+                {
+                    moveTimer = 0.5f;
+
+                    var crowded = crowd.CountNear(feet + Vector3.up, 3.5f);
+                    var dashNow = dash != null && crowded >= 6 && dash.TryStart();
+
+                    if (dashNow) vitals.HoldInvulnerable(InvulnReason.Dash, dash.Duration + dash.Grace);
+
+                    goal = Emptiest(crowd, feet, dashNow ? 4 : 1, dashNow ? 7 : 3, points, goal);
+                    if (dashNow) feet = goal;
+                }
+
+                if (dash != null) dash.Step(Step);
+
+                var speed = 6f * controller.Stats.MoveScale;
+                feet = Vector3.MoveTowards(feet, goal, speed * Step);
+
+                PlaceBody(player, feet);
+
+                director.Tick(Step);
+                crowd.Simulate(Step);
+                crowd.FlushKills();
+                ichor.Tick(Step);
+                vitals.Tick(Step);
+                player.TickStatus(Step);
+                controller.Tick(Step, Step);
+
+                run.IchorMs = Math.Max(run.IchorMs, ichor.LastStepMs);
+
+                // Карточка — сразу: эволюция, уровень пушки, тома урона и выживания, остальное.
+                if (controller.Offering)
+                {
+                    controller.Choose(PickCard(controller.Cards));
+                    run.Cards++;
+                }
+
+                if (vitals.IsDead)
+                {
+                    run.DiedAt = director.Elapsed;
+                    break;
+                }
+
+                killTimer += Step;
+
+                if (killTimer >= profile.Interval)
+                {
+                    killTimer = 0f;
+
+                    var stats = controller.Stats;
+                    var radius = KillRadius * stats.AreaScale;
+                    var damage = CombatUnits.Hits(3f) * profile.DamageScale * stats.DamageScale;
+
+                    if (TryNearest(crowd, player.BodyCentre, KillReach, aim, out var target))
+                    {
+                        crowd.DamageSphere(target, radius, damage, DamageSource.GrenadeLauncher);
+                    }
+                }
+
+                while (minute < run.LevelAtMinute.Length && director.Elapsed >= (minute + 1) * 60f)
+                {
+                    run.LevelAtMinute[minute] = controller.Session.Level;
+                    minute++;
+                }
+            }
+
+            for (; minute < run.LevelAtMinute.Length; minute++) run.LevelAtMinute[minute] = controller.Session.Level;
+
+            run.Level = controller.Session.Level;
+            run.Mercy = controller.MercyTriggers;
+            run.PeakDrops = ichor.PeakLive;
+            run.Kills = crowd.KillsBy(DamageSource.GrenadeLauncher) - killsBefore;
+            run.Chitin = controller.Session.Chitin;
+
+            return run;
+        }
+
+        /// <summary>Точка пола в нескольких шагах по ходам, где меньше всего пауков рядом.</summary>
+        private static Vector3 Emptiest(SpiderCrowd crowd, Vector3 from, int minSteps, int maxSteps, List<Vector3> points,
+            Vector3 fallback)
+        {
+            crowd.PickFloorPoints(from + Vector3.up, 10, minSteps, maxSteps, null, points);
+
+            var best = fallback;
+            var bestCount = int.MaxValue;
+
+            foreach (var point in points)
+            {
+                var count = crowd.CountNear(point + Vector3.up, 5f);
+                if (count >= bestCount) continue;
+
+                best = point;
+                bestCount = count;
+            }
+
+            return best;
+        }
+
+        private static int PickCard(IReadOnlyList<Card> cards)
+        {
+            var best = 0;
+            var bestScore = int.MinValue;
+
+            for (var i = 0; i < cards.Count; i++)
+            {
+                var score = CardScore(cards[i]);
+                if (score <= bestScore) continue;
+
+                best = i;
+                bestScore = score;
+            }
+
+            return best;
+        }
+
+        private static int CardScore(Card card)
+        {
+            switch (card.Type)
+            {
+                case CardType.Evolution:
+                    return 100;
+
+                case CardType.WeaponLevel:
+                    return card.Weapon == WeaponId.Launcher ? 80 : 20;
+
+                case CardType.NewTome:
+                case CardType.TomeLevel:
+                    if (card.Tome == TomeId.Might || card.Tome == TomeId.Reach) return 70;
+                    if (card.Tome == TomeId.Vitality || card.Tome == TomeId.Carapace || card.Tome == TomeId.Regeneration) return 60;
+                    return 40;
+
+                case CardType.Heal:
+                    return 30;
+
+                default:
+                    return 10;
+            }
         }
 
         // ------------------------------------------------------------------ помощники

@@ -134,6 +134,9 @@ GameObject:
   - component: {fileID: 85844949}
   - component: {fileID: 85844948}
   - component: {fileID: 85844947}
+  - component: {fileID: 85844957}
+  - component: {fileID: 85844956}
+  - component: {fileID: 85844955}
   - component: {fileID: 85844954}
   m_Layer: 0
   m_Name: Test Player
@@ -215,9 +218,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CatacombTestRig
   world: {fileID: 711213587}
-  crowd: {fileID: 1680631865}
-  director: {fileID: 711213594}
-  queen: {fileID: 711213592}
+  crowd: {fileID: 0}
+  director: {fileID: 0}
+  queen: {fileID: 0}
   mode: 1
   flySpeed: 18
   walkSpeed: 6
@@ -230,8 +233,6 @@ MonoBehaviour:
   digStrength: 1
   reach: 60
   noclip: 0
-  blastRadius: 5
-  showOverlay: 0
 --- !u!81 &85844950
 AudioListener:
   m_ObjectHideFlags: 0
@@ -325,7 +326,7 @@ Transform:
   m_GameObject: {fileID: 85844946}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 68, y: 5.905946, z: 54}
+  m_LocalPosition: {x: 12, y: 53.806038, z: 36}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -341,31 +342,72 @@ MonoBehaviour:
   m_GameObject: {fileID: 85844946}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ea4f04687a3761e4eab8e09f63609cbf, type: 3}
+  m_Script: {fileID: 11500000, guid: d1290df7a3c0942449dcd956eca28587, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveGrenadeLauncher
-  crowd: {fileID: 0}
-  queen: {fileID: 0}
-  world: {fileID: 0}
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.PlayerMobility
+  dashDistance: 5.5
+  dashDuration: 0.16
+  dashRecharge: 1.6
+  dashGrace: 0.08
+  holdPerSpider: 0.09
+  holdFloor: 0.35
+  holdReach: 0.6
+--- !u!114 &85844955
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 85844946}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5012adefd3026834faef960c5301bdc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.PlayerVitals
+  baseMaxHealth: 100
+  capShare: 0.15
+  overflowScale: 0.07
+  closeKillRadius: 4
+  tempPerCloseKill: 0.6
+  tempDelay: 3
+  tempDecay: 2
+  reviveShare: 0.5
+  reviveInvulnerable: 2
+  revivePanicRadius: 12
+--- !u!114 &85844956
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 85844946}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db15b56cdb104a0390ba0191579ffa36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CatacombDebugOverlay
+  blastRadius: 5
+  showOverlay: 0
+--- !u!114 &85844957
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 85844946}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 012beca47525f6a439d9f040406d2a57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.PlayerArsenal
   litShader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
   particleShader: {fileID: 4800000, guid: 7ce37c1d8de80034a8a79905a652780c, type: 3}
-  capacity: 6
-  fireInterval: 0.32
-  reloadTime: 2.1
-  muzzleSpeed: 30
-  grenadeGravity: 9
-  maxFlight: 3.5
-  proximity: 0.9
-  blastRadius: 5
-  blastDamage: 3
-  queenDamage: 1.5
+  startWeapon: 0
   craters: 1
   craterRadius: 1.7
   craterDepth: 0.85
   scorchRadius: 2.4
-  viewOffset: {x: 0.21, y: -0.2, z: 0.3}
-  sway: 1.2
---- !u!1 &711213586
+--- !u!1 &454401091
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -373,262 +415,10 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 711213591}
-  - component: {fileID: 711213587}
-  - component: {fileID: 711213588}
-  - component: {fileID: 711213593}
-  - component: {fileID: 711213592}
-  - component: {fileID: 711213594}
-  - component: {fileID: 711213595}
-  m_Layer: 0
-  m_Name: Catacombs
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &711213587
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 15a2f55f0b22f804a86dbe09410bdebc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CatacombWorld
-  settings: {fileID: 11400000, guid: a2f8d65b51c1b2d4f88fbc30b15c54d3, type: 2}
-  generateOnStart: 1
-  drawLayoutGizmos: 1
---- !u!114 &711213588
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ab2c2677d41d6c642aae10add508cc0e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveLevelMood
-  world: {fileID: 711213587}
-  viewer: {fileID: 0}
-  blendSpeed: 0.6
-  fogTint: 0.75
-  ambientTint: 0.6
---- !u!4 &711213591
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &711213592
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2783e9780090eae45b10fc05cef61604, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveQueen
-  world: {fileID: 711213587}
-  crowd: {fileID: 1680631865}
-  fixtures: {fileID: 711213593}
-  target: {fileID: 85844949}
-  lairFarShare: 0.3
-  useRange: 5
-  guideReach: 90
-  lairColor: {r: 0.85, g: 0.16, b: 0.1, a: 1}
-  probeDistance: 20
-  sizeScale: 1.6
-  baseHealth: 36
-  turnSpeed: 70
-  hue: {r: 0.8, g: 0.55, b: 0.5, a: 1}
-  engageRange: 45
-  broodInterval: 7
-  broodShieldInterval: 3.5
-  broodCount: 6
-  broodSteps: 6
-  broodCap: 40
-  broodCapRadius: 20
-  shockInterval: 9
-  shockShieldInterval: 4
-  shockRadius: 11
-  shockShieldReach: 1.8
-  shockWindup: 1.1
-  shockPush: 16
-  shockLift: 4
-  spitInterval: 6
-  spitVolley: 3
-  spitGap: 0.25
-  spitSpeed: 14
-  spitRange: 32
-  entangleSeconds: 2.2
-  entangleScale: 0.2
-  spitColor: {r: 0.75, g: 0.9, b: 0.65, a: 1}
-  shieldAt:
-  - 0.6666667
-  - 0.33333334
-  pylonCount: 3
-  pylonCharge: 4
-  pylonRadius: 2.8
-  pylonDecay: 0.25
-  pylonSteps: {x: 8, y: 26}
-  healFullSeconds: 60
-  pylonRange: 18
-  pylonIntensity: 30
-  pylonLitRadius: 12
-  pylonDarkColor: {r: 0.3, g: 0.46, b: 0.6, a: 1}
-  pylonLitColor: {r: 1, g: 0.86, b: 0.55, a: 1}
-  shieldColor: {r: 0.45, g: 0.7, b: 1, a: 1}
---- !u!114 &711213593
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d969ab91bacaef0448f786e6c28e657e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveFixtures
-  world: {fileID: 711213587}
-  lampCount: 45
-  lampSpacing: 12
-  lampHeight: {x: 1.6, y: 2.4}
-  lampColor: {r: 1, g: 0.52, b: 0.22, a: 1}
-  lampRange: 18
-  lampIntensity: 24
-  lampShadows: 0
-  lampShadowStrength: 0.45
-  veinCount: 34
-  veinSpacing: 8
-  veinColor: {r: 0.24, g: 0.82, b: 1, a: 1}
-  veinRange: 16
-  veinIntensity: 14.4
-  startDark: 1
-  darkVeinHalo: 0.34
-  darkLampHalo: 0.12
-  guideBoost: 1.4
-  probeDistance: 16
---- !u!114 &711213594
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e075c440455ace84caaf62db3df1ef7a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveRunDirector
-  world: {fileID: 711213587}
-  crowd: {fileID: 1680631865}
-  fixtures: {fileID: 711213593}
-  queen: {fileID: 711213592}
-  stageSeconds: 420
-  curve:
-    trendPeak: 2.2
-    trendPower: 1.6
-    waveAmplitude: 0.35
-    firstPeak: 0.4
-    lull: 0.55
-    secondPeak: 0.7
-  basePopulation: 260
-  baseSpawnRate: 30
-  microWave: 1.4
-  healthGrowth: 0.5
-  speedGrowth: 0.15
-  heavyUnlock: 0.6
-  swarmSeconds: 35
-  swarmExtra: 220
-  swarmRate: 60
-  swarmShare: 0.85
-  firstElite: 0.3
-  secondElite: 0.8
-  eliteSize: 1.45
-  eliteHealth: 12
-  eliteSpeed: 1.1
-  eliteHue: {r: 1.35, g: 0.72, b: 0.6, a: 1}
-  finalRamp: 30
-  finalSpawnRate: 120
-  finalNearCap: 400
-  finalNearRamp: 60
-  finalSpeedPerMinute: 0.12
-  finalSpeedMax: 1.8
-  finalTiers: {x: 60, y: 180}
-  finalHealthPerTier: 1
-  finalHueSecond: {r: 0.5, g: 0.48, b: 0.58, a: 1}
-  finalHueThird: {r: 1.35, g: 0.45, b: 0.4, a: 1}
-  queenGrowth: 3
-  victoryPanicRadius: 80
-  victoryPanicTime: 12
-  bannerSeconds: 4
---- !u!114 &711213595
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 711213586}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3e53fc8bfd93a45498d8ea10e5310694, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveWebs
-  world: {fileID: 711213587}
-  webPrefabs:
-  - {fileID: 4163741130988620699, guid: 5c41c6baf722cc1478511f65e03e5be5, type: 3}
-  - {fileID: 4020804978756500240, guid: 306b03ed97254604cbfd416e87f010af, type: 3}
-  - {fileID: 3863153739225519186, guid: 6ae681f7302880d4c880f0d3c06f4459, type: 3}
-  - {fileID: 1458160364811997277, guid: cb54601bec56a2c47b6032cdacd32e60, type: 3}
-  - {fileID: 7593397299959007469, guid: a58f31540db66414f860cf90b7ffb792, type: 3}
-  - {fileID: 5230189180519417414, guid: 67760a1b79aed0f4c8528dc6041edf90, type: 3}
-  - {fileID: 2869061535755075765, guid: 59e31764ea3886a4a9dcb06117f05612, type: 3}
-  - {fileID: 5654925662435360547, guid: 1da579bc30f41054eac61ecca254cd6b, type: 3}
-  - {fileID: 63965736751973707, guid: 129cd1571416ef9439076e67e91502d1, type: 3}
-  - {fileID: 4964177133300817016, guid: dfb2e7bcbf5b90f4a9837a05dc698c81, type: 3}
-  - {fileID: 3145381277736852245, guid: 77d57996dd5931e4ab812fa14b0b8282, type: 3}
-  - {fileID: 4186418371180897706, guid: 2f399a3a4a3440d4cb2720f561b06d2c, type: 3}
-  - {fileID: 7401246609707651228, guid: d983a59476287384481d0b60b3e62c98, type: 3}
-  - {fileID: 6348344433068600602, guid: ca547cd38e5f61e488cf76abf9267e14, type: 3}
-  - {fileID: 6854083829974287453, guid: f5c555686d39bf848a61f283a684a619, type: 3}
-  - {fileID: 3348056813132367235, guid: fdcd2234d2cb27c46bff0eafbdf10a3d, type: 3}
-  webShare: 0.7
-  webOvershoot: {x: 1.15, y: 1.4}
-  webColor: {r: 0.62, g: 0.62, b: 0.56, a: 0.3}
-  webSpeedScale: 0.25
-  webFallScale: 0.2
-  webThickness: 1.1
---- !u!1 &1680631862
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1680631866}
-  - component: {fileID: 1680631865}
-  - component: {fileID: 1680631864}
-  - component: {fileID: 1680631863}
+  - component: {fileID: 454401095}
+  - component: {fileID: 454401094}
+  - component: {fileID: 454401093}
+  - component: {fileID: 454401092}
   m_Layer: 0
   m_Name: Spider Crowd
   m_TagString: Untagged
@@ -636,13 +426,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1680631863
+--- !u!114 &454401092
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1680631862}
+  m_GameObject: {fileID: 454401091}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 20f8e741d25750f48b106f5512158b9d, type: 3}
@@ -658,13 +448,13 @@ MonoBehaviour:
   loopSeconds: 7.3
   ticksPerSecond: 190
   seed: 20250915
---- !u!82 &1680631864
+--- !u!82 &454401093
 AudioSource:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1680631862}
+  m_GameObject: {fileID: 454401091}
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
@@ -755,13 +545,13 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
---- !u!114 &1680631865
+--- !u!114 &454401094
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1680631862}
+  m_GameObject: {fileID: 454401091}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3f789bcc5e591814bbbca140e9b96122, type: 3}
@@ -826,13 +616,13 @@ MonoBehaviour:
   castShadows: 0
   drawFlowGizmos: 0
   gizmoRadius: 20
---- !u!4 &1680631866
+--- !u!4 &454401095
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1680631862}
+  m_GameObject: {fileID: 454401091}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -841,6 +631,321 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &711213586
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 711213591}
+  - component: {fileID: 711213587}
+  - component: {fileID: 711213588}
+  - component: {fileID: 711213597}
+  - component: {fileID: 711213596}
+  - component: {fileID: 711213595}
+  - component: {fileID: 711213594}
+  - component: {fileID: 711213593}
+  - component: {fileID: 711213592}
+  m_Layer: 0
+  m_Name: Catacombs
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &711213587
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15a2f55f0b22f804a86dbe09410bdebc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CatacombWorld
+  settings: {fileID: 11400000, guid: a2f8d65b51c1b2d4f88fbc30b15c54d3, type: 2}
+  generateOnStart: 1
+  drawLayoutGizmos: 1
+--- !u!114 &711213588
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab2c2677d41d6c642aae10add508cc0e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveLevelMood
+  world: {fileID: 711213587}
+  viewer: {fileID: 0}
+  blendSpeed: 0.6
+  fogTint: 0.75
+  ambientTint: 0.6
+--- !u!4 &711213591
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &711213592
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e53fc8bfd93a45498d8ea10e5310694, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveWebs
+  world: {fileID: 711213587}
+  webPrefabs:
+  - {fileID: 4163741130988620699, guid: 5c41c6baf722cc1478511f65e03e5be5, type: 3}
+  - {fileID: 4020804978756500240, guid: 306b03ed97254604cbfd416e87f010af, type: 3}
+  - {fileID: 3863153739225519186, guid: 6ae681f7302880d4c880f0d3c06f4459, type: 3}
+  - {fileID: 1458160364811997277, guid: cb54601bec56a2c47b6032cdacd32e60, type: 3}
+  - {fileID: 7593397299959007469, guid: a58f31540db66414f860cf90b7ffb792, type: 3}
+  - {fileID: 5230189180519417414, guid: 67760a1b79aed0f4c8528dc6041edf90, type: 3}
+  - {fileID: 2869061535755075765, guid: 59e31764ea3886a4a9dcb06117f05612, type: 3}
+  - {fileID: 5654925662435360547, guid: 1da579bc30f41054eac61ecca254cd6b, type: 3}
+  - {fileID: 63965736751973707, guid: 129cd1571416ef9439076e67e91502d1, type: 3}
+  - {fileID: 4964177133300817016, guid: dfb2e7bcbf5b90f4a9837a05dc698c81, type: 3}
+  - {fileID: 3145381277736852245, guid: 77d57996dd5931e4ab812fa14b0b8282, type: 3}
+  - {fileID: 4186418371180897706, guid: 2f399a3a4a3440d4cb2720f561b06d2c, type: 3}
+  - {fileID: 7401246609707651228, guid: d983a59476287384481d0b60b3e62c98, type: 3}
+  - {fileID: 6348344433068600602, guid: ca547cd38e5f61e488cf76abf9267e14, type: 3}
+  - {fileID: 6854083829974287453, guid: f5c555686d39bf848a61f283a684a619, type: 3}
+  - {fileID: 3348056813132367235, guid: fdcd2234d2cb27c46bff0eafbdf10a3d, type: 3}
+  webShare: 0.7
+  webOvershoot: {x: 1.15, y: 1.4}
+  webColor: {r: 0.62, g: 0.62, b: 0.56, a: 0.3}
+  webSpeedScale: 0.25
+  webFallScale: 0.2
+  webThickness: 1.1
+--- !u!114 &711213593
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9e0b3d2947a8eb48b2697dacdce5e67, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveRunController
+  world: {fileID: 711213587}
+  crowd: {fileID: 454401094}
+  director: {fileID: 711213595}
+  queen: {fileID: 711213596}
+  ichor: {fileID: 711213594}
+  startWeapon: 0
+  mercyHealth: 0.5
+  mercyAfter: 4
+  mercyPopulation: 0.85
+  mercySpawn: 0.6
+  mercySeconds: 12
+  mercyCooldown: 60
+  queenChitin:
+  - 60
+  - 120
+  - 250
+--- !u!114 &711213594
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ff2dee6d0e334f48a7c970229e4881f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.IchorField
+  shader: {fileID: 4800000, guid: b98a074ee59cf2649a730ed19d54394e, type: 3}
+  world: {fileID: 711213587}
+  crowd: {fileID: 454401094}
+  lieSeconds: 3
+  crawlFrom: 2
+  crawlTo: 8
+  crawlRamp: 3
+  magnetSpeed: 14
+  pickupRadius: 1.2
+  mergeRadius: 1.5
+  xpPerHit: 0.06
+  eliteIchor: 30
+  eliteChitin: 15
+  chitinOneIn: 30
+  ichorColor: {r: 1, g: 0.62, b: 0.12, a: 1}
+  chitinColor: {r: 0.45, g: 0.85, b: 0.75, a: 1}
+  cocoonColor: {r: 1, g: 0.3, b: 0.6, a: 1}
+--- !u!114 &711213595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e075c440455ace84caaf62db3df1ef7a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveRunDirector
+  world: {fileID: 711213587}
+  crowd: {fileID: 454401094}
+  fixtures: {fileID: 711213597}
+  queen: {fileID: 711213596}
+  stageSeconds: 420
+  curve:
+    trendPeak: 2.2
+    trendPower: 1.6
+    waveAmplitude: 0.35
+    firstPeak: 0.4
+    lull: 0.55
+    secondPeak: 0.7
+  basePopulation: 260
+  baseSpawnRate: 30
+  microWave: 1.4
+  healthGrowth: 0.5
+  speedGrowth: 0.15
+  damageGrowth: 0.4
+  finalDamagePerTier: 0.25
+  heavyUnlock: 0.6
+  swarmSeconds: 35
+  swarmExtra: 220
+  swarmRate: 60
+  swarmShare: 0.85
+  firstElite: 0.3
+  secondElite: 0.8
+  eliteSize: 1.45
+  eliteHealth: 12
+  eliteSpeed: 1.1
+  eliteHue: {r: 1.35, g: 0.72, b: 0.6, a: 1}
+  finalRamp: 30
+  finalSpawnRate: 120
+  finalNearCap: 400
+  finalNearRamp: 60
+  finalSpeedPerMinute: 0.12
+  finalSpeedMax: 1.8
+  finalTiers: {x: 60, y: 180}
+  finalHealthPerTier: 1
+  finalHueSecond: {r: 0.5, g: 0.48, b: 0.58, a: 1}
+  finalHueThird: {r: 1.35, g: 0.45, b: 0.4, a: 1}
+  queenGrowth: 3
+  victoryPanicRadius: 80
+  victoryPanicTime: 12
+  bannerSeconds: 4
+--- !u!114 &711213596
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2783e9780090eae45b10fc05cef61604, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveQueen
+  world: {fileID: 711213587}
+  crowd: {fileID: 454401094}
+  fixtures: {fileID: 711213597}
+  target: {fileID: 85844949}
+  lairFarShare: 0.3
+  useRange: 5
+  guideReach: 90
+  lairColor: {r: 0.85, g: 0.16, b: 0.1, a: 1}
+  probeDistance: 20
+  sizeScale: 1.6
+  baseHealth: 36
+  turnSpeed: 70
+  hue: {r: 0.8, g: 0.55, b: 0.5, a: 1}
+  engageRange: 45
+  broodInterval: 7
+  broodShieldInterval: 3.5
+  broodCount: 6
+  broodSteps: 6
+  broodCap: 40
+  broodCapRadius: 20
+  shockInterval: 9
+  shockShieldInterval: 4
+  shockRadius: 11
+  shockShieldReach: 1.8
+  shockWindup: 1.1
+  shockPush: 16
+  shockLift: 4
+  spitInterval: 6
+  spitVolley: 3
+  spitGap: 0.25
+  spitSpeed: 14
+  spitRange: 32
+  entangleSeconds: 2.2
+  entangleScale: 0.2
+  spitColor: {r: 0.75, g: 0.9, b: 0.65, a: 1}
+  shockDamage: 25
+  spitDamage: 8
+  shieldAt:
+  - 0.6666667
+  - 0.33333334
+  pylonCount: 3
+  pylonCharge: 4
+  pylonRadius: 2.8
+  pylonDecay: 0.25
+  pylonSteps: {x: 8, y: 26}
+  healFullSeconds: 60
+  pylonRange: 18
+  pylonIntensity: 30
+  pylonLitRadius: 12
+  pylonDarkColor: {r: 0.3, g: 0.46, b: 0.6, a: 1}
+  pylonLitColor: {r: 1, g: 0.86, b: 0.55, a: 1}
+  shieldColor: {r: 0.45, g: 0.7, b: 1, a: 1}
+--- !u!114 &711213597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711213586}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d969ab91bacaef0448f786e6c28e657e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MineGenerator.Catacombs.CaveFixtures
+  world: {fileID: 711213587}
+  lampCount: 45
+  lampSpacing: 12
+  lampHeight: {x: 1.6, y: 2.4}
+  lampColor: {r: 1, g: 0.52, b: 0.22, a: 1}
+  lampRange: 18
+  lampIntensity: 24
+  lampShadows: 0
+  lampShadowStrength: 0.45
+  veinCount: 34
+  veinSpacing: 8
+  veinColor: {r: 0.24, g: 0.82, b: 1, a: 1}
+  veinRange: 16
+  veinIntensity: 14.4
+  startDark: 1
+  darkVeinHalo: 0.34
+  darkLampHalo: 0.12
+  guideBoost: 1.4
+  probeDistance: 16
 --- !u!1 &1966224323
 GameObject:
   m_ObjectHideFlags: 0
@@ -1102,4 +1207,4 @@ SceneRoots:
   - {fileID: 711213591}
   - {fileID: 85844953}
   - {fileID: 1966224325}
-  - {fileID: 1680631866}
+  - {fileID: 454401095}

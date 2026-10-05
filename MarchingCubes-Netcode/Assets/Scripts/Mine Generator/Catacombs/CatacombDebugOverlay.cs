@@ -29,7 +29,8 @@ namespace MineGenerator.Catacombs
         [SerializeField, Range(1f, 12f)] private float blastRadius = 5f;
 
         [Header("Интерфейс")]
-        [SerializeField] private bool showOverlay = true;
+        [Tooltip("Отладочное наложение со статистикой. С появлением HUD (M1.9) скрыто по умолчанию, F3 — показать.")]
+        [SerializeField] private bool showOverlay;
 
         private CatacombTestRig _rig;
 
@@ -43,6 +44,7 @@ namespace MineGenerator.Catacombs
         {
             if (_rig == null) return;
 
+            if (Input.GetKeyDown(KeyCode.F3)) showOverlay = !showOverlay;
             if (Input.GetKeyDown(KeyCode.F)) _rig.ToggleMode();
             if (Input.GetKeyDown(KeyCode.G)) _rig.ToggleNoclip();
             if (Input.GetKeyDown(KeyCode.P)) DumpViewpoint();
@@ -231,7 +233,8 @@ namespace MineGenerator.Catacombs
 
             var style = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
 
-            DrawBanner(director);
+            // Объявление крупно рисует HUD (GameUi); здесь — только без него.
+            if (GameUi.Instance == null) DrawBanner(director);
 
             GUILayout.BeginArea(new Rect(10, 10, 640, 340), GUI.skin.box);
 

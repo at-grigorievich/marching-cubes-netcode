@@ -173,10 +173,17 @@ namespace MineGenerator.Catacombs
         /// логики, Tools/CloudUnity/run_logic_tests.py) .NET отказывается компилировать
         /// ЦЕЛИКОМ метод, в котором есть вызов в движок, даже если ветка не выполняется.
         /// Вынесенный вызов компилируется только когда его зовут.
+        ///
+        /// Вне play-режима в движок не пишется ничего: прогон пушек в режиме редактирования
+        /// ставил стоп-кадр (0.05), снять его было некому — часы ведёт Update, — и редактор
+        /// сохранял замедление в ProjectSettings/TimeManager.asset. Следующий play-режим
+        /// стартовал в двадцать раз медленнее.
         /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ApplyEngine(float scale, bool audio)
         {
+            if (!Application.isPlaying) return;
+
             Time.timeScale = scale;
             AudioListener.pause = audio;
         }

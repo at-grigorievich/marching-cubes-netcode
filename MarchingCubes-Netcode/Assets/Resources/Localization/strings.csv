@@ -1,0 +1,166 @@
+key;ru;en;tr
+# ---------------------------------------------------------------- HUD
+hud.level;ур. {0};lv. {0};sv. {0}
+hud.warn.swarm;Своды дрожат… идёт рой;The vaults tremble… a swarm is coming;Tavanlar titriyor… sürü geliyor
+hud.warn.elite;Что-то большое ползёт к тебе…;Something big is crawling your way…;Büyük bir şey sana doğru sürünüyor…
+hud.boss.name;Матка;The Queen;Kraliçe
+hud.boss.shield;Щит: генераторы {0}/{1};Shield: generators {0}/{1};Kalkan: jeneratörler {0}/{1}
+hud.far;далеко;far;uzak
+hud.distance;~{0} м;~{0} m;~{0} m
+# ---------------------------------------------------------------- объявления
+banner.final;ФИНАЛЬНЫЙ РОЙ;FINAL SWARM;SON SÜRÜ
+banner.swarm;РОЙ;SWARM;SÜRÜ
+banner.elite;ЭЛИТА;ELITE;SEÇKİN
+banner.elite_dead;Элита убита;Elite slain;Seçkin öldürüldü
+banner.victory;МАТКА УБИТА — катакомбы озарены;THE QUEEN IS DEAD — the catacombs blaze with light;KRALİÇE ÖLDÜ — yeraltı mezarları aydınlandı
+banner.queen_awake;МАТКА ПРОБУДИЛАСЬ;THE QUEEN AWAKENS;KRALİÇE UYANDI
+banner.shield;ЩИТ — запусти генераторы;SHIELD — power up the generators;KALKAN — jeneratörleri çalıştır
+banner.pylon;Генератор запущен;Generator online;Jeneratör çalıştı
+banner.shield_down;ЩИТ СПАЛ — бей Матку;SHIELD DOWN — hit the Queen;KALKAN DÜŞTÜ — Kraliçeye vur
+banner.descent;Спуск открыт — подойди и нажми E;The way down is open — approach and press E;İniş açıldı — yaklaş ve E'ye bas
+# ---------------------------------------------------------------- карточки
+cards.title;Уровень {0};Level {0};Seviye {0}
+cards.cocoon;Кокон с добычей;Loot cocoon;Ganimet kozası
+cards.new_weapon;Новая пушка;New weapon;Yeni silah
+cards.weapon_level;Пушка — уровень {0};Weapon — level {0};Silah — seviye {0}
+cards.evolution;ЭВОЛЮЦИЯ;EVOLUTION;EVRİM
+cards.new_tome;Новый том;New tome;Yeni kitap
+cards.tome_level;Том — уровень {0};Tome — level {0};Kitap — seviye {0}
+cards.spare;Запасная;Spare;Yedek
+cards.heal;Лечение;Heal;İyileşme
+cards.heal_desc;Восстановить {0} здоровья;Restore {0} health;{0} can yenile
+cards.chitin;Хитин;Chitin;Kitin
+cards.chitin_desc;Получить {0} хитина;Gain {0} chitin;{0} kitin kazan
+cards.reroll;Переброс ({0});Reroll ({0});Yeniden çek ({0})
+cards.reroll_ad;Переброс за рекламу;Reroll for an ad;Reklamla yeniden çek
+cards.skip;Пропуск ({0});Skip ({0});Atla ({0})
+cards.banish;Изгнать ({0});Banish ({0});Sürgün et ({0})
+cards.banish_pick;Выбери, что изгнать;Pick a card to banish;Sürgün edilecek kartı seç
+# ---------------------------------------------------------------- смерть и итоги
+death.title;ТЫ ПАЛ;YOU HAVE FALLEN;DÜŞTÜN
+death.revive;Возродиться ({0});Revive ({0});Diril ({0})
+death.revive_ad;Возродиться за просмотр рекламы;Revive by watching an ad;Reklam izleyerek diril
+death.results;Итоги;Results;Sonuçlar
+results.victory;ВЫЛАЗКА УДАЛАСЬ;EXPEDITION COMPLETE;SEFER TAMAMLANDI
+results.defeat;ВЫЛАЗКА ОКОНЧЕНА;EXPEDITION OVER;SEFER BİTTİ
+results.time;Время: {0};Time: {0};Süre: {0}
+results.tier;Ярус: {0}   глубина: {1};Tier: {0}   depth: {1};Kat: {0}   derinlik: {1}
+results.level;Уровень: {0};Level: {0};Seviye: {0}
+results.kills;Убито пауков: {0};Spiders killed: {0};Öldürülen örümcek: {0}
+results.elites;Элита: {0};Elites: {0};Seçkinler: {0}
+results.queens;Матки: {0};Queens: {0};Kraliçeler: {0}
+results.chitin;Хитин: {0};Chitin: {0};Kitin: {0}
+results.again;Ещё раз;Again;Tekrar
+results.camp;В лагерь;To camp;Kampa
+results.double;Хитин ×2 за рекламу;Double chitin for an ad;Reklamla kitin ×2
+results.next_unlock;До открытия «{0}»: {1} хитина;{1} chitin until «{0}»;«{0}» için {1} kitin kaldı
+results.quests;Задания:;Quests:;Görevler:
+# ---------------------------------------------------------------- пауза и подсказки
+pause.title;ПАУЗА;PAUSED;DURAKLATILDI
+pause.resume;Продолжить;Resume;Devam et
+pause.settings;Настройки;Settings;Ayarlar
+pause.camp;В лагерь;To camp;Kampa
+pause.controls;WASD — идти   мышь — смотреть   ЛКМ — огонь   ПКМ — альт   Shift — рывок\nV — перезарядка   1/2/3, колесо — пушка   E — разбудить Матку, спуститься   Esc — пауза;WASD — move   mouse — look   LMB — fire   RMB — alt fire   Shift — dash\nV — reload   1/2/3, wheel — weapon   E — wake the Queen, descend   Esc — pause;WASD — yürü   fare — bak   SOL — ateş   SAĞ — alternatif   Shift — atılma\nV — şarjör   1/2/3, tekerlek — silah   E — Kraliçeyi uyandır, in   Esc — duraklat
+hint.move;WASD — идти;WASD — move;WASD — yürü
+hint.fire;ЛКМ — огонь;Left mouse — fire;Sol fare — ateş
+hint.dash;Shift — рывок сквозь толпу;Shift — dash through the swarm;Shift — sürünün içinden atıl
+hint.cards;Выбери улучшение;Choose an upgrade;Bir geliştirme seç
+hint.lair;Найди логово Матки — иди по стрелке;Find the Queen's lair — follow the arrow;Kraliçenin inini bul — oku takip et
+# ---------------------------------------------------------------- пушки
+weapon.launcher.name;Барабан;Drum;Tambur
+weapon.launcher.desc;Гранатомёт на шесть гранат. Взрыв по толпе, воронка в камне.;Six-shot grenade launcher. Blasts the swarm and craters the rock.;Altı atımlık bombaatar. Sürüyü patlatır, kayada krater açar.
+weapon.launcher.alt;ПКМ — липучка: прилипает и ждёт. Предел или удержание ПКМ — подрыв.;RMB — sticky: clings and waits. At the limit or holding RMB — detonate.;SAĞ — yapışkan: yapışır ve bekler. Sınırda veya SAĞ basılı — patlat.
+weapon.launcher.evo;Кассета;Cluster;Misket
+weapon.launcher.evo.desc;Каждый взрыв разбрасывает пять прыгающих бомбочек.;Every blast scatters five bouncing bomblets.;Her patlama beş seken bombacık saçar.
+weapon.launcher.l2;+1 граната в барабане;+1 grenade in the drum;Tamburda +1 bomba
+weapon.launcher.l3;+15% радиуса взрыва;+15% blast radius;+%15 patlama yarıçapı
+weapon.launcher.l4;+20% урона;+20% damage;+%20 hasar
+weapon.launcher.l5;−20% перезарядки, +1 липучка;−20% reload, +1 sticky;−%20 şarjör süresi, +1 yapışkan
+weapon.revolver.name;Монета;Coin;Sikke
+weapon.revolver.desc;Револьвер: пуля пробивает троих. По элите и Матке — всегда крит.;Revolver: the bullet pierces three. Always crits elites and the Queen.;Tabanca: mermi üç düşmanı deler. Seçkinlere ve Kraliçeye hep kritik.
+weapon.revolver.alt;ПКМ — монетка: выстрел в неё рикошетит в самую опасную цель.;RMB — coin: shoot it to ricochet into the deadliest target.;SAĞ — sikke: vurursan en tehlikeli hedefe seker.
+weapon.revolver.evo;Сплит;Split;Bölünme
+weapon.revolver.evo.desc;Рикошет с монеты делится на три цели.;Coin ricochets split into three targets.;Sikke sekmesi üç hedefe bölünür.
+weapon.revolver.l2;+20% урона;+20% damage;+%20 hasar
+weapon.revolver.l3;+1 пробитие;+1 pierce;+1 delme
+weapon.revolver.l4;+1 монета, −20% перезарядки;+1 coin, −20% reload;+1 sikke, −%20 şarjör süresi
+weapon.revolver.l5;+10% шанс крита;+10% crit chance;+%10 kritik şansı
+weapon.shotgun.name;Ядро;Core;Çekirdek
+weapon.shotgun.desc;Дробовик: отбрасывает и оглушает вплотную. Убийства в упор лечат сильнее.;Shotgun: knocks back and stuns up close. Point-blank kills heal more.;Pompalı: yakından iter ve sersemletir. Dibinden öldürmek daha çok iyileştirir.
+weapon.shotgun.alt;ПКМ — выброс ядра. Выстрел по ядру в полёте — двойной взрыв.;RMB — eject the core. Shoot it mid-air for a double blast.;SAĞ — çekirdeği fırlat. Havada vurursan çift patlama.
+weapon.shotgun.evo;Таран;Ram;Koçbaşı
+weapon.shotgun.evo.desc;Выстрел сносит толпу вглубь коридора.;Each shot shoves the swarm deep down the corridor.;Her atış sürüyü koridorun derinliğine iter.
+weapon.shotgun.l2;+2 дробины — шире конус;+2 pellets — wider cone;+2 saçma — daha geniş koni
+weapon.shotgun.l3;+30% отброса;+30% knockback;+%30 itme
+weapon.shotgun.l4;−20% заряжания, +25% радиуса ядра;−20% reload, +25% core radius;−%20 doldurma, +%25 çekirdek yarıçapı
+weapon.shotgun.l5;+20% урона;+20% damage;+%20 hasar
+weapon.nailgun.name;Гвоздомёт;Nailgun;Çivi tabancası
+weapon.nailgun.desc;Поток гвоздей. Каждый замедляет — гвозди в лапах. Следи за нагревом.;A stream of nails. Each one slows — nails in their legs. Watch the heat.;Çivi yağmuru. Her çivi yavaşlatır. Isıya dikkat.
+weapon.nailgun.alt;ПКМ — магнит: гвозди рядом с ним крутятся на орбите и рубят всех.;RMB — magnet: nails near it orbit and shred everything.;SAĞ — mıknatıs: yakındaki çiviler yörüngeye girip her şeyi doğrar.
+weapon.nailgun.evo;Пилорама;Sawmill;Bıçkıhane
+weapon.nailgun.evo.desc;Гвозди становятся пилами: пробивают и дважды рикошетят от камня.;Nails become saws: they pierce and ricochet twice off the rock.;Çiviler testere olur: deler ve kayadan iki kez seker.
+weapon.nailgun.l2;+20% темпа;+20% fire rate;+%20 atış hızı
+weapon.nailgun.l3;+20% урона, сильнее замедление;+20% damage, stronger slow;+%20 hasar, daha güçlü yavaşlatma
+weapon.nailgun.l4;+3 с магниту;+3 s magnet;Mıknatısa +3 sn
+weapon.nailgun.l5;−25% нагрева;−25% heat;−%25 ısınma
+weapon.rail.name;Прострел;Piercer;Delici
+weapon.rail.desc;Рельсотрон: держи — заряд, отпусти — луч через всю галерею сквозь всех.;Railgun: hold to charge, release — a beam through the whole gallery and everything in it.;Ray tüfeği: basılı tut — şarj, bırak — galerinin sonuna kadar her şeyi delen ışın.
+weapon.rail.alt;ПКМ — отвёртка: болт сверлит первую цель четыре секунды.;RMB — driver: a bolt drills the first target for four seconds.;SAĞ — matkap: cıvata ilk hedefi dört saniye deler.
+weapon.rail.evo;Двойной разряд;Double charge;Çift şarj
+weapon.rail.evo.desc;Два заряда подряд.;Two charges in a row.;Art arda iki şarj.
+weapon.rail.l2;−15% отката;−15% cooldown;−%15 bekleme
+weapon.rail.l3;+25% урона;+25% damage;+%25 hasar
+weapon.rail.l4;+50% ширины луча, −30% заряда;+50% beam width, −30% charge time;+%50 ışın genişliği, −%30 şarj süresi
+weapon.rail.l5;Перезаряд: держи две секунды — урон ×1.5;Overcharge: hold two seconds — damage ×1.5;Aşırı şarj: iki saniye tut — hasar ×1.5
+weapon.flamer.name;Напалм;Napalm;Napalm
+weapon.flamer.desc;Огнемёт: поджигает толпу, пол за тобой горит. Горящие разносят огонь.;Flamethrower: sets the swarm ablaze, the floor behind you burns. The burning spread fire.;Alev makinesi: sürüyü tutuşturur, arkandaki zemin yanar. Yananlar ateşi yayar.
+weapon.flamer.alt;ПКМ — выдох: кольцо огня вокруг, отброс и поджог.;RMB — exhale: a ring of fire around you, knockback and ignite.;SAĞ — nefes: etrafında ateş halkası, itme ve tutuşturma.
+weapon.flamer.evo;Пекло;Inferno;Cehennem
+weapon.flamer.evo.desc;Сгоревшие лопаются огненным облачком.;The burned pop in a cloud of fire.;Yananlar ateş bulutuyla patlar.
+weapon.flamer.l2;+1.5 дальности;+1.5 range;+1.5 menzil
+weapon.flamer.l3;+30% горения;+30% burn;+%30 yanma
+weapon.flamer.l4;+25% ширины конуса, +40% топлива;+25% cone width, +40% fuel;+%25 koni genişliği, +%40 yakıt
+weapon.flamer.l5;+2 с огню на полу;+2 s floor fire;Zemin ateşine +2 sn
+weapon.tesla.name;Дуга;Arc;Ark
+weapon.tesla.desc;Тесла: молния сама находит цель и прыгает дальше — снимает пауков со стен и свода.;Tesla: lightning finds its target and jumps on — strips spiders off walls and ceiling.;Tesla: şimşek hedefi kendisi bulur ve atlar — örümcekleri duvar ve tavandan söker.
+weapon.tesla.alt;ПКМ — громоотвод: катушка бьёт троих рядом восемь секунд.;RMB — lightning rod: a coil strikes three nearby for eight seconds.;SAĞ — paratoner: bobin sekiz saniye yakındaki üç hedefe çarpar.
+weapon.tesla.evo;Индукция;Induction;İndüksiyon
+weapon.tesla.evo.desc;Молния подтягивает мелочь к точке удара.;Lightning pulls small fry to the point of impact.;Şimşek küçükleri vuruş noktasına çeker.
+weapon.tesla.l2;+1 прыжок;+1 jump;+1 sekme
+weapon.tesla.l3;+20% урона;+20% damage;+%20 hasar
+weapon.tesla.l4;+3 дальности захвата, +30% батареи;+3 lock range, +30% battery;+3 kilit menzili, +%30 batarya
+weapon.tesla.l5;+4 с громоотводу;+4 s lightning rod;Paratonere +4 sn
+weapon.hammer.name;Забой;Breaker;Kırıcı
+weapon.hammer.desc;Кирка-молот: серия взмахов рассекает толпу. Держи — удар оземь с воронкой.;Pick-hammer: a combo of swings cleaves the swarm. Hold — a ground slam that craters the floor.;Kazma-çekiç: savurma serisi sürüyü yarar. Basılı tut — zemini çökerten darbe.
+weapon.hammer.alt;ПКМ — пробой: выпад сквозь тонкую стену. Начало — парирование плевков.;RMB — breach: a lunge through a thin wall. Its start parries spit.;SAĞ — yarma: ince duvardan atılış. Başlangıcı tükürüğü savuşturur.
+weapon.hammer.evo;Землетряс;Quake;Deprem
+weapon.hammer.evo.desc;Удар оземь раскалывает пол трещиной вперёд.;The ground slam cracks the floor ahead.;Yer darbesi önündeki zemini çatlatır.
+weapon.hammer.l2;+20% урона;+20% damage;+%20 hasar
+weapon.hammer.l3;+2 цели рассечения;+2 cleave targets;+2 yarma hedefi
+weapon.hammer.l4;+1 радиуса удара оземь, −2 с отката пробоя;+1 slam radius, −2 s breach cooldown;+1 darbe yarıçapı, −2 sn yarma bekleme
+weapon.hammer.l5;×1.5 временного здоровья;×1.5 temporary health;×1.5 geçici can
+# ---------------------------------------------------------------- тома
+tome.might.name;Сила;Might;Güç
+tome.might.desc;+10% урона;+10% damage;+%10 hasar
+tome.haste.name;Темп;Haste;Tempo
+tome.haste.desc;+8% скорострельности;+8% fire rate;+%8 atış hızı
+tome.reach.name;Охват;Reach;Kapsam
+tome.reach.desc;+10% площади: взрыв, конус, дуга;+10% area: blast, cone, arc;+%10 alan: patlama, koni, yay
+tome.supply.name;Запас;Supply;İkmal
+tome.supply.desc;+15% магазина, −8% перезарядки;+15% magazine, −8% reload;+%15 şarjör, −%8 şarjör süresi
+tome.precision.name;Меткость;Precision;İsabet
+tome.precision.desc;+5% шанс крита (крит ×2);+5% crit chance (crit ×2);+%5 kritik şansı (kritik ×2)
+tome.carapace.name;Панцирь;Carapace;Kabuk
+tome.carapace.desc;+1 броня: вычитается из каждого укуса;+1 armor: subtracted from every bite;+1 zırh: her ısırıktan düşülür
+tome.vitality.name;Живучесть;Vitality;Dayanıklılık
+tome.vitality.desc;+20 к максимуму здоровья;+20 maximum health;+20 maksimum can
+tome.regen.name;Регенерация;Regeneration;Yenilenme
+tome.regen.desc;+0.4 здоровья в секунду;+0.4 health per second;Saniyede +0.4 can
+tome.agility.name;Проворство;Agility;Çeviklik
+tome.agility.desc;+6% скорости. На 3-м уровне +1 рывок;+6% speed. Level 3: +1 dash;+%6 hız. 3. seviyede +1 atılma
+tome.magnet.name;Магнит;Magnet;Mıknatıs
+tome.magnet.desc;+30% радиуса притяжения ихора;+30% ichor pickup radius;+%30 iksir çekim yarıçapı
+tome.insight.name;Чутьё;Insight;Sezgi
+tome.insight.desc;+10% опыта;+10% experience;+%10 deneyim
+tome.greed.name;Жадность;Greed;Açgözlülük
+tome.greed.desc;+12% хитина;+12% chitin;+%12 kitin

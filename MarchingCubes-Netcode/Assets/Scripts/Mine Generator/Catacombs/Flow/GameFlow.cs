@@ -54,6 +54,9 @@ namespace MineGenerator.Catacombs
         /// <summary>Смена состояния: прежнее, новое.</summary>
         public event Action<GameState, GameState> StateChanged;
 
+        /// <summary>Замедление смерти кончилось — пора показывать экран смерти.</summary>
+        public event Action DeathSettled;
+
         private CatacombWorld _world;
 
         /// <summary>
@@ -122,6 +125,19 @@ namespace MineGenerator.Catacombs
         {
             GameClock.Tick(Time.unscaledDeltaTime);
 
+            // Замедление смерти идёт по реальному времени: игровое под ним ползёт втрое медленнее.
+            if (_dying >= 0f && State == GameState.Dead)
+            {
+                _dying += Time.unscaledDeltaTime;
+
+                if (_dying >= DyingSeconds)
+                {
+                    _dying = -1f;
+                    GameClock.Hold(ClockReason.Death, 0f);
+                    DeathSettled?.Invoke();
+                }
+            }
+
             // Уровень перестраивается и сам (R на стенде, переход между ярусами в M4) —
             // опросом, а не событием: начало генерации события не имеет.
             var generating = _world != null && _world.IsGenerating;
@@ -130,7 +146,7 @@ namespace MineGenerator.Catacombs
             else if (State == GameState.Loading && !generating) SetState(GameState.Playing);
         }
 
-        /// <summary>Пауза и выход из неё. Меню паузы появится в M1.</summary>
+        /// <summary>Пауза и выход из неё — меню паузы (M1.9).</summary>
         public void SetPaused(bool paused)
         {
             if (paused && State == GameState.Playing)
@@ -143,6 +159,97 @@ namespace MineGenerator.Catacombs
                 GameClock.Release(ClockReason.Pause);
                 SetState(GameState.Playing);
             }
+        }
+
+        public bool IsPlaying => State == GameState.Playing;
+
+        /// <summary>Экран выбора карточки: время стоит, как в VS и Megabonk.</summary>
+        public bool EnterLevelUp()
+        {
+            if (State != GameState.Playing) return false;
+
+            GameClock.Hold(ClockReason.LevelUp);
+            SetState(GameState.LevelUp);
+            return true;
+        }
+
+        public void ExitLevelUp()
+        {
+            if (State != GameState.LevelUp) return;
+
+            GameClock.Release(ClockReason.LevelUp);
+            SetState(GameState.Playing);
+        }
+
+        private float _dying = -1f;
+
+        /// <summary>Сколько секунд реального времени длится замедление смерти, и во сколько раз медленнее.</summary>
+        public const float DyingSeconds = 0.6f;
+        public const float DyingScale = 0.3f;
+
+        /// <summary>Доля замедления смерти 0..1 — для оседания камеры и затемнения.</summary>
+        public float DyingProgress => _dying < 0f ? (State == GameState.Dead || State == GameState.Results ? 1f : 0f)
+            : Mathf.Clamp01(_dying / DyingSeconds);
+
+        /// <summary>
+        /// Смерть: замедление ×0.3 на 0.6 с реального времени (камера оседает, экран темнеет),
+        /// затем время стоит и открывается экран смерти — возрождение или итоги.
+        /// </summary>
+        public void EnterDying()
+        {
+            if (State != GameState.Playing && State != GameState.LevelUp) return;
+
+            if (State == GameState.LevelUp) GameClock.Release(ClockReason.LevelUp);
+
+            _dying = 0f;
+            GameClock.Hold(ClockReason.Death, DyingScale);
+            SetState(GameState.Dead);
+        }
+
+        /// <summary>Возрождение: время снова идёт, игра продолжается.</summary>
+        public void Revive()
+        {
+            if (State != GameState.Dead) return;
+
+            _dying = -1f;
+            GameClock.Release(ClockReason.Death);
+            SetState(GameState.Playing);
+        }
+
+        /// <summary>Итоги забега: время стоит.</summary>
+        public void EnterResults()
+        {
+            _dying = -1f;
+            GameClock.Hold(ClockReason.Death, 0f);
+            SetState(GameState.Results);
+        }
+
+        /// <summary>Ярус пройден — привал между ярусами (M4): время стоит.</summary>
+        public void EnterStageClear()
+        {
+            if (State != GameState.Playing) return;
+
+            GameClock.Hold(ClockReason.Pause);
+            SetState(GameState.StageClear);
+        }
+
+        /// <summary>Лагерь (M4): время идёт (облёт камеры), забега нет.</summary>
+        public void EnterHub()
+        {
+            _dying = -1f;
+            GameClock.ResetAll();
+            SetState(GameState.Hub);
+        }
+
+        /// <summary>
+        /// Новый забег или следующий ярус: снять все причины остановки времени — генерация уровня
+        /// переведёт в загрузку и потом в игру сама.
+        /// </summary>
+        public void BeginRun()
+        {
+            _dying = -1f;
+            GameClock.ResetAll();
+            SetState(_world != null && _world.IsGenerating ? GameState.Loading : GameState.Playing);
         }
 
         private void SetState(GameState next)

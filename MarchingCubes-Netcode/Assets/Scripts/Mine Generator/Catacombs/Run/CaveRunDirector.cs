@@ -233,6 +233,45 @@ namespace MineGenerator.Catacombs
 
         public CaveQueen Queen => queen;
 
+        private readonly List<StageEvent> _schedule = new List<StageEvent>(8);
+        private float _scheduledFor = -1f;
+
+        /// <summary>
+        /// Расписание стадии — для шкалы и предупреждений интерфейса (рог орды за 8 с до роя
+        /// и элиты). Пересобирается, если поменялась длина стадии (рецепт яруса, M4).
+        /// </summary>
+        public List<StageEvent> Schedule
+        {
+            get
+            {
+                if (!Mathf.Approximately(_scheduledFor, stageSeconds))
+                {
+                    RunSchedule.Build(stageSeconds, curve, swarmSeconds, firstElite, secondElite, _schedule);
+                    _scheduledFor = stageSeconds;
+                }
+
+                return _schedule;
+            }
+        }
+
+        /// <summary>Ближайшее событие стадии и сколько до него секунд.</summary>
+        public bool TryGetNextEvent(out StageEvent next, out float seconds)
+        {
+            seconds = 0f;
+
+            if (Phase != RunPhase.Stage || !RunSchedule.Next(Schedule, Elapsed, out next)) 
+            {
+                next = default;
+                return false;
+            }
+
+            seconds = next.Time - Elapsed;
+            return true;
+        }
+
+        /// <summary>Длина стадии — рецепт яруса (M4) задаёт свою.</summary>
+        public void SetStageSeconds(float seconds) => stageSeconds = Mathf.Clamp(seconds, 60f, 1200f);
+
         private float _swarmLeft;
         private readonly bool[] _swarmFired = new bool[2];
         private readonly bool[] _eliteDue = new bool[2];
@@ -359,7 +398,7 @@ namespace MineGenerator.Catacombs
                 if (Phase == RunPhase.Stage && Elapsed >= stageSeconds)
                 {
                     Phase = RunPhase.FinalSwarm;
-                    Announce("ФИНАЛЬНЫЙ РОЙ — Матка не убита вовремя");
+                    Announce("banner.final");
                 }
 
                 UpdateSwarms(deltaTime);
@@ -525,7 +564,7 @@ namespace MineGenerator.Catacombs
                 if (_swarmFired[i]) continue;
 
                 var peak = i == 0 ? curve.firstPeak : curve.secondPeak;
-                var start = peak * stageSeconds - swarmSeconds * 0.5f;
+                var start = RunSchedule.SwarmStart(stageSeconds, peak, swarmSeconds);
 
                 if (Elapsed < start) continue;
 
@@ -542,7 +581,7 @@ namespace MineGenerator.Catacombs
                 SwarmsFired++;
 
                 var kind = crowd.KindAt(SwarmKind);
-                Announce($"РОЙ: {(kind != null ? kind.name : "?")}");
+                Announce($"banner.swarm: {(kind != null ? kind.name.Replace('_', ' ') : "?")}");
             }
         }
 
@@ -591,8 +630,8 @@ namespace MineGenerator.Catacombs
                     _elites.Add(handle);
                     ElitesSpawned++;
 
-                    Announce("ЭЛИТА: " + (crowd.KindAt(crowd.HeaviestKind) != null
-                        ? crowd.KindAt(crowd.HeaviestKind).name
+                    Announce("banner.elite: " + (crowd.KindAt(crowd.HeaviestKind) != null
+                        ? crowd.KindAt(crowd.HeaviestKind).name.Replace('_', ' ')
                         : "?"));
                 }
             }
@@ -602,7 +641,7 @@ namespace MineGenerator.Catacombs
                 if (crowd == null || !crowd.TryGetSpider(_elites[i], out _, out _))
                 {
                     _elites.RemoveAt(i);
-                    if (crowd != null) Announce("элита убита");
+                    if (crowd != null) Announce("banner.elite_dead");
                 }
             }
         }
@@ -638,7 +677,7 @@ namespace MineGenerator.Catacombs
                 crowd.SetHotPoint(null);
             }
 
-            Announce("МАТКА УБИТА — катакомбы озарены, стадия пройдена");
+            Announce("banner.victory");
         }
 
         private void Announce(string text)
